@@ -93,6 +93,7 @@ model Space {
   agentStates        AgentState[]
   agentRuns          AgentRun[]
   agentSubscriptions AgentSubscription[]
+  agentConfigChanges AgentConfigChange[]
   agentChatThreads   AgentChatThread[]
   agentEvents        AgentEvent[]
   agentEgressLog     AgentEgressLog[]
@@ -434,14 +435,12 @@ model ConnectorState {
   @@map("connector_state")
 }
 
-/// The scheduler's index of one Space agent (lib/agents). The NOTE stays
-/// authoritative — `agents/<name>/index.md` is the brief, its schedule and
-/// its `active` flag — and this row is derived from it on every write (`scheduleHash` lets a tick notice a note that changed under
-/// it and re-derive). It exists so "who is due" is one indexed query instead
-/// of parsing every live agent note every five minutes, and so overlap
-/// suppression is an atomic compare-and-swap on `status` that survives ten
-/// Cloud Run instances. `budgetMonthlyCents` is the one agent fact that is
-/// deliberately NOT in a note: money is admin-read, notes are member-read.
+/// One Space agent's record (lib/agents). The row is HOW it runs — model,
+/// reach, schedule, identity, share, caps — and is authoritative; the note
+/// `agents/<name>/index.md` is WHAT it is: title, description, tags and the
+/// brief itself. Written only through lib/agents/service.ts#configureAgent,
+/// so "who is due" is one indexed query and overlap suppression is an atomic
+/// compare-and-swap on `status` that survives ten Cloud Run instances.
 model AgentState {
   id                  String     @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId             String     @map("space_id")
@@ -454,7 +453,6 @@ model AgentState {
   lastRunAt           DateTime?  @map("last_run_at")
   runningSince        DateTime?  @map("running_since")
   currentRunId        String?    @map("current_run_id") // the AgentRun holding the `running` claim; release is a CAS on it
-  scheduleHash        String?    @map("schedule_hash")
   budgetMonthlyCents  Int?       @map("budget_monthly_cents") // null = uncapped
   deactivatedReason   String?    @map("deactivated_reason") // DeactivationReason: brief_changed | key_rejected | repeated_failure | author_gone | renamed | deleted | admin | config
   deactivatedDetail   String?    @map("deactivated_detail") // e.g. who edited the brief
@@ -462,6 +460,22 @@ model AgentState {
   triggersJson        Json?      @map("triggers_json") // the live note's parsed `on:` map — { context: [globs], webhook: name }
   sharedFrom          String?    @map("shared_from") // a run-in copy: the HOUSE whose brief this row runs, in this room (lib/agents/hooks.ts#syncSharedCopies)
   debounceMs          Int        @default(60000) @map("debounce_ms") // how far forward an event pulls next_run_at
+  // ── How it runs: the record, not a cache. `configured_at` null = a row from
+  // before the record existed, still read from the note (lib/agents/record.ts).
+  model               String? // a pinned `<provider>/<id>`; null runs on the space's model
+  connectors          String[]   @default([])
+  tools               String[]   @default([]) // AGENT_TOOL_EXTRAS
+  agents              String[]   @default([]) // agents it may start with run_agent
+  schedule            Json? // AgentSchedule (lib/agents/config.ts); null = trigger-only or off
+  timezone            String?
+  runsAs              String?    @map("runs_as") // an explicit identity; admin-held
+  shareMode           String     @default("none") @map("share_mode") // none | all | rooms
+  shareRooms          String[]   @default([]) @map("share_rooms")
+  shareAs             String     @default("use") @map("share_as") // use | run-in
+  dryRun              Boolean    @default(false) @map("dry_run")
+  maxTurns            Int        @default(40) @map("max_turns")
+  configuredAt        DateTime?  @map("configured_at")
+  updatedBy           String?    @map("updated_by")
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
   space               Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
@@ -482,12 +496,30 @@ model AgentSubscription {
   spaceId   String   @map("space_id")
   name      String // agent name = folder basename under agents/
   userId    String   @map("user_id")
+  at        String? // "HH:MM", their own time on a daily or weekly agent
+  timezone  String?
+  model     String? // their own model; null rides the agent's
   createdAt DateTime @default(now()) @map("created_at")
   space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   @@unique([spaceId, name, userId], name: "agent_subscription_identity")
   @@index([spaceId, name])
   @@map("agent_subscriptions")
+}
+
+/// Who changed how an agent runs, and to what — the history a note revision
+/// used to be for these fields (lib/agents/service.ts#configureAgent).
+model AgentConfigChange {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  name      String
+  userId    String?  @map("user_id") // null for a machine write
+  patch     Json
+  at        DateTime @default(now())
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, name, at(sort: Desc)])
+  @@map("agent_config_changes")
 }
 
 /// One execution of a Space agent — the run record and its transcript. Written

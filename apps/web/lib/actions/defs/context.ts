@@ -86,7 +86,8 @@ import { createEventRecord, eventAuthorFor, updateEventRecord } from '@/lib/even
 import { coverUrlFromResource } from '@/lib/events/cover'
 import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
-import { activateAgent, canTriggerRun, createAgentBrief, describeAgent, listAgents, switchOffAgent } from '@/lib/agents/service'
+import { activateAgent, canTriggerRun, configureAgent, createAgentBrief, describeAgent, listAgents, switchOffAgent } from '@/lib/agents/service'
+import { agentConfigInput, configPatchOf } from '@/lib/agents/configInput'
 import { defaultModelOf, noModelReason, spaceModels } from '@/lib/agents/spaceModels'
 import {
   AGENT_TOOL_EXTRAS,
@@ -1939,9 +1940,8 @@ export const CONTEXT_ACTIONS = [
         'its schedule, next run and last run outcome. Spend is not included (admins see it in the app). ' +
         "Trigger one with run_agent (needs the 'agents:run' scope; the agent must be active). " +
         'Write a new one with create_agent and turn it on with activate_agent — an agent is a brief plus an ' +
-        'activation, and creating one does NOT start it. Briefs are EDITED on the note itself, not ' +
-        'through edit_context: agents/ is frozen against generic AI writes so that a sweep cannot silently ' +
-        'switch off every agent in the space.',
+        'activation, and creating one does NOT start it. How an agent runs (model, connectors, tools, share, caps) ' +
+        'is its record, changed with configure_agent; the brief prose is its note.',
       input: { space_id: spaceArg
           .optional()
           .describe('The space to read. Omit to read every space you can act in, each row stamped with its space.') },
@@ -1962,6 +1962,7 @@ export const CONTEXT_ACTIONS = [
             model: a.model,
             connectors: a.connectors,
             tools: a.tools,
+            runs_as: a.runAsUserId,
             invalid: a.invalid ?? a.activation.invalid,
             active: a.activation.active,
             schedule: a.activation.scheduleLabel,
@@ -2092,9 +2093,10 @@ export const CONTEXT_ACTIONS = [
       summary: "Write a new agent's brief. It does nothing until it is turned on.",
       description:
         `BEFORE YOU CALL THIS: ${intakeSummary('agent')} ` +
-        'Create an agent: a folder agents/<name>/ whose index.md is the brief — frontmatter declaring the model ' +
-        'it runs on, the connectors it may call and which tool extras it gets; BODY the instructions it follows ' +
-        'on every run. Write the body as a standing instruction, not a one-off request: what to read from the ' +
+        'Create an agent: a folder agents/<name>/ whose index.md is the brief — its title, description, tags and ' +
+        'the instructions it follows on every run — and a RECORD of how it runs: the model, the connectors it may ' +
+        'call and which tool extras it gets (never frontmatter; change them later with configure_agent). ' +
+        'Write the instructions as a standing instruction, not a one-off request: what to read from the ' +
         "context, what to produce, and where to write it. Read list_connectors first — every name in " +
         '`connectors` must be a connector the space already has; omit `model` unless this agent must run on a ' +
         "different one of the space's models. " +
@@ -2108,7 +2110,7 @@ export const CONTEXT_ACTIONS = [
         "the Turn on button on the agent's page) — say so when you hand it over, and OFFER THE REHEARSAL FIRST: " +
         'rehearse_agent hands you its first round to carry out yourself, so the person sees the output before an ' +
         'unattended run makes it. ' +
-        'Creates only; an existing agent is a 409, and briefs are edited on the note itself.',
+        'Creates only; an existing agent is a 409. Its prose is edited on the note; how it runs with configure_agent.',
       input: {
         space_id: spaceArg,
         name: z
@@ -2116,6 +2118,8 @@ export const CONTEXT_ACTIONS = [
           .describe("The agent's name — lower-case letters, digits, - and _, e.g. 'weekly-digest'. This is what it is known by everywhere"),
         title: z.string().optional().describe('Display name, e.g. "Weekly digest". Defaults to the name'),
         description: z.string().optional().describe('One sentence on what it does — its line on the roster'),
+        tags: z.array(z.string()).optional().describe('How the space groups its agents; the first is its group on the roster'),
+        agents: z.array(z.string()).optional().describe('Other agents, by name, this one may start with run_agent. Omit for none'),
         instructions: z
           .string()
           .describe(
@@ -2156,9 +2160,11 @@ export const CONTEXT_ACTIONS = [
           name: args.name,
           title: args.title,
           description: args.description,
+          tags: args.tags,
           model: args.model,
           connectors: args.connectors,
           tools: args.tools,
+          agents: args.agents,
           body: args.instructions,
         })
         if (!r.ok) throw new ActionError(r.status, r.error)
@@ -2363,6 +2369,43 @@ export const CONTEXT_ACTIONS = [
         const r = await switchOffAgent(principal, context, args.agent)
         if (!r.ok) throw new ActionError(r.status, r.error)
         return { agent: args.agent, active: false, page: agentPageHref(args.agent, null, context.spaceId) }
+      },
+    }),
+    defineAction({
+      name: 'configure_agent',
+      scope: 'agents:author',
+      summary: 'Change how an agent runs — its model, connectors, tools, share and caps. Its record, not its note.',
+      description:
+        "Change an agent's RECORD: what it runs on and reaches. Pass only the fields to change. " +
+        'Anyone who can edit the brief may; `runs_as` naming someone other than yourself is a space admin\'s. ' +
+        '`connectors` is its ENTIRE external reach — read list_connectors first. The schedule is set with ' +
+        'activate_agent / deactivate_agent, who it runs for on its page, and its title, description, tags and ' +
+        'instructions are the note (edit_context on its path from list_agents). Answers the record as saved.',
+      input: {
+        space_id: spaceArg,
+        agent: z.string().describe("The agent's name, from list_agents"),
+        ...agentConfigInput.shape,
+      },
+      run: async (ctx, args) => {
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
+        const { space_id: _space, agent, ...fields } = args
+        const r = await configureAgent(principal, context, agent, configPatchOf(fields))
+        if (!r.ok) throw new ActionError(r.status, r.error)
+        const c = r.config!
+        return {
+          agent,
+          model: c.model,
+          connectors: c.connectors,
+          tools: c.tools,
+          agents: c.agents,
+          share: c.share,
+          share_as: c.shareAs,
+          dry_run: c.dryRun,
+          max_turns: c.maxTurns,
+          runs_as: c.runsAs,
+          active: c.active,
+          page: agentPageHref(agent, null, context.spaceId),
+        }
       },
     }),
 ]

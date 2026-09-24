@@ -1,26 +1,42 @@
 /**
- * The agent note contract — pure, no I/O (tests import this directly).
+ * The agent contract — pure, no I/O (tests import this directly).
  *
- * An agent is a FOLDER, `agents/<name>/`, and ONE note defines it — the
- * folder's index. What the agent is and whether it runs are the same note,
- * because they are written by the same people and read as one thing:
+ * An agent is a FOLDER, `agents/<name>/`, and TWO things define it:
  *
- *   agents/<name>/index.md      the BRIEF — what the agent is AND when it runs
+ *   agents/<name>/index.md      the BRIEF note — what the agent IS
  *   ---
  *   type: agent
  *   title: Weekly digest
  *   description: One line, shown on the roster
- *   model: anthropic/claude-sonnet-5  # OPTIONAL — omit to use the space's model
- *   connectors: [hubspot]             # declared reach — names under connectors/
- *   tools: [web]                      # optional extras: web (fetch_url — any public page,
- *                                     #   a search engine's results included),
- *                                     #   directory (create_node/link_nodes), actions (run_action)
- *   agents: [digest]                  # optional — agents this one may chain into with run_agent
- *                                     #   (omit it and any agent in the space may be chained)
- *   dry_run: true                     # optional — writes are captured in the transcript, not applied
- *   max_turns: 40                     # optional, 1..200
+ *   tags: [Investments]               # the roster's groups; the first is the group
+ *   ---
+ *   The body is the brief. It is WRAPPED (a fixed preamble + the body), not
+ *   passed verbatim as the whole system prompt.
  *
- *   active: true                      # ── the activation, same frontmatter ──
+ *   agent_state + agent_subscriptions   the RECORD — how it RUNS
+ *     model, connectors, tools, agents, share / share_as, dry_run, max_turns,
+ *     runs_as, who it runs for, and the activation: active, the clock
+ *     (hourly/daily/weekly, an interval or a cron), `on` triggers, debounce,
+ *     timezone. Written only by lib/agents/service.ts#configureAgent.
+ *
+ *   agents/<name>/<anything>.md  the agent's OWN notes — where its runs write
+ *                               by default. The one place under agents/ an
+ *                               agent may write, and only its own.
+ *
+ * The parsers below still read the record as FRONTMATTER keys — every reader
+ * composes the note with the record rendered as those keys
+ * (briefs.ts#composeAgent, shared/agentConfig.ts#configFrontmatter) — so what
+ * a valid value is has one definition. Frontmatter is also what a brief
+ * written before the record carried; the store hook adopts such keys into the
+ * record and strips them (hooks.ts#adoptNoteConfig).
+ *
+ *   model: anthropic/claude-sonnet-5  # OPTIONAL — omit to use the space's model
+ *   connectors: [hubspot]             # declared reach — connector names
+ *   tools: [web]                      # optional extras: web, directory, actions
+ *   agents: [digest]                  # agents this one may start with run_agent
+ *   dry_run: true                     # writes captured in the transcript, not applied
+ *   max_turns: 40                     # 1..200
+ *   active: true
  *   schedule: daily                   # hourly | daily | weekly   (XOR with `every`)
  *   at: "07:00"                       # daily / weekly
  *   on: monday                        # weekly (a bare string is the weekday)
@@ -29,33 +45,21 @@
  *     context: ["people/**"]          #   note created/saved/renamed-to under a glob
  *     webhook: hubspot                #   connector whose inbound hook feeds this agent
  *     wake: always                    #   optional: run on EVERY matching save, unjudged
- *     weekday: monday                 #   only with schedule: weekly (the bare string, moved here)
+ *     weekday: monday                 #   only with schedule: weekly
  *   debounce: 2m                      # coalesce window: Ns | Nm, default 60s, max 30m
- *   timezone: Pacific/Auckland        # required with a clock; UTC only for legacy notes
+ *   timezone: Pacific/Auckland        # required with a clock
  *   runs_as: <user id>                # admin-only unless you name yourself
- *   ---
- *   The body is the brief. It is WRAPPED (a fixed preamble + the body), not
- *   passed verbatim as the whole system prompt.
  *
- *   An active agent needs at least one of `schedule`, `every` or `on`.
+ * An active agent needs at least one of `schedule`, `every` or `on`.
  *
- *   agents/<name>/<anything>.md  the agent's OWN notes — where its runs write
- *                               by default (a digest, a report, the state it
- *                               keeps between runs). The one place under
- *                               agents/ an agent may write, and only its own.
+ * `agents/<name>/activation.md` was a second note holding the activation half
+ * before it moved into the brief; it is still READ for an agent with no
+ * record, and nothing writes one.
  *
- * `agents/<name>/activation.md` was a second note holding the activation half.
- * It is still READ when a brief carries no activation keys, so an agent
- * written before the merge keeps running; `db:agents:activation` folds it in
- * and removes it. Nothing writes one any more.
- *
- * Budget is deliberately NOT here: it lives on the AgentState row because
- * money is admin-read while notes are member-read.
+ * Budget is on the row too, admin-only (lib/agents/budget.ts).
  *
  * Both parsers follow the connector precedent — `{ ok, … } | { ok: false,
- * error }` — so a broken note still describes itself on the roster. They read
- * the SAME frontmatter now: `parseAgentBrief` ignores the activation keys and
- * `parseAgentActivation` ignores the brief's.
+ * error }` — so a broken agent still describes itself on the roster.
  */
 import { inSpace, stripSpacePrefix } from '@/lib/spaces/shared/spaceUrl'
 import { parentAdministers, reachesRoom, shareTargets } from '@/lib/spaces/subspaces'
@@ -616,17 +620,6 @@ export function parseTriggers(raw: Record<string, unknown>): { ok: true; trigger
   return { ok: true, triggers: { context: globs.list, webhook, ...(wake === 'always' ? { wake: 'always' as const } : {}) } }
 }
 
-/** A stable fingerprint of what dispatch derives from — the note is authoritative. */
-export function scheduleHash(activation: AgentActivation, effectiveTz: string, runsFor: RunsForEntry[] = []): string {
-  // `runsAs` is deliberately absent: it changes whose credentials a run spends,
-  // not when the run happens, and folding it in would reschedule every agent
-  // whenever somebody repointed one.
-  // People's own times move the next fire, so they are part of it; with none
-  // the fingerprint is what it always was.
-  const own = runsFor.filter((e) => e.at || e.timezone).map((e) => [e.userId, e.at, e.timezone])
-  return JSON.stringify([activation.active, activation.schedule, effectiveTz, activation.every, activation.on, activation.debounceMs, ...(own.length ? [own] : [])])
-}
-
 // ── Globs ────────────────────────────────────────────────────────────────────
 
 const GLOB_MAX = 200
@@ -939,31 +932,19 @@ export function describeSchedule(schedule: AgentSchedule | null, tz: string | nu
 
 const yamlString = (s: string) => JSON.stringify(s)
 
-export function newAgentNote(input: {
-  name: string
-  title?: string
-  description?: string
-  model?: string
-  connectors?: string[]
-  tools?: string[]
-  body?: string
-}): string {
+/**
+ * A new brief note: what the agent IS — title, description, tags and the
+ * brief. How it runs is its record (shared/agentConfig.ts), never written here.
+ */
+export function newAgentNote(input: { name: string; title?: string; description?: string; tags?: string[]; body?: string }): string {
   const title = input.title?.trim() || input.name
+  const tags = [...new Set((input.tags ?? []).map((t) => t.trim()).filter(Boolean))]
   const lines = [
     '---',
     `type: ${AGENT_TYPE}`,
     `title: ${yamlString(title)}`,
     ...(input.description?.trim() ? [`description: ${yamlString(input.description.trim())}`] : []),
-    // Only when the author pinned one. A brief with no `model:` runs on the
-    // SPACE's model, which is the ordinary case — and writing a guess here is
-    // how a new agent came to name a provider its space had never heard of.
-    ...(input.model?.trim() ? [`model: ${input.model.trim()}`] : []),
-    `connectors: [${(input.connectors ?? []).join(', ')}]`,
-    ...(input.tools?.length ? [`tools: [${input.tools.join(', ')}]`] : []),
-    `max_turns: ${DEFAULT_MAX_TURNS}`,
-    // The activation lives here too. A new brief is off: turning it on is a
-    // deliberate act, and it writes the schedule keys in beside this one.
-    'active: false',
+    ...(tags.length ? [`tags: [${tags.map(yamlString).join(', ')}]`] : []),
     '---',
     '',
   ]
@@ -1041,6 +1022,7 @@ export function activationFrontmatter(input: {
     if (s?.kind === 'weekly') map.weekday = WEEKDAYS[s.weekday]
     if (on.context.length) map.context = [...on.context]
     if (on.webhook) map.webhook = on.webhook
+    if (on.wake === 'always') map.wake = 'always'
     fm.on = map
   }
   const d = input.debounceMs
@@ -1070,20 +1052,6 @@ export function isLegacyActivationFrontmatter(fm: NoteFrontmatter): boolean {
 
 export function hasActivationFrontmatter(fm: NoteFrontmatter): boolean {
   return ACTIVATION_KEYS.some((k) => fm[k] !== undefined && fm[k] !== null && fm[k] !== '')
-}
-
-/**
- * The brief with a new activation written into its frontmatter — the one write
- * that turns an agent on or off. The body and every brief key are untouched;
- * only the activation keys are replaced.
- */
-export function withActivation(
-  briefContent: string,
-  input: Parameters<typeof activationFrontmatter>[0],
-): string {
-  const fm = { ...parseFrontmatter(briefContent) }
-  for (const key of ACTIVATION_KEYS) delete fm[key]
-  return joinFrontmatter({ ...fm, ...activationFrontmatter(input) }, splitFrontmatter(briefContent).body)
 }
 
 /** The brief with `active: false` written in, leaving the rest of it alone. */

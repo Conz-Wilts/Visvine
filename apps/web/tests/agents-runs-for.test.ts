@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { modelFor, parseRunsFor, runsForDenial, runsForFrontmatter, withRunsFor, type RunsForEntry } from '../lib/agents/shared/runsFor'
 import { clockFor, dueIdentities, nextFire } from '../lib/agents/shared/fanout'
-import { setRunsFor } from '../lib/agents/briefEdit'
-import { parseAgentBrief, scheduleHash, type AgentActivation, type AgentSchedule } from '../lib/agents/config'
+import { applyConfigPatch, defaultAgentConfig, effectiveFrontmatter } from '../lib/agents/shared/agentConfig'
+import { parseAgentBrief, type AgentSchedule } from '../lib/agents/config'
 import { parseFrontmatter, splitFrontmatter } from '../lib/notes/shared/markdown'
 
 const entry = (userId: string, over: Partial<RunsForEntry> = {}): RunsForEntry => ({ userId, at: null, timezone: null, model: null, ...over })
@@ -44,13 +44,15 @@ describe('runsForDenial', () => {
 
 describe('the brief', () => {
   const note = '---\ntype: agent\ntitle: Digest\n---\n\nSummarise.\n'
-  it('carries one person in and out without touching the rest', () => {
-    const withMe = setRunsFor(note, 'me', { at: { hour: 8, minute: 5 }, timezone: null, model: null })
-    const parsed = parseAgentBrief(parseFrontmatter(withMe), splitFrontmatter(withMe).body)
+  it('carries one person in and out of the record without touching the rest', () => {
+    const withMe = applyConfigPatch(defaultAgentConfig(), { runsFor: withRunsFor([], 'me', { at: { hour: 8, minute: 5 }, timezone: null, model: null }) })
+    assert.ok(withMe.ok)
+    if (!withMe.ok) return
+    const parsed = parseAgentBrief(effectiveFrontmatter(parseFrontmatter(note), withMe.config), splitFrontmatter(note).body)
     assert.ok(parsed.ok)
     assert.deepEqual(parsed.brief.runsFor, [entry('me', { at: { hour: 8, minute: 5 } })])
     assert.equal(parsed.brief.title, 'Digest')
-    assert.equal(parseFrontmatter(setRunsFor(withMe, 'me', null)).for, undefined)
+    assert.deepEqual(withRunsFor(withMe.config.runsFor, 'me', null), [])
     assert.deepEqual(withRunsFor([entry('a'), entry('b')], 'a', { at: null, timezone: null, model: 'x/y' }).map((e) => e.userId), ['a', 'b'])
   })
   it('gives a person their own model, everyone else the brief’s', () => {
@@ -86,9 +88,4 @@ describe('fan-out', () => {
     assert.deepEqual(who, [null, 'ana'])
   })
 
-  it('folds people’s own times into the schedule fingerprint, and only those', () => {
-    const activation: AgentActivation = { active: true, schedule: daily, every: null, on: null, debounceMs: 60_000, timezone: null, runsAs: null }
-    assert.equal(scheduleHash(activation, 'UTC', [bo]), scheduleHash(activation, 'UTC'))
-    assert.notEqual(scheduleHash(activation, 'UTC', [ana]), scheduleHash(activation, 'UTC'))
-  })
 })

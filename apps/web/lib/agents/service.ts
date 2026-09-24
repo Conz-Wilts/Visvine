@@ -18,7 +18,6 @@ function agentNameOfAliasPath(path: string): string | null {
   // agents/index.md is the folder's own index note, never an agent called "index".
   return m && m[1] !== 'index' && AGENT_NAME_RE.test(m[1]) ? m[1] : null
 }
-import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { principalCanWrite, principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
@@ -28,21 +27,17 @@ import {
   DEFAULT_DEBOUNCE_MS,
   describeSchedule,
   describeTriggers,
-  hasActivationFrontmatter,
   newAgentNote,
-  parseAgentActivation,
-  parseAgentBrief,
-  withActivation,
   type AgentActivation,
   type AgentBrief,
   type AgentSchedule,
   type AgentTriggers,
 } from './config'
-import { findAgentActivation, findAgentBrief, findOwnAgentBrief } from './briefs'
-import { setRunsFor } from './briefEdit'
-import { modelFor, parseRunsFor, runsForFrontmatter, type RunsForEntry } from './shared/runsFor'
-import * as store from '@/lib/notes/store'
-import { deactivateAgent, syncAgentState } from './hooks'
+import { agentConfigOf, composeAgent, findAgentActivation, findAgentBrief, findOwnAgentBrief } from './briefs'
+import { modelFor, parseRunsFor, runsForDenial, runsForFrontmatter, withRunsFor } from './shared/runsFor'
+import { applyConfigPatch, configOf, defaultAgentConfig, type AgentConfig, type AgentConfigPatch } from './shared/agentConfig'
+import { listAgentConfigChanges, storeAgentConfig, type AgentConfigChangeRow } from './record'
+import { adoptNoteConfig, deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
 import { localRuntimeOf, localRuntimeRefusal } from './local'
@@ -216,12 +211,15 @@ async function summarise(
   opts: { includeSpend: boolean; now: Date; heartbeatAt: Date | null; models: readonly SpaceModel[] },
 ): Promise<AgentSummary> {
   const spaceId = context.spaceId
-  const fm = parseFrontmatter(briefContent)
-  const parsedBrief = parseAgentBrief(fm, splitFrontmatter(briefContent).body)
+  // The note's prose with the record's run keys laid over it (briefs.ts#composeAgent).
+  const config = await agentConfigOf(spaceId, name)
+  const composed = composeAgent(briefContent, config)
+  const fm = composed.fm
+  const parsedBrief = composed.brief
   const brief = parsedBrief.ok ? parsedBrief.brief : null
 
-  // The brief IS the activation; a pre-merge activation.md is the fallback.
-  const parsedLive = hasActivationFrontmatter(fm) ? parseAgentActivation(fm) : (await findAgentActivation(spaceId, name)).parsed
+  // An agent from before the record may still keep its activation in a pre-merge activation.md.
+  const parsedLive = config ? composed.activation : (await findAgentActivation(spaceId, name)).parsed
   const activation: AgentActivation | null = parsedLive?.ok ? parsedLive.activation : null
 
   const [state, last, briefRow, subs] = await Promise.all([
@@ -383,6 +381,10 @@ export async function describeAgent(
       subscribers: AgentSubscriber[]
       viewerSubscribed: boolean
       readiness: AgentReadiness
+      /** How it runs, as the record holds it — what the Config screen edits. */
+      config: AgentConfig
+      /** Who last changed how it runs, newest first. */
+      configChanges: AgentConfigChangeRow[]
     })
   | null
 > {
@@ -398,7 +400,9 @@ export async function describeAgent(
     models: await spaceModels(context.spaceId),
   })
 
-  const forRows = runsForFrontmatter(parseRunsForOf(content)) ?? []
+  const config = await agentConfigOf(context.spaceId, name)
+  const composed = composeAgent(content, config)
+  const forRows = runsForFrontmatter(composed.brief.ok ? composed.brief.brief.runsFor : []) ?? []
   const subRows = forRows.map((r) => ({ userId: r.user, at: r.at ?? null, timezone: r.timezone ?? null, model: r.model ?? null }))
   const runAsUserId = summary.runAsUserId
   const userIds = [...new Set([...subRows.map((s) => s.userId), ...(runAsUserId ? [runAsUserId] : [])])]
@@ -416,7 +420,7 @@ export async function describeAgent(
   const held = await listConnectors(p, context)
   const needs = agentNeeds({
     declared: viewer,
-    instructions: splitFrontmatter(content).body,
+    instructions: composed.body,
     modelProblem: summary.modelProblem,
     catalog: needsCatalog(),
     spaceConnectors: held.map((c) => ({ name: c.name, recipe: c.recipe })),
@@ -429,6 +433,8 @@ export async function describeAgent(
     heartbeatAt: heartbeatAt?.toISOString() ?? null,
     subscribers: subRows.map((s) => ({ ...s, name: nameOf.get(s.userId) ?? null, image: imageOf.get(s.userId) ?? null })),
     viewerSubscribed: subRows.some((s) => s.userId === p.userId),
+    config: config ?? (composed.brief.ok && composed.activation.ok ? configOf(composed.brief.brief, composed.activation.activation) : defaultAgentConfig()),
+    configChanges: await listAgentConfigChanges(context.spaceId, name),
     readiness: {
       viewer,
       runAs,
@@ -472,10 +478,12 @@ export async function subscribeToAgent(p: ContextPrincipal, context: Context, na
     const runnable = runnableModels(await spaceModels(context.spaceId)).some((m) => m.ref === entry.model)
     if (!runnable) return { ok: false, status: 400, error: 'That model is not one of this space’s.' }
   }
-  const next = setRunsFor(content, p.userId, entry)
-  const check = parseAgentBrief(parseFrontmatter(next), splitFrontmatter(next).body)
-  if (!check.ok) return { ok: false, status: 400, error: check.error }
-  await store.writeNote(context, row.path, next, { id: p.userId, name: p.name }, 'edit')
+  const current = await currentConfig(context.spaceId, name)
+  if (!current.ok) return current
+  const next = applyConfigPatch(current.config, { runsFor: withRunsFor(current.config.runsFor, p.userId, entry) })
+  if (!next.ok) return { ok: false, status: 400, error: next.error }
+  await storeAgentConfig(context.spaceId, name, next.config, { userId: p.userId })
+  await syncAgentState(context.spaceId, name)
   await logAudit(context.spaceId, { userId: p.userId, name: p.name, action: 'agent', path: row.path, detail: 'runs for them' })
   return { ok: true, warning: null }
 }
@@ -491,21 +499,30 @@ export async function unsubscribeFromAgent(
   if (userId !== p.userId && agentManageDenial(p, context, name)) {
     return { ok: false, status: 403, error: 'Only someone who can edit the agent can remove someone else.' }
   }
-  await dropRunsFor(context.spaceId, name, userId)
+  await dropRunsFor(context.spaceId, name, userId, p.userId)
   return { ok: true, warning: null }
 }
 
-/** Take one person out of the brief's `for:` block — theirs to ask, the platform's to write. */
-export async function dropRunsFor(spaceId: string, name: string, userId: string): Promise<void> {
-  const context: Context = { spaceId, ownerKey: SHARED_OWNER_KEY }
-  const row = await findOwnAgentBrief(spaceId, name)
-  if (!row || !parseRunsForOf(row.content).some((e) => e.userId === userId)) return
-  await store.writeNote(context, row.path, setRunsFor(row.content, userId, null), { id: 'system', name: 'Visvine' }, 'maintenance', 'agents')
+/** Take one person off who an agent runs for — theirs to ask, the platform's to write. */
+export async function dropRunsFor(spaceId: string, name: string, userId: string, by: string | null = null): Promise<void> {
+  const current = await currentConfig(spaceId, name)
+  if (!current.ok || !current.config.runsFor.some((e) => e.userId === userId)) return
+  const next = applyConfigPatch(current.config, { runsFor: withRunsFor(current.config.runsFor, userId, null) })
+  if (!next.ok) return
+  await storeAgentConfig(spaceId, name, next.config, { userId: by })
+  await syncAgentState(spaceId, name)
 }
 
-function parseRunsForOf(content: string): RunsForEntry[] {
-  const parsed = parseRunsFor(parseFrontmatter(content).for)
-  return parsed.ok ? parsed.entries : []
+/**
+ * The record as it stands, adopting a note written before it first. An agent
+ * whose brief cannot be read has no record to change — its note says why.
+ */
+async function currentConfig(spaceId: string, name: string): Promise<{ ok: true; config: AgentConfig } | { ok: false; status: number; error: string }> {
+  if (!(await findOwnAgentBrief(spaceId, name))) return { ok: false, status: 404, error: 'No such agent.' }
+  await adoptNoteConfig(spaceId, name)
+  const config = await agentConfigOf(spaceId, name)
+  if (!config) return { ok: false, status: 400, error: 'The brief is invalid — fix its note first.' }
+  return { ok: true, config }
 }
 
 export type ActivateResult =
@@ -524,10 +541,53 @@ function agentManageDenial(p: ContextPrincipal, context: Context, name: string):
 }
 
 /**
+ * THE write of how an agent runs. Each field keeps the gate it had when it
+ * lived in the note:
+ *   - everything: whoever can EDIT the brief (agentManageDenial);
+ *   - `runsAs`: a space admin, or a member naming themselves;
+ *   - `runsFor`: anyone may take a person out, but only that person (or an
+ *     admin) puts them in or changes their entry (shared/runsFor.ts).
+ * Budget is setBudget's, admin only. The patch is checked by the same parsers
+ * a brief is, stored with who changed what, and the schedule re-derived.
+ */
+export async function configureAgent(
+  p: ContextPrincipal,
+  context: Context,
+  name: string,
+  patch: AgentConfigPatch,
+): Promise<ActivateResult & { config?: AgentConfig }> {
+  if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
+  if (context.ownerKey !== SHARED_OWNER_KEY) return { ok: false, status: 400, error: 'Agents live in a space.' }
+  const manage = agentManageDenial(p, context, name)
+  if (manage) return { ok: false, status: 403, error: manage }
+  const current = await currentConfig(context.spaceId, name)
+  if (!current.ok) return current
+  const admin = principalIsSuperAdmin(p)
+  if (patch.runsAs !== undefined && patch.runsAs !== null && patch.runsAs !== p.userId && patch.runsAs !== current.config.runsAs && !admin) {
+    return { ok: false, status: 403, error: 'Only a space admin can make an agent run as someone else. Leave it as its author, or name yourself.' }
+  }
+  if (patch.runsFor !== undefined) {
+    const denied = runsForDenial(current.config.runsFor, patch.runsFor, { userId: p.userId, isAdmin: admin })
+    if (denied) return { ok: false, status: 403, error: denied }
+  }
+  const next = applyConfigPatch(current.config, patch)
+  if (!next.ok) return { ok: false, status: 400, error: next.error }
+  // A brief on a member's own plan runs only when that person presses Run in
+  // the desktop app; switching it on would promise a schedule nothing can keep.
+  const local = next.config.active ? localRuntimeOf(next.config.model) : null
+  if (local) return { ok: false, status: 400, error: localRuntimeRefusal(local) }
+  if (next.config.active && next.config.schedule && !next.config.timezone?.trim()) {
+    return { ok: false, status: 400, error: 'A scheduled agent must name the timezone it runs in.' }
+  }
+  await storeAgentConfig(context.spaceId, name, next.config, { userId: p.userId })
+  await syncAgentState(context.spaceId, name)
+  return { ok: true, warning: null, config: next.config }
+}
+
+/**
  * Activation: validate the brief and the key (a 401/403 refuses; other
- * probe failures activate with a warning), write the schedule into the brief
- * through the gate, and re-derive the state row. Anyone who can edit the brief
- * may.
+ * probe failures activate with a warning), switch the record on with its
+ * schedule, and re-derive the state row. Anyone who can edit the brief may.
  */
 export async function activateAgent(
   p: ContextPrincipal,
@@ -550,12 +610,13 @@ export async function activateAgent(
   const row = await findAgentBrief(context.spaceId, name)
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return { ok: false, status: 404, error: 'No such agent.' }
-  const parsed = parseAgentBrief(parseFrontmatter(content), splitFrontmatter(content).body)
-  if (!parsed.ok) return { ok: false, status: 400, error: `The brief is invalid: ${parsed.error}` }
+  const current = await currentConfig(context.spaceId, name)
+  if (!current.ok) return current
+  const composed = composeAgent(content, current.config)
+  if (!composed.brief.ok) return { ok: false, status: 400, error: `The brief is invalid: ${composed.brief.error}` }
+  const brief = composed.brief.brief
 
-  // A brief on a member's own plan runs only when that person presses Run in
-  // the desktop app; switching it on would promise a schedule nothing can keep.
-  const localRuntime = localRuntimeOf(parsed.brief.model)
+  const localRuntime = localRuntimeOf(brief.model)
   if (localRuntime) return { ok: false, status: 400, error: localRuntimeRefusal(localRuntime) }
 
   // A declared connector that is not there, is off or does not parse fails
@@ -563,15 +624,14 @@ export async function activateAgent(
   // than found by the first fire. A sign-in is the runner's to do and is a
   // warning; a service the prose names is a reading of the prose, and the
   // page already says it.
-  const existing = parseAgentActivation(parseFrontmatter(content))
-  const runAsUserId = (existing.ok ? existing.activation.runsAs : null) ?? p.userId
+  const runAsUserId = current.config.runsAs ?? p.userId
   const [declared, held] = await Promise.all([
-    connectorReadiness(p, context, parsed.brief.connectors, runAsUserId),
+    connectorReadiness(p, context, brief.connectors, runAsUserId),
     listConnectors(p, context),
   ])
   const needs = agentNeeds({
     declared,
-    instructions: splitFrontmatter(content).body,
+    instructions: composed.body,
     modelProblem: null,
     catalog: needsCatalog(),
     spaceConnectors: held.map((c) => ({ name: c.name, recipe: c.recipe })),
@@ -586,21 +646,20 @@ export async function activateAgent(
   }
   const unsigned = needs.needs.filter((n) => n.status === 'needs_connection' || n.status === 'broken')
 
-  const resolved = await resolveAgentChatConfig(context.spaceId, modelFor(parsed.brief, p.userId))
+  const resolved = await resolveAgentChatConfig(context.spaceId, modelFor(brief, p.userId))
   if (!resolved.ok) return { ok: false, status: 400, error: resolved.message }
   const probe = await probeModelKey(resolved.config, resolved.ref.provider)
   if (!probe.ok && probe.kind === 'auth') return { ok: false, status: 400, error: probe.message }
   const warning = [probe.ok ? null : probe.message, ...unsigned.map((n) => `${n.why} ${n.fix}`)].filter(Boolean).join(' ') || null
 
-  // The activation is written INTO the brief — one note, one edit, the same
-  // people. Round-trip it so a bad glob or interval is refused here, not
-  // discovered by the tick.
-  const note = withActivation(content, { active: true, schedule: input.schedule, on: input.on ?? null, debounceMs: input.debounceMs ?? null, timezone: input.timezone })
-  const check = parseAgentActivation(parseFrontmatter(note))
-  if (!check.ok) return { ok: false, status: 400, error: check.error }
-  const written = await writeGated(p, context, row.path, note)
-  if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
-  await syncAgentState(context.spaceId, name)
+  const written = await configureAgent(p, context, name, {
+    active: true,
+    schedule: input.schedule,
+    on: input.on ?? null,
+    debounceMs: input.debounceMs ?? current.config.debounceMs,
+    timezone: input.timezone,
+  })
+  if (!written.ok) return written
   await logAudit(context.spaceId, {
     userId: p.userId,
     name: p.name,
@@ -676,7 +735,7 @@ export type CreateAgentResult =
  * the note. Editing a brief stays a human act at the note itself; this is the
  * same line lib/tools/bridge.ts holds for a Tool writing one.
  *
- * The brief is round-tripped through `parseAgentBrief` before it is saved, so
+ * The note and the record are both checked before anything is saved, so
  * an unparseable model ref or tool extra is refused here rather than
  * discovered by the admin who tries to turn it on.
  */
@@ -687,9 +746,11 @@ export async function createAgentBrief(
     name: string
     title?: string
     description?: string
+    tags?: string[]
     model?: string
     connectors?: string[]
     tools?: string[]
+    agents?: string[]
     body: string
   },
 ): Promise<CreateAgentResult> {
@@ -710,20 +771,22 @@ export async function createAgentBrief(
   const denial = await writeDenialFull(p, context, path)
   if (denial) return { ok: false, status: 403, error: denial }
 
-  const content = newAgentNote({
-    name,
-    title: input.title,
-    description: input.description,
-    model: input.model,
-    connectors: input.connectors,
-    tools: input.tools,
-    body: input.body,
+  const content = newAgentNote({ name, title: input.title, description: input.description, tags: input.tags, body: input.body })
+  // How it runs is the record's, checked before anything is written.
+  const config = applyConfigPatch(defaultAgentConfig(), {
+    ...(input.model?.trim() ? { model: input.model.trim() } : {}),
+    ...(input.connectors ? { connectors: input.connectors } : {}),
+    ...(input.tools ? { tools: input.tools as AgentConfig['tools'] } : {}),
+    ...(input.agents ? { agents: input.agents } : {}),
   })
-  const parsed = parseAgentBrief(parseFrontmatter(content), splitFrontmatter(content).body)
+  if (!config.ok) return { ok: false, status: 400, error: `That agent is not valid: ${config.error}` }
+  const parsed = composeAgent(content, config.config).brief
   if (!parsed.ok) return { ok: false, status: 400, error: `That brief is not valid: ${parsed.error}` }
 
   const written = await writeGated(p, context, path, content)
   if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
+  await storeAgentConfig(context.spaceId, name, config.config, { userId: p.userId })
+  await syncAgentState(context.spaceId, name)
 
   await logAudit(context.spaceId, {
     userId: p.userId,

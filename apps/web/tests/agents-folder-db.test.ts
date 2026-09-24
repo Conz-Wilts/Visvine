@@ -175,40 +175,57 @@ test('the folder is the agent\'s own to write — and only its own', async (t) =
   }
 })
 
-test('the activation IS the brief: whoever can edit it turns the agent on, and it drives the state row; deleting the folder retires the agent', async (t) => {
+test('how it runs is the record: whoever can edit the brief turns it on, runs_as is an admin\'s, and the note refuses run keys', async (t) => {
   const reason = await probe()
   if (reason) return t.skip(reason)
   const store = await import('@/lib/notes/store')
   const { writeGated } = await import('@/lib/notes/contextService')
-  const { withActivation } = await import('@/lib/agents/config')
+  const { configureAgent } = await import('@/lib/agents/service')
+  const { agentConfigOf } = await import('@/lib/agents/briefs')
+  const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
   await setup()
   try {
     await store.createNote(CONTEXT, 'agents/digest/index.md', BRIEF, ACTOR)
-    const live = withActivation(BRIEF, { active: true, schedule: { kind: 'hourly' } })
+    // The older shape's `model:` was folded into the record and taken out of the note.
+    assert.equal((await agentConfigOf(SPACE, 'digest'))?.model, 'openai/gpt-4.1-mini')
+    assert.equal(parseFrontmatter((await store.readNoteOrNull(CONTEXT, 'agents/digest/index.md')) ?? '').model, undefined)
+
+    // A note may not say how it runs any more — not even its own author.
+    const current = (await store.readNoteOrNull(CONTEXT, 'agents/digest/index.md')) ?? ''
+    const withKey = current.replace('---\n', '---\nschedule: hourly\n')
+    const refused = await writeGated(principal(AUTHOR, false), CONTEXT, 'agents/digest/index.md', withKey)
+    assert.equal(refused.status, 'denied')
+    assert.match(refused.status === 'denied' ? refused.reason : '', /configure_agent/)
+    // Prose is still the author's to edit.
+    assert.equal((await writeGated(principal(AUTHOR, false), CONTEXT, 'agents/digest/index.md', current.replace('write a digest', 'write a short digest'))).status, 'applied')
+
     // A member who can edit the brief turns the agent on — but may only run it
     // as themselves; naming somebody else's connections is an admin's call.
-    const asOther = live.replace('---\n', `---\nruns_as: ${ADMIN}\n`)
-    const byMemberAsOther = await writeGated(principal(AUTHOR, false), CONTEXT, 'agents/digest/index.md', asOther)
-    assert.equal(byMemberAsOther.status, 'denied')
-    assert.match(byMemberAsOther.status === 'denied' ? byMemberAsOther.reason : '', /run as someone else/)
-    const asSelf = live.replace('---\n', `---\nruns_as: ${AUTHOR}\n`)
-    assert.equal((await writeGated(principal(AUTHOR, false), CONTEXT, 'agents/digest/index.md', asSelf)).status, 'applied')
-    assert.equal((await writeGated(principal(AUTHOR, false), CONTEXT, 'agents/digest/index.md', live)).status, 'applied')
+    const member = principal(AUTHOR, false)
+    const asOther = await configureAgent(member, CONTEXT, 'digest', { runsAs: ADMIN })
+    assert.equal(asOther.ok, false)
+    assert.match(asOther.ok ? '' : asOther.error, /run as someone else/)
+    assert.ok((await configureAgent(member, CONTEXT, 'digest', { runsAs: AUTHOR })).ok)
+    assert.ok((await configureAgent(principal(ADMIN, true), CONTEXT, 'digest', { runsAs: ADMIN })).ok, 'an admin may repoint it')
+    // And only a person adds themselves to who it runs for.
+    const forOther = await configureAgent(member, CONTEXT, 'digest', { runsFor: [{ userId: ADMIN, at: null, timezone: null, model: null }] })
+    assert.equal(forOther.ok, false)
 
-    assert.equal((await writeGated(principal(ADMIN, true), CONTEXT, 'agents/digest/index.md', asOther)).status, 'applied', 'an admin may repoint it')
-    assert.equal((await writeGated(principal(ADMIN, true), CONTEXT, 'agents/digest/index.md', live)).status, 'applied')
-    const on = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
-    assert.equal(on.active, true)
-    assert.ok(on.nextRunAt, 'an hourly clock was derived from the note')
+    const on = await configureAgent(member, CONTEXT, 'digest', { active: true, schedule: { kind: 'hourly' }, timezone: 'UTC' })
+    assert.ok(on.ok, on.ok ? '' : on.error)
+    const row = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
+    assert.equal(row.active, true)
+    assert.ok(row.nextRunAt, 'an hourly clock was derived from the record')
+    assert.equal(row.runAsUserId, ADMIN)
+    assert.ok((await prisma!.agentConfigChange.count({ where: { spaceId: SPACE, name: 'digest' } })) >= 3, 'each change is kept')
 
     // The folder IS the agent, and like every entity folder its path is the
     // entity's identity: it cannot be renamed, only deleted — and deleting it
-    // takes the brief (activation and all) and the node, and retires the row
-    // (the run history hangs off it, so it stays).
+    // takes the brief and the node, and retires the row (the run history
+    // hangs off it, so it stays).
     await assert.rejects(store.renameFolder(CONTEXT, 'agents/digest', 'agents/summary', ACTOR), /entity's identity/)
     await store.deleteFolder(CONTEXT, 'agents/digest')
     assert.equal(await store.readNoteOrNull(CONTEXT, 'agents/digest/index.md'), null)
-    assert.equal(await store.readNoteOrNull(CONTEXT, 'agents/digest/activation.md'), null)
     assert.equal(await prisma!.node.findUnique({ where: { id: 'agent:digest' } }), null, 'the node went with the brief')
     const gone = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
     assert.equal(gone.active, false)
@@ -218,38 +235,37 @@ test('the activation IS the brief: whoever can edit it turns the agent on, and i
   }
 })
 
-test('a pre-merge activation.md still drives an agent whose brief has none, and the brief wins once it has one', async (t) => {
+test('a brief in the older shape is adopted: its keys and a pre-merge activation.md become the record', async (t) => {
   const reason = await probe()
   if (reason) return t.skip(reason)
   const store = await import('@/lib/notes/store')
-  const { findAgentActivation } = await import('@/lib/agents/briefs')
-  const { withActivation } = await import('@/lib/agents/config')
+  const { agentConfigOf } = await import('@/lib/agents/briefs')
+  const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
   await setup()
   try {
-    // A brief written before the merge: no activation keys of its own.
-    await store.createNote(CONTEXT, 'agents/digest/index.md', BRIEF, ACTOR)
-    await store.createNote(
-      CONTEXT,
-      'agents/digest/activation.md',
-      '---\ntype: agent-activation\nactive: true\nschedule: hourly\ntimezone: UTC\n---\n',
-      ACTOR,
-    )
-    const legacy = await findAgentActivation(SPACE, 'digest')
-    assert.ok(legacy.legacy, 'read from the sibling')
-    assert.equal(legacy.parsed?.ok && legacy.parsed.activation.schedule?.kind, 'hourly')
-    const fromLegacy = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
-    assert.equal(fromLegacy.active, true, 'the older shape keeps running')
-
-    // The moment the brief says anything about when it runs, it is the answer:
-    // a stale sibling can never contradict the note a person just edited.
-    await store.writeNote(CONTEXT, 'agents/digest/index.md', withActivation(BRIEF, { active: false, schedule: null }), ACTOR)
-    const merged = await findAgentActivation(SPACE, 'digest')
-    assert.equal(merged.legacy, false)
-    assert.equal(merged.path, 'agents/digest/index.md')
-    assert.equal(merged.parsed?.ok && merged.parsed.activation.active, false)
-    const off = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
-    assert.equal(off.active, false)
-    assert.equal(off.nextRunAt, null)
+    const { adoptNoteConfig } = await import('@/lib/agents/hooks')
+    // Rows as they stood before the record: written straight to the table, as
+    // a deployment's existing notes are, and adopted the way the script does.
+    await prisma!.contextNote.createMany({
+      data: [
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/digest/activation.md', createdBy: AUTHOR, content: '---\ntype: agent-activation\nactive: true\nschedule: hourly\ntimezone: UTC\n---\n' },
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/digest/index.md', createdBy: AUTHOR, content: BRIEF.replace('---\nEach', `for:\n  - user: ${AUTHOR}\n---\nEach`) },
+      ],
+    })
+    assert.equal(await agentConfigOf(SPACE, 'digest'), null, 'no record yet — the note still says')
+    await adoptNoteConfig(SPACE, 'digest')
+    const config = await agentConfigOf(SPACE, 'digest')
+    assert.ok(config, 'the brief now has a record')
+    assert.equal(config.active, true, 'the older shape keeps running')
+    assert.deepEqual(config.schedule, { kind: 'hourly' })
+    assert.equal(config.model, 'openai/gpt-4.1-mini')
+    assert.deepEqual(config.runsFor.map((e) => e.userId), [AUTHOR])
+    const fm = parseFrontmatter((await store.readNoteOrNull(CONTEXT, 'agents/digest/index.md')) ?? '')
+    assert.equal(fm.model, undefined)
+    assert.equal(fm.for, undefined)
+    const row = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
+    assert.equal(row.active, true)
+    assert.ok(row.configuredAt)
   } finally {
     await teardown()
   }

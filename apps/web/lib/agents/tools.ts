@@ -45,11 +45,10 @@ import type { ResolvedContext } from '@/lib/notes/resolve'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ToolHandler } from '@/lib/notes/toolLoop'
-import { agentFolderPath, parseAgentBrief, type AgentBrief } from './config'
-import { findAgentBrief } from './briefs'
+import { agentFolderPath, type AgentBrief } from './config'
+import { readAgent } from './briefs'
 import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
 import { isSharedDown, isSubspacePath } from '@/lib/spaces/subspaces'
-import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { memoryPath, memorySectionOf, REMEMBER_SECTIONS, rememberInto } from './shared/memory'
 import { edgeConfigured, EdgeUnavailableError } from '@/lib/vm/edge'
 import { browseOnMachine, QuotaExceededError, runOnMachine } from '@/lib/vm/lease'
@@ -121,12 +120,10 @@ function defaultDeps(): AgentToolDeps {
     sharedParentAgent: async (spaceId, name) => {
       const parent = await parentOfSubspace(spaceId)
       if (!parent) return null
-      const row = await findAgentBrief(parent.id, name)
-      if (!row) return null
-      const fm = parseFrontmatter(row.content)
-      if (!isSharedDown(row.path, fm, spaceId)) return null
-      const parsed = parseAgentBrief(fm, splitFrontmatter(row.content).body)
-      return parsed.ok && parsed.brief.shareAs === 'use' ? parent : null
+      const agent = await readAgent(parent.id, name)
+      if (!agent) return null
+      if (!isSharedDown(agent.note.path, agent.fm, spaceId)) return null
+      return agent.brief.ok && agent.brief.brief.shareAs === 'use' ? parent : null
     },
     createEntity,
     machineAvailable: edgeConfigured,

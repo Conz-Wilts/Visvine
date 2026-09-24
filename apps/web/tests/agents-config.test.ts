@@ -7,6 +7,18 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import {
+  applyConfigPatch,
+  configColumns,
+  configFromColumns,
+  configFromFrontmatter,
+  configFrontmatter,
+  defaultAgentConfig,
+  effectiveFrontmatter,
+  runKeysOf,
+  runsForColumns,
+  stripRunKeys,
+} from '@/lib/agents/shared/agentConfig'
 import { readFileSync } from 'node:fs'
 import {
   agentNameOfHref,
@@ -16,13 +28,11 @@ import {
   globProblem,
   globToRegExp,
   matchesAnyGlob,
-  withActivation,
   parseEvery,
   newAgentNote,
   nextOccurrence,
   parseAgentActivation,
   parseAgentBrief,
-  scheduleHash,
   wallClockAt,
   zonedWallToInstant,
   copyRooms,
@@ -186,12 +196,13 @@ test('agentPageHref / agentNameOfHref round-trip', () => {
   assert.equal(agentNameOfHref(null), null)
 })
 
-test('newAgentNote round-trips through the parser', () => {
-  const md = newAgentNote({ name: 'digest', title: 'Digest', description: 'd', connectors: ['hubspot'], tools: ['web'] })
-  const { frontmatter, body } = splitFrontmatter(md)
-  const r = parseAgentBrief(parseFrontmatter(`---\n${frontmatter}\n---\n`), body)
+test('newAgentNote writes what the agent IS and no run keys', () => {
+  const md = newAgentNote({ name: 'digest', title: 'Digest', description: 'd', tags: ['Ops'] })
+  const fm = parseFrontmatter(md)
+  assert.deepEqual(runKeysOf(fm), [], 'how it runs is the record, never the note')
+  const r = parseAgentBrief(fm, splitFrontmatter(md).body)
   assert.ok(r.ok, JSON.stringify(r))
-  if (r.ok) assert.deepEqual(r.brief.connectors, ['hubspot'])
+  if (r.ok) assert.deepEqual(r.brief.tags, ['Ops'])
 })
 
 // ── activation ──
@@ -217,18 +228,20 @@ test('parseAgentActivation reads hourly / daily / weekly and enforces the rules'
   assert.ok(off.ok && off.activation.active === false && off.activation.schedule === null)
 })
 
-test('withActivation round-trips through the brief and scheduleHash is stable', () => {
-  const md = withActivation(
-    '---\ntype: agent\nmodel: gemini/gemma-4-31b-it\n---\n\nBody.\n',
-    { active: true, schedule: { kind: 'weekly', hour: 9, minute: 30, weekday: 1 }, timezone: 'UTC' },
-  )
-  const r = parseAgentActivation(parseFrontmatter(md))
+test('a config round-trips through the frontmatter the parsers read', () => {
+  const next = applyConfigPatch(defaultAgentConfig(), {
+    model: 'gemini/gemma-4-31b-it',
+    active: true,
+    schedule: { kind: 'weekly', hour: 9, minute: 30, weekday: 1 },
+    timezone: 'UTC',
+  })
+  assert.ok(next.ok, JSON.stringify(next))
+  if (!next.ok) return
+  const r = parseAgentActivation(configFrontmatter(next.config))
   assert.ok(r.ok, JSON.stringify(r))
-  if (r.ok) {
-    assert.deepEqual(r.activation.schedule, { kind: 'weekly', hour: 9, minute: 30, weekday: 1 })
-    assert.equal(scheduleHash(r.activation, 'UTC'), scheduleHash(r.activation, 'UTC'))
-    assert.notEqual(scheduleHash(r.activation, 'UTC'), scheduleHash({ ...r.activation, active: false }, 'UTC'))
-  }
+  if (r.ok) assert.deepEqual(r.activation.schedule, { kind: 'weekly', hour: 9, minute: 30, weekday: 1 })
+  assert.equal(applyConfigPatch(defaultAgentConfig(), { active: true }).ok, false, 'on needs a clock or a trigger')
+  assert.equal(applyConfigPatch(defaultAgentConfig(), { tools: ['nope' as never] }).ok, false)
 })
 
 // ── schedule math ──
@@ -395,36 +408,53 @@ test('nextOccurrence: interval aligns to the clock grid; cron respects fields an
 /** A minimal valid brief, for the activation-into-the-brief round trips. */
 const BRIEF_MD = '---\ntype: agent\ntitle: Digest\nmodel: gemini/gemma-4-31b-it\n---\n\nDo the thing.\n'
 
-test('scheduleHash covers every / on / debounce; withActivation round-trips triggers into the brief', () => {
-  const base = parseAgentActivation({ active: true, every: '15m', on: { context: ['people/**'], webhook: 'hubspot' }, debounce: '2m' })
+test('the record keeps every / on / debounce / wake, and composes over a note without them', () => {
+  const base = parseAgentActivation({ active: true, every: '15m', on: { context: ['people/**'], webhook: 'hubspot', wake: 'always' }, debounce: '2m' })
   assert.ok(base.ok)
   if (!base.ok) return
-  const h = scheduleHash(base.activation, 'UTC')
-  assert.notEqual(h, scheduleHash({ ...base.activation, on: { context: ['orgs/**'], webhook: 'hubspot' } }, 'UTC'))
-  assert.notEqual(h, scheduleHash({ ...base.activation, every: '30m', schedule: { kind: 'interval', minutes: 30 } }, 'UTC'))
-  assert.notEqual(h, scheduleHash({ ...base.activation, debounceMs: 5_000 }, 'UTC'))
-
-  const md = withActivation(BRIEF_MD, { active: true, schedule: base.activation.schedule, on: base.activation.on, debounceMs: 120_000, timezone: null })
-  const back = parseAgentActivation(parseFrontmatter(md))
-  // The brief half is still there and still parses — one note, two readers.
-  assert.match(md, /type: agent/)
-  assert.match(md, /Do the thing\./)
-  assert.ok(back.ok, JSON.stringify(back) + '\n' + md)
+  const config = applyConfigPatch(defaultAgentConfig(), { active: true, schedule: base.activation.schedule, on: base.activation.on, debounceMs: 120_000 })
+  assert.ok(config.ok, JSON.stringify(config))
+  if (!config.ok) return
+  const fm = effectiveFrontmatter(parseFrontmatter(BRIEF_MD), config.config)
+  // The note's own keys are still there, the record's model wins over none.
+  assert.equal(fm.title, 'Digest')
+  assert.equal(fm.model, undefined, 'the note\'s model is not the record\'s')
+  const back = parseAgentActivation(fm)
+  assert.ok(back.ok, JSON.stringify(back))
   if (back.ok) {
     assert.deepEqual(back.activation.schedule, { kind: 'interval', minutes: 15 })
-    assert.deepEqual(back.activation.on, { context: ['people/**'], webhook: 'hubspot' })
+    assert.deepEqual(back.activation.on, { context: ['people/**'], webhook: 'hubspot', wake: 'always' })
     assert.equal(back.activation.debounceMs, 120_000)
   }
+  // Columns and back: what the row stores reads as the same config.
+  const cols = configColumns(config.config)
+  assert.deepEqual(configFromColumns(cols, runsForColumns(config.config.runsFor)), config.config)
+
   const cron = parseEvery('*/10 * * * *')
   assert.ok(cron.ok)
   if (!cron.ok) return
-  const cronBack = parseAgentActivation(parseFrontmatter(withActivation(BRIEF_MD, { active: true, schedule: cron.schedule })))
+  const cronBack = parseAgentActivation(configFrontmatter({ ...defaultAgentConfig(), active: true, schedule: cron.schedule }))
   assert.ok(cronBack.ok && cronBack.activation.every === '*/10 * * * *')
-  const weeklyMd = withActivation(BRIEF_MD, { active: true, schedule: { kind: 'weekly', hour: 9, minute: 0, weekday: 5 }, on: { context: ['people/**'], webhook: null } })
-  const weeklyBack = parseAgentActivation(parseFrontmatter(weeklyMd))
-  assert.ok(weeklyBack.ok && weeklyBack.activation.schedule?.kind === 'weekly' && weeklyBack.activation.schedule.weekday === 5 && weeklyBack.activation.on?.context[0] === 'people/**', weeklyMd)
+  const weekly = parseAgentActivation(
+    configFrontmatter({ ...defaultAgentConfig(), active: true, schedule: { kind: 'weekly', hour: 9, minute: 0, weekday: 5 }, on: { context: ['people/**'], webhook: null } }),
+  )
+  assert.ok(weekly.ok && weekly.activation.schedule?.kind === 'weekly' && weekly.activation.schedule.weekday === 5 && weekly.activation.on?.context[0] === 'people/**')
   assert.equal(describeTriggers(base.activation.on), 'when people/** changes · webhook hubspot')
   assert.equal(describeSchedule({ kind: 'interval', minutes: 15 }, null), 'Every 15 minutes')
+})
+
+test('an older brief\'s run keys fold into a config, and strip out of the note', () => {
+  const fm = parseFrontmatter('---\ntype: agent\ntitle: D\nmodel: gemini/x\nconnectors: [hubspot]\nactive: true\nschedule: hourly\nfor:\n  - user: u1\n    at: "07:30"\n---\nBody\n')
+  assert.deepEqual(runKeysOf(fm), ['model', 'connectors', 'for', 'active', 'schedule'])
+  const r = configFromFrontmatter(fm, 'Body')
+  assert.ok(r.ok, JSON.stringify(r))
+  if (r.ok) {
+    assert.equal(r.config.model, 'gemini/x')
+    assert.deepEqual(r.config.connectors, ['hubspot'])
+    assert.deepEqual(r.config.runsFor, [{ userId: 'u1', at: { hour: 7, minute: 30 }, timezone: null, model: null }])
+    assert.equal(r.config.active, true)
+  }
+  assert.deepEqual(Object.keys(stripRunKeys(fm)).sort(), ['title', 'type'])
 })
 
 test('on.wake: `always` is kept, `relevant` is the silent default, anything else is refused', () => {

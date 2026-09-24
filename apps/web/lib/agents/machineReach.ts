@@ -9,10 +9,8 @@
  * grant-free, because the answer is the brief's and the space's, not the
  * asker's view of them.
  */
-import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { compileForSpace, declaredReachHosts, type CompiledForSpace } from '@/lib/vm/policy'
-import { findAgentBrief } from './briefs'
-import { parseAgentBrief } from './config'
+import { readAgent } from './briefs'
 
 /**
  * The `taskAllow` the agent's machine is leased under. Null when there is no
@@ -20,11 +18,9 @@ import { parseAgentBrief } from './config'
  * for a lease it means nothing, never the space's whole list.
  */
 export async function agentReachHosts(spaceId: string, name: string): Promise<string[] | null> {
-  const row = await findAgentBrief(spaceId, name)
-  if (!row) return null
-  const parsed = parseAgentBrief(parseFrontmatter(row.content), splitFrontmatter(row.content).body)
-  if (!parsed.ok) return null
-  return declaredReachHosts(spaceId, parsed.brief.connectors)
+  const agent = await readAgent(spaceId, name)
+  if (!agent?.brief.ok) return null
+  return declaredReachHosts(spaceId, agent.brief.brief.connectors)
 }
 
 /** Null when there is no readable brief or no policy can be compiled. */

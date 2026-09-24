@@ -371,13 +371,6 @@ test('enqueueAgentEvent: 50 enqueues → one claim of ≤ cap; dedupe collapses;
         { spaceId: SPACE, ownerKey: 'shared', path: 'agents/listener/activation.md', content: '---\ntype: agent-activation\nactive: true\non:\n  context: ["people/**"]\ndebounce: 5s\n---\n', createdBy: ADMIN },
       ],
     })
-    // Match the hash the tick will compute so it claims without re-deriving.
-    const { parseAgentActivation, scheduleHash } = await import('@/lib/agents/config')
-    const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
-    const parsed = parseAgentActivation(parseFrontmatter('---\ntype: agent-activation\nactive: true\non:\n  context: ["people/**"]\ndebounce: 5s\n---\n'))
-    assert.ok(parsed.ok)
-    if (!parsed.ok) return
-    await prisma!.agentState.update({ where: { id: st.id }, data: { scheduleHash: scheduleHash(parsed.activation, 'UTC') } })
 
     // The tick is global: refuse to run it if some other due agent in this DB would be claimed and dispatched.
     const otherDue = await prisma!.agentState.count({ where: { active: true, status: 'idle', nextRunAt: { lte: later }, NOT: { spaceId: SPACE } } })
@@ -484,7 +477,7 @@ test('claimManualRun resets next_run_at once it takes the mail; a trigger-only a
   process.env.AGENT_DISPATCH = 'inline'
   const { enqueueAgentEvent } = await import('@/lib/agents/events')
   const { claimManualRun, tick } = await import('@/lib/agents/schedule')
-  const { parseAgentActivation, scheduleHash } = await import('@/lib/agents/config')
+  const { parseAgentActivation } = await import('@/lib/agents/config')
   const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
   await setup()
   try {
@@ -503,7 +496,7 @@ test('claimManualRun resets next_run_at once it takes the mail; a trigger-only a
     ;(await import('@/lib/notes/vaultCache')).invalidateVault({ spaceId: SPACE, ownerKey: 'shared' })
     await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 30, grantedBy: 'system' } })
     const st = await prisma!.agentState.create({
-      data: { spaceId: SPACE, name: 'only', runAsUserId: AUTHOR, active: true, triggersJson: { context: ['people/**'], webhook: null }, debounceMs: 5_000, scheduleHash: scheduleHash(parsed.activation, 'UTC') },
+      data: { spaceId: SPACE, name: 'only', runAsUserId: AUTHOR, active: true, triggersJson: { context: ['people/**'], webhook: null }, debounceMs: 5_000 },
     })
     // An event pulls next_run_at forward …
     assert.ok((await enqueueAgentEvent({ spaceId: SPACE, agentName: 'only', kind: 'note_written', source: 'people/a.md', summary: 's' })).ok)
@@ -602,7 +595,7 @@ test('a fire fans out: one run per subscriber, each acting as that person', asyn
   if (reason) return t.skip(reason)
   const { enqueueAgentEvent } = await import('@/lib/agents/events')
   const { tick } = await import('@/lib/agents/schedule')
-  const { parseAgentActivation, scheduleHash } = await import('@/lib/agents/config')
+  const { parseAgentActivation } = await import('@/lib/agents/config')
   const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
   process.env.AGENT_DISPATCH = 'inline'
   await setup()
@@ -619,7 +612,6 @@ test('a fire fans out: one run per subscriber, each acting as that person', asyn
         active: true,
         triggersJson: { context: ['people/**'], webhook: null },
         debounceMs: 5_000,
-        scheduleHash: scheduleHash(parsed.activation, 'UTC'),
       },
     })
     await prisma!.contextNote.createMany({

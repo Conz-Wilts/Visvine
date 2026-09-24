@@ -5,7 +5,9 @@ import { Chip, Input, Select } from '@visvine/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { LOCAL_RUNTIMES, localModelRef } from '@/lib/agents/local';
-import { readBriefSettings, updateBriefSettings, type BriefSettings } from '@/lib/agents/briefEdit';
+import { briefTags, withBriefTags } from '@/lib/agents/briefEdit';
+import type { AgentConfigInput } from '@/lib/agents/configInput';
+import type { AgentConfig as AgentRecordConfig } from '@/lib/agents/shared/agentConfig';
 import type { AgentSummary } from '@/lib/agents/service';
 import { useAgentOptions } from '../lib/useAgentOptions';
 import MachinePane from './MachinePane';
@@ -23,10 +25,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /**
  * What the agent runs on and reaches, one row each: when, model, tools,
- * connectors, group, cap. Every row is a key of the brief's frontmatter and is
- * saved as it is changed (lib/agents/briefEdit.ts, through the ordinary notes
- * API and its gate) — there is no Save. Anything a row does not cover is the
- * note itself, on the Context tab.
+ * connectors, group, cap. Each is saved as it is changed — there is no Save.
+ * Model, tools and connectors are the agent's RECORD (`PUT …/config`, gated
+ * per field on the server); Group is the brief's `tags:`, written to the note
+ * through the ordinary notes API; the cap is the budget route's. Anything a
+ * row does not cover is the note itself, on the Context tab.
  */
 export default function AgentConfig({
   spaceId,
@@ -38,7 +41,7 @@ export default function AgentConfig({
   onSaved,
 }: {
   spaceId: string;
-  agent: AgentSummary & { brief: string };
+  agent: AgentSummary & { brief: string; config: AgentRecordConfig };
   isAdmin: boolean;
   canManage: boolean;
   liveRun: boolean;
@@ -46,33 +49,57 @@ export default function AgentConfig({
   onSaved: () => void;
 }) {
   const { options } = useAgentOptions(spaceId);
-  const [value, setValue] = useState<BriefSettings>(() => readBriefSettings(agent.brief));
-  const [group, setGroup] = useState(value.tags.join(', '));
+  const [value, setValue] = useState<AgentRecordConfig>(agent.config);
+  const [tags, setTags] = useState<string[]>(() => briefTags(agent.brief));
+  const [group, setGroup] = useState(tags.join(', '));
   const [cap, setCap] = useState(agent.spend?.budgetMonthlyCents != null ? (agent.spend.budgetMonthlyCents / 100).toFixed(2) : '');
   const [error, setError] = useState<string | null>(null);
   // Saves are chained so two quick presses write in the order they were made.
   const queue = useRef<Promise<void>>(Promise.resolve());
 
   // A save elsewhere (the note, an action) shows up on reload.
+  useEffect(() => setValue(agent.config), [agent.config]);
   useEffect(() => {
-    const next = readBriefSettings(agent.brief);
-    setValue(next);
-    setGroup(next.tags.join(', '));
+    const next = briefTags(agent.brief);
+    setTags(next);
+    setGroup(next.join(', '));
   }, [agent.brief]);
 
-  const save = (patch: Partial<BriefSettings>) => {
-    setValue((v) => ({ ...v, ...patch }));
+  const enqueue = (write: () => Promise<void>, undo: () => void) => {
     setError(null);
     queue.current = queue.current.then(async () => {
       try {
-        const { content } = await notesApi.read(spaceId, agent.path);
-        await notesApi.write(spaceId, agent.path, updateBriefSettings(content, patch));
+        await write();
         onSaved();
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not save');
-        setValue(readBriefSettings(agent.brief));
+        undo();
       }
     });
+  };
+
+  const save = (patch: Partial<AgentRecordConfig>, input: AgentConfigInput) => {
+    setValue((v) => ({ ...v, ...patch }));
+    enqueue(
+      () =>
+        fetchJson(`/api/spaces/${spaceId}/agents/${encodeURIComponent(agent.name)}/config`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        }).then(() => undefined),
+      () => setValue(agent.config),
+    );
+  };
+
+  const saveTags = (next: string[]) => {
+    setTags(next);
+    enqueue(
+      async () => {
+        const { content } = await notesApi.read(spaceId, agent.path);
+        await notesApi.write(spaceId, agent.path, withBriefTags(content, next));
+      },
+      () => setTags(briefTags(agent.brief)),
+    );
   };
 
   const saveCap = async () => {
@@ -92,7 +119,7 @@ export default function AgentConfig({
   };
 
   const models = options?.models ?? [];
-  const pinned = value.model.trim();
+  const pinned = value.model?.trim() ?? '';
   const known = !pinned || pinned.startsWith('local/') || models.some((m) => m.ref === pinned);
   const connectors = options?.connectors ?? [];
   const when = agent.activation.active
@@ -111,7 +138,7 @@ export default function AgentConfig({
         </Row>
         <Row label="Model">
           <div className="max-w-xs">
-          <Select value={pinned} aria-label="Model" onChange={(e) => save({ model: e.target.value })}>
+          <Select value={pinned} aria-label="Model" onChange={(e) => save({ model: e.target.value || null }, { model: e.target.value || null })}>
             <option value="">{options?.spaceModel ? `Space’s model · ${options.spaceModel.label}` : 'Space’s model'}</option>
             {models.map((m) => (
               <option key={m.name} value={m.ref ?? ''} disabled={!m.ref || m.problem !== null}>
@@ -130,7 +157,10 @@ export default function AgentConfig({
         <Row label="Tools">
           <div className="flex flex-wrap gap-1.5">
             {(options?.tools ?? []).map((t) => (
-              <Chip key={t.id} size="lg" color={value.tools.includes(t.id) ? ON : undefined} title={t.description} onClick={() => save({ tools: toggle(value.tools, t.id) })}>
+              <Chip key={t.id} size="lg" color={value.tools.includes(t.id) ? ON : undefined} title={t.description} onClick={() => {
+                const tools = toggle(value.tools, t.id);
+                save({ tools }, { tools });
+              }}>
                 {t.label}
               </Chip>
             ))}
@@ -140,7 +170,10 @@ export default function AgentConfig({
           <Row label="Connectors">
             <div className="flex flex-wrap gap-1.5">
               {connectors.map((c) => (
-                <Chip key={c.name} size="lg" color={value.connectors.includes(c.name) ? ON : undefined} onClick={() => save({ connectors: toggle(value.connectors, c.name) })}>
+                <Chip key={c.name} size="lg" color={value.connectors.includes(c.name) ? ON : undefined} onClick={() => {
+                  const next = toggle(value.connectors, c.name);
+                  save({ connectors: next }, { connectors: next });
+                }}>
                   {c.name}
                 </Chip>
               ))}
@@ -155,8 +188,8 @@ export default function AgentConfig({
             placeholder="None"
             onChange={(e) => setGroup(e.target.value)}
             onBlur={() => {
-              const tags = group.split(',').map((t) => t.trim()).filter(Boolean);
-              if (tags.join(',') !== value.tags.join(',')) save({ tags });
+              const next = group.split(',').map((t) => t.trim()).filter(Boolean);
+              if (next.join(',') !== tags.join(',')) saveTags(next);
             }}
           />
           </div>

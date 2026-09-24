@@ -3,13 +3,12 @@ import prisma from '@/lib/prisma'
 import { z } from 'zod'
 import { bad, requireAgentsAccess } from '@/lib/agents/route'
 import { canTriggerRun } from '@/lib/agents/service'
-import { findAgentBrief } from '@/lib/agents/briefs'
-import { parseAgentBrief } from '@/lib/agents/config'
+import { agentConfigOf, composeAgent, findAgentBrief } from '@/lib/agents/briefs'
 import { syncAgentState } from '@/lib/agents/hooks'
 import { createRun, finishRun, type AgentRunEvent, type TerminalReason } from '@/lib/agents/runs'
 import { isLocalRuntimeId, localAgentPreamble, localModelRef, localRuntimeOf, localRuntimesEnabled } from '@/lib/agents/local'
 import { readVisible } from '@/lib/notes/contextService'
-import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
+import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { parseBody } from '@/lib/api/route'
 
 /**
@@ -34,7 +33,7 @@ async function localBrief(spaceId: string, name: string, ctx: Awaited<ReturnType
   const row = await findAgentBrief(spaceId, name)
   const content = row ? await readVisible(ctx.principal, ctx.resolved, row.path) : null
   if (!row || content === null) return bad('No such agent.', 404)
-  const parsed = parseAgentBrief(parseFrontmatter(content), splitFrontmatter(content).body)
+  const parsed = composeAgent(content, await agentConfigOf(spaceId, name)).brief
   if (!parsed.ok) return bad(`The brief is invalid: ${parsed.error}`)
   const runtime = localRuntimeOf(parsed.brief.model)
   if (!runtime) return bad('This agent runs on the space’s model, not on your plan — run it with Run.')

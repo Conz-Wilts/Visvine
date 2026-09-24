@@ -1,5 +1,7 @@
 'use client';
 
+import type { AgentConfig as AgentRecordConfig } from '@/lib/agents/shared/agentConfig';
+import type { AgentConfigChangeRow } from '@/lib/agents/record';
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
@@ -48,6 +50,8 @@ type AgentDetail = AgentSummary & {
   subscribers: AgentSubscriber[];
   viewerSubscribed: boolean;
   readiness: AgentReadiness;
+  config: AgentRecordConfig;
+  configChanges: AgentConfigChangeRow[];
 };
 
 interface DetailResponse {

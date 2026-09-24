@@ -7,19 +7,25 @@
  * it is read here so such an agent keeps running, never written.
  */
 import prisma from '@/lib/prisma'
-import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
+import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import {
   agentActivationPath,
   agentBriefAliasPath,
   agentBriefPath,
   hasActivationFrontmatter,
   parseAgentActivation,
+  parseAgentBrief,
   type ParseActivationResult,
+  type ParseBriefResult,
 } from './config'
+import { configFromColumns, effectiveFrontmatter, type AgentConfig } from './shared/agentConfig'
 
 const SHARED_OWNER_KEY = 'shared'
 
 export interface AgentBriefRow {
+  /** The space the note is in — the house's, for a run-in copy. */
+  spaceId: string
   /** The note row's own id — what says this is the SAME brief and not a new
    *  agent that happens to have taken the name back. */
   id: string
@@ -36,7 +42,8 @@ export async function findOwnAgentBrief(spaceId: string, name: string): Promise<
     select: { id: true, path: true, content: true, createdBy: true },
   })
   // The folder form wins when both exist — the alias is only ever a leftover.
-  return rows.find((r) => r.path === index) ?? rows[0] ?? null
+  const row = rows.find((r) => r.path === index) ?? rows[0] ?? null
+  return row ? { ...row, spaceId } : null
 }
 
 /**
@@ -65,6 +72,55 @@ export interface AgentActivationSource {
 }
 
 /**
+ * How the agent at `name` in `spaceId` runs — its record, or null for a row
+ * from before the record existed (its note still says). A run-in copy runs
+ * the HOUSE's record, as it runs the house's brief.
+ */
+export async function agentConfigOf(spaceId: string, name: string): Promise<AgentConfig | null> {
+  const row = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } })
+  if (row?.sharedFrom) return agentConfigOf(row.sharedFrom, name)
+  if (!row?.configuredAt) return null
+  const subs = await prisma.agentSubscription.findMany({ where: { spaceId, name }, orderBy: { createdAt: 'asc' } })
+  return configFromColumns(row, subs)
+}
+
+/** One agent as every reader sees it: the note's prose with the record's run keys laid over it. */
+export interface ComposedAgent {
+  /** The frontmatter the parsers read — the note's own keys, the record's run keys. */
+  fm: NoteFrontmatter
+  body: string
+  brief: ParseBriefResult
+  activation: ParseActivationResult
+}
+
+export function composeAgent(noteContent: string, config: AgentConfig | null): ComposedAgent {
+  const fm = effectiveFrontmatter(parseFrontmatter(noteContent), config)
+  const body = splitFrontmatter(noteContent).body
+  return { fm, body, brief: parseAgentBrief(fm, body), activation: parseAgentActivation(fm) }
+}
+
+export interface AgentRecord extends ComposedAgent {
+  note: AgentBriefRow
+  /** The record, or null when the note still carries it (a row from before). */
+  config: AgentConfig | null
+}
+
+/**
+ * THE read of an agent: its note and its record, composed. Null when there is
+ * no such agent. Every reader — runner, tick, roster, chat, tools — goes
+ * through this, so none of them knows which half a key lives in.
+ */
+export async function readAgent(spaceId: string, name: string): Promise<AgentRecord | null> {
+  const [note, config] = await Promise.all([findAgentBrief(spaceId, name), agentConfigOf(spaceId, name)])
+  if (!note) return null
+  if (config) return { note, config, ...composeAgent(note.content, config) }
+  // Not yet a record: the note's own keys, with a pre-merge activation.md as before.
+  const composed = composeAgent(note.content, null)
+  const activation = (await findAgentActivation(spaceId, name)).parsed ?? composed.activation
+  return { note, config: null, ...composed, activation }
+}
+
+/**
  * Where this agent's activation is, and what it says.
  *
  * The brief IS the activation now, so the answer is normally its own
@@ -75,6 +131,10 @@ export interface AgentActivationSource {
  */
 export async function findAgentActivation(spaceId: string, name: string): Promise<AgentActivationSource> {
   const brief = await findAgentBrief(spaceId, name)
+  const config = brief ? await agentConfigOf(spaceId, name) : null
+  if (brief && config) {
+    return { parsed: composeAgent(brief.content, config).activation, path: brief.path, content: brief.content, legacy: false }
+  }
   if (brief) {
     const fm = parseFrontmatter(brief.content)
     if (hasActivationFrontmatter(fm)) {
@@ -89,4 +149,30 @@ export async function findAgentActivation(spaceId: string, name: string): Promis
     return { parsed: parseAgentActivation(parseFrontmatter(legacy.content)), path: agentActivationPath(name), content: legacy.content, legacy: true }
   }
   return { parsed: brief ? parseAgentActivation({}) : null, path: brief?.path ?? null, content: brief?.content ?? null, legacy: false }
+}
+
+/**
+ * A reader of `space`'s notes that sees each agent brief's SHARE the way the
+ * share-down rules need it (`isSharedDown`): the note's frontmatter with the
+ * record's `share` / `share_as` laid over it, since a brief note no longer
+ * carries them. One query for the whole space; other notes pass through.
+ */
+export async function withAgentShares(spaceId: string): Promise<(path: string, fm: NoteFrontmatter) => NoteFrontmatter> {
+  const rows = await prisma.agentState.findMany({
+    where: { spaceId, configuredAt: { not: null }, sharedFrom: null },
+    select: { name: true, shareMode: true, shareRooms: true, shareAs: true },
+  })
+  const byName = new Map(rows.map((r) => [r.name, r]))
+  return (path, fm) => {
+    const m = /^agents\/([^/]+)(?:\/index)?\.md$/.exec(path)
+    const row = m ? byName.get(m[1]) : undefined
+    if (!row) return fm
+    const out: NoteFrontmatter = { ...fm }
+    delete out.share
+    delete out.share_as
+    if (row.shareMode === 'all') out.share = 'all'
+    else if (row.shareMode === 'rooms' && row.shareRooms.length) out.share = row.shareRooms
+    if (out.share !== undefined && row.shareAs === 'run-in') out.share_as = 'run-in'
+    return out
+  }
 }

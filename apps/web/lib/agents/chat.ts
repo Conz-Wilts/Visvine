@@ -27,14 +27,13 @@ import { takeToken } from '@/lib/rateLimit'
 import { ModelError } from '@/lib/notes/ai'
 import { connectorReachFor } from '@/lib/connectors/service'
 import { readVisible } from '@/lib/notes/contextService'
-import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
 import type { ChatFn } from '@/lib/notes/toolLoop'
 import { costMicros, preRunStop, type BudgetState } from './budget'
-import { findAgentBrief } from './briefs'
+import { agentConfigOf, composeAgent, findAgentBrief } from './briefs'
 import { runChatTurn } from './chatTurn'
-import { AGENT_NAME_RE, parseAgentBrief, type AgentBrief } from './config'
+import { AGENT_NAME_RE, type AgentBrief } from './config'
 import { effectiveTimezone } from './hooks'
 import { resolveAgentChatConfig } from './providers'
 import { ledgerSpendForAgent, ledgerSpendForMonth, meterModelUsage } from './runs'
@@ -219,7 +218,7 @@ export async function sendChatMessage(
   const row = await findAgentBrief(spaceId, agentName)
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return { ok: false, status: 404, reason: 'unknown_agent', message: 'No such agent here.' }
-  const parsed = parseAgentBrief(parseFrontmatter(content), splitFrontmatter(content).body)
+  const parsed = composeAgent(content, await agentConfigOf(spaceId, agentName)).brief
   if (!parsed.ok) return { ok: false, status: 422, reason: 'invalid_brief', message: `This agent's brief is not valid: ${parsed.error}` }
   const brief: AgentBrief = parsed.brief
 

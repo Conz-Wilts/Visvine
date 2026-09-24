@@ -26,6 +26,7 @@
 // Every function takes `(principal, context)` like contextService's, so the
 // routes, the actions and an agent's tools call them the same way.
 
+import { withAgentShares } from '@/lib/agents/briefs'
 import { LEVEL_VIEW } from './shared/authz'
 import { readVisible, searchContext, visibleVault, type BrainSearchResult, type SearchOptions } from './contextService'
 import { contextAccessFor, ensureAccessSeeded, spaceWideAccessFor } from './access'
@@ -247,8 +248,8 @@ export async function parentShare(context: Context): Promise<ParentShare | null>
   const parent = await parentOfSubspace(context.spaceId)
   if (!parent) return null
   const pctx: Context = { spaceId: parent.id, ownerKey: SHARED_OWNER_KEY }
-  const raws = await listRaw(pctx)
-  const notes = raws.filter((r) => isSharedDown(r.path, parseFrontmatter(r.content), context.spaceId))
+  const [raws, fmOf] = await Promise.all([listRaw(pctx), withAgentShares(parent.id)])
+  const notes = raws.filter((r) => isSharedDown(r.path, fmOf(r.path, parseFrontmatter(r.content)), context.spaceId))
   return { space: parent, context: pctx, notes }
 }
 

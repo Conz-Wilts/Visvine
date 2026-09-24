@@ -23,6 +23,7 @@ import { AGENT_TOOL_OPTIONS } from './config'
 import { defaultModelOf, noModelReason, spaceModels } from './spaceModels'
 import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
 import { isSharedDown } from '@/lib/spaces/subspaces'
+import { withAgentShares } from './briefs'
 import type { ModelPricing } from './registry'
 
 const SHARED_OWNER_KEY = 'shared'
@@ -125,8 +126,9 @@ async function sharedParentAgents(spaceId: string): Promise<AgentOptions['shared
     orderBy: { path: 'asc' },
   })
   const out: AgentOptions['sharedAgents'] = []
+  const fmOf = await withAgentShares(parent.id)
   for (const row of rows) {
-    const fm = parseFrontmatter(row.content)
+    const fm = fmOf(row.path, parseFrontmatter(row.content))
     // Per room: a brief shared with other rooms is not offered here.
     if (!isAgentBriefPath(row.path) || !isSharedDown(row.path, fm, spaceId)) continue
     const name = agentNameOfPath(row.path)

@@ -19,7 +19,7 @@ import { embeddingEnabledFor } from './embedSweep'
 import { embedTexts, semanticConfigured, type SemanticStatus } from './embeddings'
 import { getVault, vaultFor } from './vaultCache'
 import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
-import { parseRunsFor, runsForDenial } from '@/lib/agents/shared/runsFor'
+import { runKeysOf } from '@/lib/agents/shared/agentConfig'
 import { rewriteLinks } from './shared/linkRewrite'
 import { fusedSearch, type FusedResult, type SearchFilters } from './shared/retrieval'
 import { createReranker, type RerankReport } from './rerank'
@@ -533,45 +533,31 @@ export async function writeGated(
     lockedDenial(p, context, path, origin, model) ??
     (await configKindDenial(p, context, path, content))
   if (denial) return { status: 'denied', reason: denial }
-  const runsAsDenial = activationRunsAsDenial(p, context, path, content)
-  if (runsAsDenial) return { status: 'denied', reason: runsAsDenial }
-  const forDenial = await briefRunsForDenial(p, context, path, content)
-  if (forDenial) return { status: 'denied', reason: forDenial }
+  const runKeys = await briefRunKeyDenial(p, context, path, content)
+  if (runKeys) return { status: 'denied', reason: runKeys }
   await store.writeNote(context, path, content, actorOf(p), origin, model)
   return { status: 'applied', path }
 }
 
 /**
- * The brief's `for:` block names the people each fire also runs AS, so an
- * entry is that person's own to add: a writer may take anyone out, and put in
- * or change only themselves — a space admin anyone (shared/runsFor.ts). A
- * block that does not parse is the brief's own problem, said where briefs are.
+ * How an agent runs — model, connectors, tools, schedule, who it runs as and
+ * for, its share — is its RECORD (lib/agents/shared/agentConfig.ts), changed
+ * only through `configure_agent` / the agent's Config, where each field has
+ * its own gate. So a brief note may not ADD or CHANGE a run key; taking one
+ * out is fine, and a note written before the record keeps the ones it has
+ * until the store hook folds them in. The system writes the older shape freely.
  */
-async function briefRunsForDenial(p: ContextPrincipal, context: Context, path: string, content: string): Promise<string | null> {
-  if (!isShared(context) || !isAgentBriefPath(path) || p.system) return null
-  const after = parseRunsFor(parseFrontmatter(content).for)
-  if (!after.ok || after.entries.length === 0) return null
+async function briefRunKeyDenial(p: ContextPrincipal, context: Context, path: string, content: string): Promise<string | null> {
+  if (!isShared(context) || !(isAgentBriefPath(path) || isAgentActivationPath(path)) || p.system) return null
+  const after = parseFrontmatter(content)
+  const keys = runKeysOf(after)
+  if (keys.length === 0) return null
   const current = await store.readNoteOrNull(context, path)
-  const before = current ? parseRunsFor(parseFrontmatter(current).for) : null
-  return runsForDenial(before?.ok ? before.entries : [], after.entries, { userId: p.userId, isAdmin: principalIsSuperAdmin(p) })
+  const before = current ? parseFrontmatter(current) : {}
+  const changed = keys.filter((k) => JSON.stringify(after[k]) !== JSON.stringify(before[k]))
+  if (changed.length === 0) return null
+  return `How an agent runs is not written in its note — ${changed.map((k) => `\`${k}\``).join(', ')} ${changed.length === 1 ? 'is' : 'are'} set with configure_agent (or on the agent's Config). The note holds its title, description, tags and brief.`
 }
-
-/**
- * An agent's brief (agents/<name>/index.md) carries its activation, and is
- * written by whoever can edit the agent's folder — so turning an agent on is a
- * member act. The one field in it that reaches beyond the writer is `runs_as`:
- * a run spends that member's stored connections, and naming somebody else is a
- * space admin's call. A member may leave it out (the agent runs as its author)
- * or name themselves. A pre-merge `activation.md` is gated identically.
- */
-function activationRunsAsDenial(p: ContextPrincipal, context: Context, path: string, content: string): string | null {
-  if (!isShared(context) || !(isAgentBriefPath(path) || isAgentActivationPath(path)) || p.system || principalIsSuperAdmin(p)) return null
-  const runsAs = parseFrontmatter(content).runs_as
-  if (runsAs === undefined || runsAs === null || runsAs === '') return null
-  if (typeof runsAs === 'string' && runsAs.trim() === p.userId) return null
-  return 'Only a space admin can make an agent run as someone else. Leave `runs_as` out, or name yourself.'
-}
-
 
 /**
  * Gated dated `## Log` append (creating the section when absent). AI/agent

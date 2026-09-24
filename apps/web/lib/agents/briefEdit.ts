@@ -1,117 +1,26 @@
 /**
- * Editing a brief's settings without touching its prose. The settings form on
- * the agent page and the create surface both hold the same handful of
- * frontmatter keys; this is the one place they are written, so the shape the
- * parser reads (`lib/agents/config.ts#parseAgentBrief`) and the shape the UI
- * writes cannot drift. Pure: string in, string out.
- *
- * Keys not named in the patch — `title`, `type`, `agents`, anything a person
- * added by hand — survive untouched, and so does the body. A key set to its
- * default (`dry_run: false`, empty `tools`) is dropped rather than written,
- * so a brief someone wrote by hand does not grow lines they never typed.
+ * The one brief-note key the agent's Config screen writes: `tags:` — the
+ * roster's groups, which stay in the note because they classify what the
+ * agent IS (every note's tags reach its node the same way). Everything else
+ * the screen edits is the record (shared/agentConfig.ts). Pure: string in,
+ * string out; the body and every other key are untouched.
  */
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
-import { AGENT_TOOL_EXTRAS, type AgentToolExtra } from './config'
-import { shareTargets } from '@/lib/spaces/subspaces'
-import { parseRunsFor, runsForFrontmatter, withRunsFor, type RunsForEntry } from './shared/runsFor'
 
-export interface BriefSettings {
-  model: string
-  description: string
-  connectors: string[]
-  tools: AgentToolExtra[]
-  dryRun: boolean
-  maxTurns: number | null
-  /** The brief's `tags:` — the roster's groups. */
-  tags: string[]
-  /** `share:` — which sub-spaces this brief is offered to: none, all, or named rooms (docs/sub-spaces.md). */
-  share: 'none' | 'all' | string[]
-  /** `share_as:` — `use` (rooms may start it; runs here) or `run-in` (a copy runs in each governed room). */
-  shareAs: 'use' | 'run-in'
+/** The brief's `tags:`, as the Group field shows them. */
+export function briefTags(content: string): string[] {
+  const raw: unknown = parseFrontmatter(content).tags
+  const list: unknown[] = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []
+  return [...new Set(list.filter((t): t is string => typeof t === 'string').map((t) => t.trim()).filter(Boolean))]
 }
 
-export type BriefSettingsPatch = Partial<BriefSettings>
-
-/** The settings a brief's frontmatter currently holds, as the form reads them. */
-export function readBriefSettings(content: string): BriefSettings {
-  const fm = parseFrontmatter(content)
-  const list = (raw: unknown): string[] =>
-    Array.isArray(raw)
-      ? raw.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter(Boolean)
-      : typeof raw === 'string'
-        ? raw.split(',').map((v) => v.trim()).filter(Boolean)
-        : []
-  const tools = list(fm.tools)
-    .map((t) => t.toLowerCase())
-    .filter((t): t is AgentToolExtra => (AGENT_TOOL_EXTRAS as readonly string[]).includes(t))
-  const maxTurns = typeof fm.max_turns === 'number' ? fm.max_turns : Number(fm.max_turns)
-  return {
-    model: typeof fm.model === 'string' ? fm.model.trim() : '',
-    description: typeof fm.description === 'string' ? fm.description.trim() : '',
-    connectors: list(fm.connectors),
-    tools: [...new Set(tools)],
-    dryRun: fm.dry_run === true || (typeof fm.dry_run === 'string' && fm.dry_run.trim().toLowerCase() === 'true'),
-    maxTurns: Number.isInteger(maxTurns) && maxTurns > 0 ? maxTurns : null,
-    tags: [...new Set(list(fm.tags))],
-    share: typeof fm.share === 'string' && fm.share.trim().toLowerCase() === 'none' ? 'none' : shareTargets(fm),
-    shareAs: typeof fm.share_as === 'string' && /^run[-_]?in$/i.test(fm.share_as.trim()) ? 'run-in' : 'use',
-  }
-}
-
-/** The brief with `patch` applied to its frontmatter and its body untouched. */
-export function updateBriefSettings(content: string, patch: BriefSettingsPatch): string {
-  const { body } = splitFrontmatter(content)
-  const fm: NoteFrontmatter = { ...parseFrontmatter(content), type: 'agent' }
-  if (patch.model !== undefined) fm.model = patch.model.trim()
-  if (patch.description !== undefined) {
-    if (patch.description.trim()) fm.description = patch.description.trim()
-    else delete fm.description
-  }
-  if (patch.connectors !== undefined) fm.connectors = [...new Set(patch.connectors.map((c) => c.trim()).filter(Boolean))]
-  if (patch.tools !== undefined) {
-    const tools = [...new Set(patch.tools)]
-    if (tools.length) fm.tools = tools
-    else delete fm.tools
-  }
-  if (patch.dryRun !== undefined) {
-    if (patch.dryRun) fm.dry_run = true
-    else delete fm.dry_run
-  }
-  if (patch.maxTurns !== undefined) {
-    if (patch.maxTurns === null) delete fm.max_turns
-    else fm.max_turns = patch.maxTurns
-  }
-  if (patch.tags !== undefined) {
-    const tags = [...new Set(patch.tags.map((t) => t.trim()).filter(Boolean))]
-    if (tags.length) fm.tags = tags
-    else delete fm.tags
-  }
-  if (patch.share !== undefined) {
-    if (patch.share === 'none') delete fm.share
-    else if (patch.share === 'all') fm.share = 'all'
-    else {
-      const rooms = [...new Set(patch.share.map((r) => r.trim()).filter(Boolean))]
-      if (rooms.length) fm.share = rooms
-      else delete fm.share
-    }
-  }
-  if (patch.shareAs !== undefined || patch.share !== undefined) {
-    const mode = patch.shareAs ?? (typeof fm.share_as === 'string' && /^run[-_]?in$/i.test(fm.share_as) ? 'run-in' : 'use')
-    // `use` is the default and `share_as` means nothing without a share.
-    if (mode === 'run-in' && fm.share !== undefined) fm.share_as = 'run-in'
-    else delete fm.share_as
-  }
-  return joinFrontmatter(fm, body)
-}
-
-/** The brief with one person's `for:` entry set — or, with null, taken out. Everything else untouched. */
-export function setRunsFor(content: string, userId: string, entry: Omit<RunsForEntry, 'userId'> | null): string {
+/** The brief with its `tags:` replaced — dropped when empty. */
+export function withBriefTags(content: string, tags: string[]): string {
   const { body } = splitFrontmatter(content)
   const fm: NoteFrontmatter = { ...parseFrontmatter(content) }
-  const current = parseRunsFor(fm.for)
-  const next = runsForFrontmatter(withRunsFor(current.ok ? current.entries : [], userId, entry))
-  if (next) fm.for = next
-  else delete fm.for
+  const next = [...new Set(tags.map((t) => t.trim()).filter(Boolean))]
+  if (next.length) fm.tags = next
+  else delete fm.tags
   return joinFrontmatter(fm, body)
 }

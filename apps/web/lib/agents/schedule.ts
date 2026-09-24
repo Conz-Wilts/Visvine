@@ -15,11 +15,9 @@
  */
 import crypto from 'node:crypto'
 import prisma from '@/lib/prisma'
-import { parseAgentBrief, scheduleHash } from './config'
-import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { dueIdentities, nextFire } from './shared/fanout'
 import type { RunsForEntry } from './shared/runsFor'
-import { findAgentActivation, findAgentBrief, findOwnAgentBrief } from './briefs'
+import { findAgentActivation, findAgentBrief, readAgent } from './briefs'
 import { gateWake } from './wakeGate'
 import { dispatchRun, type DispatchResult } from './dispatch'
 import { claimEvents, eventDepthOf, type ClaimedEvent } from './events'
@@ -121,13 +119,13 @@ async function nextClockOccurrence(spaceId: string, name: string, now: Date): Pr
   return nextFire(parsed.activation.schedule, tz, await runsForOf(spaceId, name), now)
 }
 
-/** The brief's `for:` block — who the agent runs for besides its own identity. */
+/** Who the agent runs for besides its own identity — the record's runs-for. */
 async function runsForOf(spaceId: string, name: string): Promise<RunsForEntry[]> {
-  // The space's OWN brief: a run-in copy runs for nobody but the house brief's author.
-  const row = await findOwnAgentBrief(spaceId, name)
-  if (!row) return []
-  const parsed = parseAgentBrief(parseFrontmatter(row.content), splitFrontmatter(row.content).body)
-  return parsed.ok ? parsed.brief.runsFor : []
+  // A run-in copy runs for nobody but the house brief's author.
+  const copy = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } }, select: { sharedFrom: true } })
+  if (copy?.sharedFrom) return []
+  const agent = await readAgent(spaceId, name)
+  return agent?.brief.ok ? agent.brief.brief.runsFor : []
 }
 
 /** The run id is minted BEFORE the claim so the claim can name it (release is a CAS on it). */
@@ -175,9 +173,8 @@ export async function tick(now = new Date()): Promise<TickReport> {
     if (claimed.length >= MAX_RUNS_PER_TICK) break
     if (busy.has(row.spaceId)) continue
 
-    // Derivation discipline: if the brief changed under the row (a write that
-    // bypassed the hook — restore, direct SQL), re-derive first and only claim
-    // if the note still says it's due.
+    // A row whose agent no longer reads as runnable (its brief deleted or
+    // broken under it) is re-derived rather than claimed.
     const parsed = (await findAgentActivation(row.spaceId, row.name)).parsed
     if (!parsed || !parsed.ok || !parsed.activation.active || (!parsed.activation.schedule && !parsed.activation.on)) {
       await syncAgentState(row.spaceId, row.name, { now })
@@ -185,11 +182,6 @@ export async function tick(now = new Date()): Promise<TickReport> {
     }
     const tz = await effectiveTimezone(row.spaceId, parsed.activation.timezone)
     const runsFor = await runsForOf(row.spaceId, row.name)
-    const hash = scheduleHash(parsed.activation, tz, runsFor)
-    if (hash !== row.scheduleHash) {
-      const fresh = await syncAgentState(row.spaceId, row.name, { activation: parsed.activation, now })
-      if (!fresh.active || !fresh.nextRunAt || fresh.nextRunAt > now) continue
-    }
     // Event-only agents have no clock: next_run_at goes back to null until the
     // next event pulls it forward (or release re-arms it for mail that arrived
     // mid-run).

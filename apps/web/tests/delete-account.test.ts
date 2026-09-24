@@ -95,7 +95,7 @@ test('every userId-scoped model without a cascading User FK is cleared by delete
  * An allowlist, not a loophole: a new table cannot opt out of deletion by
  * accident, only by being named here deliberately.
  */
-const REDACTED_BY_DESIGN = new Set(['ContextAuditEntry'])
+const REDACTED_BY_DESIGN = new Set(['ContextAuditEntry', 'AgentConfigChange'])
 
 test('the audit trail is redacted on account deletion, never deleted', () => {
   // If deleting an account erased its audit entries, deleting an account would

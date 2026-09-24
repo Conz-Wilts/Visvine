@@ -9,7 +9,7 @@ import { platformClientRef, resolvePlatformClient } from '@/lib/connectors/platf
 import { createPkce, randomState, statesMatch, authorizeUrl } from '@/lib/connectors/oauth'
 import { readPending, signPending } from '@/lib/connectors/pending'
 import { parseConnectorPerimeter, perimeterSecretRefs } from '@/lib/connectors/config'
-import { parseAgentActivation, scheduleHash } from '@/lib/agents/config'
+import { parseAgentActivation } from '@/lib/agents/config'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { createHash } from 'node:crypto'
 
@@ -301,11 +301,3 @@ test('agents: runs_as is read off the live note, and defaults to absent', () => 
   assert.equal(pointed.activation.runsAs, 'user_service')
 })
 
-test('agents: repointing runs_as does not reschedule the agent', () => {
-  const a = parseAgentActivation(fm('active: true\nschedule: daily\nat: "07:00"'))
-  const b = parseAgentActivation(fm('active: true\nschedule: daily\nat: "07:00"\nruns_as: user_x'))
-  assert.ok(a.ok && b.ok)
-  // scheduleHash drives dispatch. Whose credentials a run spends is not a
-  // scheduling fact, and folding it in would re-plan every agent on an edit.
-  assert.equal(scheduleHash(a.activation, 'UTC'), scheduleHash(b.activation, 'UTC'))
-})

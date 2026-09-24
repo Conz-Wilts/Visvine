@@ -5,21 +5,19 @@
  *
  * Three rules, all from the wayfinder map:
  *
- * 1. A write to `agents/<name>/index.md` re-derives `active`, `nextRunAt` and
- *    `scheduleHash` from the note — the brief IS the activation. The note is
- *    authoritative; the row is an index that can always be rebuilt. Editing a
- *    brief does not switch the agent off: the people who can edit one are the
- *    people who can turn it on, so a changed brief is not a lapsed approval.
- *    Machine deactivation (a rejected key, repeated failures) is the ONLY
- *    machine write into the activation boundary, and it can only ever set
- *    `active: false`.
+ * 1. A write to `agents/<name>/index.md` re-derives `active` and `nextRunAt`
+ *    from the agent's RECORD (the row's own config columns). A brief that
+ *    still carries run keys — written before the record, or by a seed or
+ *    script straight into the store — is ADOPTED: its keys are folded into
+ *    the record and stripped from the note (`adoptNoteConfig`). People and
+ *    agents never get that far: the write gate refuses run keys
+ *    (contextService#briefRunKeyDenial), so the record is changed only
+ *    through service.ts#configureAgent.
  * 2. A write to a pre-merge `agents/<name>/activation.md` re-derives the row
  *    the same way, so an agent from before the merge keeps working until
- *    `db:agents:activation` folds it in.
+ *    it is adopted.
  * 3. A rename or delete of the agent always deactivates — simple and safe;
- *    re-activating is one click. The activation rides the brief, so a folder
- *    rename or delete carries it by itself; the hook only has to move the
- *    state row.
+ *    re-activating is one click. The hook moves the state row with the name.
  *
  * Only prisma, the pure parsers, audit and auth are imported statically; the
  * store is reached by dynamic import because the store imports this file.
@@ -33,7 +31,8 @@ import {
   isAgentActivationPath,
   isAgentBriefPath,
 } from '@/lib/notes/entities'
-import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
+import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
+import { logger } from '@/lib/logger'
 import type { Actor, Context } from '@/lib/notes/store'
 
 // Redeclared (as entityLinks.ts does) rather than imported: the store imports
@@ -42,15 +41,15 @@ const SHARED_OWNER_KEY = 'shared'
 import {
   agentActivationPath,
   agentBriefPath,
-  scheduleHash,
   withActiveFalse,
   type AgentActivation,
   DEFAULT_DEBOUNCE_MS,
   copyRooms,
-  parseAgentBrief,
   type AgentBrief,
 } from './config'
-import { findAgentActivation, findAgentBrief, findOwnAgentBrief } from './briefs'
+import { agentConfigOf, findAgentActivation, findAgentBrief, findOwnAgentBrief, readAgent } from './briefs'
+import { configFromFrontmatter, configFrontmatter, configOf, runKeysOf, stripRunKeys } from './shared/agentConfig'
+import { storeAgentConfig } from './record'
 import { nextFire } from './shared/fanout'
 
 import { fireNoteTriggers, hasPendingEvents } from './events'
@@ -135,26 +134,23 @@ export async function syncAgentState(
     await retireCopy(existing.id, spaceId, name)
     return { active: false, nextRunAt: null, invalid: 'no longer shared with this room' }
   }
-  const briefRead = findAgentBrief(spaceId, name)
-  if (activation === undefined || activation === null) {
-    const found = await findAgentActivation(spaceId, name)
-    if (found.parsed?.ok) activation = found.parsed.activation
-    else if (found.parsed) invalid = found.parsed.error
+  const agent = await readAgent(spaceId, name)
+  const brief = agent?.note ?? null
+  if (!activation && agent) {
+    if (agent.activation.ok) activation = agent.activation.activation
+    else invalid = agent.activation.error
   }
-  const brief = await briefRead
   // Who the agent acts as. The brief's author by default — a member's agent
-  // reaches exactly what that member reaches — unless the activation repoints
-  // it with `runs_as`. That matters most for connectors with an `auth:` block:
-  // a run spends somebody's stored credentials, so the write gate lets a member
-  // name only themselves there and an admin anyone (contextService.writeGated).
+  // reaches exactly what that member reaches — unless the record repoints it
+  // with `runs_as`, which only an admin may set to someone else
+  // (service.ts#configureAgent).
   const runAsUserId = activation?.runsAs ?? brief?.createdBy ?? null
 
-  // Active = the note says so AND it has some way to fire (a clock or a trigger).
+  // Active = the record says so AND it has some way to fire (a clock or a trigger).
   const active = !!(activation?.active && (activation.schedule || activation.on) && brief)
   const tz = await effectiveTimezone(spaceId, activation?.timezone ?? null)
-  // Who it runs for is the brief's `for:` block; people with a time of their
-  // own pull the next fire forward to theirs (shared/fanout.ts).
-  const parsedBrief = brief ? parseAgentBrief(parseFrontmatter(brief.content), splitFrontmatter(brief.content).body) : null
+  // People with a time of their own pull the next fire forward to theirs (shared/fanout.ts).
+  const parsedBrief = agent?.brief ?? null
   const runsFor = parsedBrief?.ok && !existing?.sharedFrom ? parsedBrief.brief.runsFor : []
   let nextRunAt = active && activation?.schedule ? nextFire(activation.schedule, tz, runsFor, now) : null
   // Mail already waiting (arrived while inactive, or just before this
@@ -164,23 +160,23 @@ export async function syncAgentState(
     const soon = new Date(now.getTime() + activation.debounceMs)
     if (!nextRunAt || soon < nextRunAt) nextRunAt = soon
   }
-  const hash = activation ? scheduleHash(activation, tz, runsFor) : null
-  const triggersJson = activation?.on ? { context: activation.on.context, webhook: activation.on.webhook } : Prisma.DbNull
+  const triggersJson = activation?.on ? { ...activation.on } : Prisma.DbNull
   const debounceMs = activation?.debounceMs ?? DEFAULT_DEBOUNCE_MS
+  // Only the record's own run-in copies and pre-record rows are derived here;
+  // a configured row's config columns are its own and only `active` follows.
+  const configured = !!existing?.configuredAt && !existing.sharedFrom
 
-  const reborn = !!(brief && existing?.briefNoteId && existing.briefNoteId !== brief.id)
+  const reborn = !!(brief && existing?.briefNoteId && existing.briefNoteId !== brief.id && brief.spaceId === spaceId)
   if (reborn && existing) await retirePreviousIncarnation(spaceId, name, existing.id)
   const becameActive = active && !existing?.active
   await prisma.agentState.upsert({
     where: { agent_identity: { spaceId, name } },
-    create: { spaceId, name, briefNoteId: brief?.id ?? null, runAsUserId, active, nextRunAt, scheduleHash: hash, triggersJson, debounceMs },
+    create: { spaceId, name, briefNoteId: brief?.id ?? null, runAsUserId, active, nextRunAt, triggersJson, debounceMs },
     update: {
-      ...(brief ? { briefNoteId: brief.id } : {}),
+      ...(brief && brief.spaceId === spaceId ? { briefNoteId: brief.id } : {}),
       runAsUserId,
       active,
-      scheduleHash: hash,
-      triggersJson,
-      debounceMs,
+      ...(configured && !reborn ? {} : { triggersJson, debounceMs }),
       // A newly (re)activated agent starts clean; an inactive one keeps its
       // reason so the panel can say why. Keep a running row's nextRunAt as is:
       // dispatch already advanced it at claim time.
@@ -188,7 +184,8 @@ export async function syncAgentState(
       ...(becameActive ? { deactivatedReason: null, deactivatedDetail: null, consecutiveFailures: 0 } : {}),
       ...(!active && existing?.active ? { deactivatedReason: existing.deactivatedReason ?? 'admin' } : {}),
       // A new agent at an old name starts with a clean page: no last run, no
-      // failure streak, and none of the previous one's deactivation reason.
+      // failure streak, none of the previous one's deactivation reason — and
+      // none of its record, which the new note is adopted into afresh.
       ...(reborn
         ? {
             status: 'idle',
@@ -198,6 +195,7 @@ export async function syncAgentState(
             consecutiveFailures: 0,
             deactivatedReason: null,
             deactivatedDetail: null,
+            configuredAt: null,
           }
         : {}),
     },
@@ -206,11 +204,61 @@ export async function syncAgentState(
   // (a room holds no rooms, so this finds none and costs one query).
   if (!existing?.sharedFrom) {
     await syncSharedCopies(spaceId, name, parsedBrief?.ok ? parsedBrief.brief : null)
-    // `agent_subscriptions` is an index of the `for:` block — what the roster
-    // and account deletion query. An unreadable brief leaves it as it was.
-    if (!brief || parsedBrief?.ok) await indexRunsFor(spaceId, name, runsFor.map((e) => e.userId))
+    // Before the record, `agent_subscriptions` was an index of the note's
+    // `for:` block; for a configured agent it IS the list, written by the record.
+    if (!agent?.config && (!brief || parsedBrief?.ok)) await indexRunsFor(spaceId, name, runsFor.map((e) => e.userId))
   }
   return { active, nextRunAt, invalid }
+}
+
+/**
+ * Fold the run keys a brief note still carries into the agent's record, and
+ * take them out of the note. A note with none adopts the defaults, so every
+ * readable brief ends up with a record. A brief that does not parse is left
+ * as it is: its own words say what is wrong, where briefs are read.
+ *
+ * Reached only by writes that bypass the gate — the older note shape, a seed,
+ * a script. People and agents change the record through configureAgent.
+ */
+export async function adoptNoteConfig(spaceId: string, name: string): Promise<void> {
+  const note = await findOwnAgentBrief(spaceId, name)
+  if (!note) return
+  const fm = parseFrontmatter(note.content)
+  const { body } = splitFrontmatter(note.content)
+  const keys = runKeysOf(fm)
+  const row = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } }, select: { briefNoteId: true, sharedFrom: true } })
+  // A different note at an old name is a new agent: its keys start from nothing.
+  const reborn = !!(row?.briefNoteId && row.briefNoteId !== note.id)
+  if (reborn) await syncAgentState(spaceId, name)
+  const current = await agentConfigOf(spaceId, name)
+  if (current && keys.length === 0) return
+
+  let next
+  if (current) {
+    const picked = Object.fromEntries(keys.map((k) => [k, fm[k]]))
+    const merged = configFromFrontmatter({ ...configFrontmatter(current), ...picked }, body)
+    if (!merged.ok) {
+      logger.warn('agents: run keys in a brief did not fold into its record', { spaceId, name, error: merged.error })
+      return
+    }
+    next = merged.config
+  } else {
+    const agent = await readAgent(spaceId, name)
+    if (!agent?.brief.ok || !agent.activation.ok) return
+    next = configOf(agent.brief.brief, agent.activation.activation)
+  }
+  await storeAgentConfig(spaceId, name, next, { userId: null, briefNoteId: note.id })
+  if (keys.length) {
+    const store = await import('@/lib/notes/store')
+    await store.writeNote(
+      { spaceId, ownerKey: SHARED_OWNER_KEY },
+      note.path,
+      joinFrontmatter(stripRunKeys(fm), body),
+      SYSTEM_ACTOR,
+      'maintenance',
+      'agents',
+    )
+  }
 }
 
 /** Make the subscription rows say what the brief's `for:` block says. */
@@ -233,9 +281,9 @@ export async function copyStillAllowed(roomId: string, name: string, houseId: st
     findOwnAgentBrief(houseId, name),
   ])
   if (!room || room.parentId !== houseId || !brief) return false
-  const parsed = parseAgentBrief(parseFrontmatter(brief.content), splitFrontmatter(brief.content).body)
-  if (!parsed.ok) return false
-  return copyRooms(parsed.brief, [room]).length === 1
+  const house = await readAgent(houseId, name)
+  if (!house?.brief.ok) return false
+  return copyRooms(house.brief.brief, [room]).length === 1
 }
 
 async function retireCopy(stateId: string, roomId: string, name: string): Promise<void> {
@@ -269,10 +317,11 @@ async function syncSharedCopies(houseId: string, name: string, brief: AgentBrief
 }
 
 /**
- * Machine deactivation: write `active: false` into the note that carries the
- * activation, as the system principal (only ever false — never true, never a
- * schedule), record
- * why on the row, and leave an audit line. Safe to call when already inactive.
+ * Deactivation: switch the record off (only ever off — never on, never a
+ * schedule), record why on the row, and leave an audit line. Safe to call
+ * when already inactive. An agent from before the record is adopted first;
+ * one whose brief cannot be adopted still carries `active:` in its note, and
+ * `active: false` is written there instead, as the system.
  */
 export async function deactivateAgent(
   spaceId: string,
@@ -281,17 +330,21 @@ export async function deactivateAgent(
   detail: string | null,
   by: { userId: string; name: string } = { userId: 'system', name: 'Visvine' },
 ): Promise<void> {
-  const source = await findAgentActivation(spaceId, name)
-  // A run-in copy has no note of its own here: only its row is switched off,
-  // never the house's brief (which keeps its other copies running).
   const copy = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } }, select: { sharedFrom: true } })
-  // Into whichever note carries the activation — the brief, or a pre-merge
-  // activation.md an agent still has. Only ever `active: false`.
-  if (!copy?.sharedFrom && source.path && source.content && parseFrontmatter(source.content).active !== false) {
-    const store = await import('@/lib/notes/store')
-    // origin 'maintenance' stamps the revision as a machine act; the store
-    // is ungated (the gate lives in contextService), so no principal needed.
-    await store.writeNote({ spaceId, ownerKey: SHARED_OWNER_KEY }, source.path, withActiveFalse(source.content), SYSTEM_ACTOR, 'maintenance', 'agents')
+  // A run-in copy has no record of its own: only its row is switched off,
+  // never the house's (which keeps its other copies running).
+  if (!copy?.sharedFrom) {
+    await adoptNoteConfig(spaceId, name)
+    const config = await agentConfigOf(spaceId, name)
+    if (config) {
+      if (config.active) await storeAgentConfig(spaceId, name, { ...config, active: false }, { userId: by.userId === 'system' ? null : by.userId })
+    } else {
+      const source = await findAgentActivation(spaceId, name)
+      if (source.path && source.content && parseFrontmatter(source.content).active !== false) {
+        const store = await import('@/lib/notes/store')
+        await store.writeNote({ spaceId, ownerKey: SHARED_OWNER_KEY }, source.path, withActiveFalse(source.content), SYSTEM_ACTOR, 'maintenance', 'agents')
+      }
+    }
   }
   await prisma.agentState.updateMany({
     where: { spaceId, name },
@@ -342,6 +395,7 @@ export async function agentNoteWritten(
   // The brief carries the activation, so every write to it re-derives the row
   // — that is how turning an agent on takes effect. A pre-merge activation.md
   // does the same for an agent that still has one.
+  if (isAgentBriefPath(path)) await adoptNoteConfig(spaceId, name)
   if (isAgentBriefPath(path) || isAgentActivationPath(path)) await syncAgentState(spaceId, name)
 }
 

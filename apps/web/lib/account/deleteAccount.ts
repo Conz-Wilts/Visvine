@@ -88,9 +88,9 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     select: { id: true },
   })
 
-  // The agents that run FOR this person say so in their brief's `for:` block;
-  // the subscription rows are the index of it. Read before anything is
-  // deleted, taken out of the notes once the account is gone.
+  // The agents that run FOR this person: their rows go in the transaction, and
+  // each agent's record is re-saved without them once the account is gone —
+  // which also takes them out of a brief still written in the older shape.
   const runsFor = await prisma.agentSubscription.findMany({ where: { userId }, select: { spaceId: true, name: true } })
 
   // Guard before we delete anything: a space must not be left unmanageable.
@@ -195,6 +195,9 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     // Agent subscriptions — runs the agents fan out FOR this person. Without
     // this the tick would keep minting runs for a user who no longer exists.
     await tx.agentSubscription.deleteMany({ where: { userId } })
+    // Who changed how an agent runs is the space's history, like the audit
+    // trail: the change stays, the person in it does not.
+    await tx.agentConfigChange.updateMany({ where: { userId }, data: { userId: null } })
 
     // A nightly clean that ran AS this person stops. The pass acts for a
     // named admin or not at all, so it would only ever record a skipped run
