@@ -717,7 +717,7 @@ only).
   Embeds are ours, for the allowlist in `providers.ts`, which is also the CSP's
   `frame-src`.
 - **One viewer** (`features/resources/viewer/`, chrome in `@visvine/ui`):
-  a side panel or full screen on `?resource=<id>[&full=1]`, a renderer per kind
+  full screen on `?resource=<id>`, stepped down to a side panel with `&panel=1`, a renderer per kind
   from a pure registry. **One list** (`lib/resources/list.ts`) behind
   Directory → Resources, a channel's Files tab, the pickers and
   `list_resources`.

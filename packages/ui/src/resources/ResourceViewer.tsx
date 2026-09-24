@@ -62,8 +62,8 @@ function typingInto(target: EventTarget | null): boolean {
 /**
  * The resources viewer — Slack's flexpane grown into its file viewer. Beside
  * the page as a side sheet, or the whole window; the stage is the caller's
- * renderer. Keys: ← → walk the list, Esc steps full → panel → closed, f
- * toggles full, + − 0 zoom. Focus moves in on open and back out on close.
+ * renderer. Keys: ← → walk the list, Esc closes, f toggles full, + − 0
+ * zoom; a click on the full screen's backdrop closes it too. Focus moves in on open and back out on close.
  */
 export default function ResourceViewer({
   open,
@@ -104,8 +104,7 @@ export default function ResourceViewer({
       if (e.defaultPrevented || typingInto(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (mode === 'full') onModeChange('panel');
-        else onClose();
+        onClose();
       } else if (e.key === 'ArrowLeft' && onPrev) {
         e.preventDefault();
         onPrev();
@@ -250,7 +249,7 @@ export default function ResourceViewer({
         'fixed z-(--vv-z-modal) flex',
         full ? 'inset-0 bg-black/30' : 'inset-y-0 right-0 w-full sm:w-[28rem] lg:w-[30rem]',
       )}
-      onClick={full ? (e) => e.target === e.currentTarget && onModeChange('panel') : undefined}
+      onClick={full ? (e) => e.target === e.currentTarget && onClose() : undefined}
     >
       <div
         ref={shell}

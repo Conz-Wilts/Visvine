@@ -9,21 +9,23 @@
  * Files dropped or pasted here are uploaded; a pasted link is added.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { clsx } from 'clsx';
 import {
   Checkbox,
   ConfirmDialog,
+  FileTypeIcon,
   IconButton,
   Menu,
   ResourceCard,
   ResourceGrid,
   ResourceRow,
   SearchInput,
+  type FileKind,
   type MenuItem,
 } from '@visvine/ui';
+import FilterMenu from '@/features/resources/components/FilterMenu';
 import {
-  ChevronDownIcon,
   DownloadIcon,
   EllipsisIcon,
   ExternalLinkIcon,
@@ -65,6 +67,18 @@ const CHANNEL_KIND_FILTERS: Array<{ id: ListKind; label: string }> = [
   { id: 'link', label: 'Links' },
 ];
 
+/** The glyph a kind's row wears; `all` and `files` are no one kind. */
+const KIND_ICON: Partial<Record<ListKind, FileKind>> = {
+  image: 'image',
+  pdf: 'pdf',
+  doc: 'doc',
+  sheet: 'sheet',
+  slides: 'slides',
+  video: 'video',
+  audio: 'audio',
+  link: 'link',
+}
+
 const SORTS: Array<{ id: ListSort; label: string }> = [
   { id: 'recent', label: 'Recent' },
   { id: 'name', label: 'Name' },
@@ -96,45 +110,6 @@ function download(url: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-}
-
-function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={clsx(
-        'h-8 shrink-0 rounded-lg px-2.5 text-[13px] font-medium transition-colors',
-        active ? 'bg-surface-muted text-fg' : 'text-fg-muted hover:bg-surface-subtle hover:text-fg',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function DropdownFilter({ label, value, active, items }: { label: string; value: string; active: boolean; items: MenuItem[] }) {
-  return (
-    <Menu
-      label={label}
-      align="start"
-      items={items}
-      trigger={({ toggle }) => (
-        <button
-          type="button"
-          onClick={toggle}
-          className={clsx(
-            'inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2.5 text-[13px] font-medium transition-colors hover:bg-surface-subtle',
-            active ? 'bg-surface-muted text-fg' : 'text-fg-muted hover:text-fg',
-          )}
-        >
-          {value}
-          <ChevronDownIcon className="h-3.5 w-3.5" />
-        </button>
-      )}
-    />
-  );
 }
 
 export default function ResourcesBrowser({
@@ -396,78 +371,91 @@ export default function ResourcesBrowser({
       }}
       onDrop={onDrop}
     >
-      {/* Toolbar */}
+      {/* Toolbar: the Directory's shape — search, then one dropdown per filter. */}
       <div className={clsx('flex flex-col gap-3', inChannel ? 'px-4 pt-3' : 'pr-6 pt-1')}>
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <SearchInput value={q} onChange={setQ} placeholder={inChannel ? 'Search files' : 'Search resources'} size={inChannel ? 'sm' : 'md'} />
-          </div>
-          <div className="flex items-center gap-0.5">
-            <IconButton label="List" icon={<ListIcon />} active={layout === 'list'} onClick={() => setLayout('list')} />
-            <IconButton label="Grid" icon={<LayoutGridIcon />} active={layout === 'grid'} onClick={() => setLayout('grid')} />
-          </div>
-          {!trash && (canAddToSpace || inChannel) && (
-            <>
-              <button
-                type="button"
-                onClick={() => fileInput.current?.click()}
-                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-              >
-                <UploadIcon className="h-4 w-4" />
-                <span className="hidden sm:inline">Upload</span>
-              </button>
-              <input
-                ref={fileInput}
-                type="file"
-                multiple
-                hidden
-                onChange={(e) => {
-                  void upload(Array.from(e.target.files ?? []));
-                  e.target.value = '';
-                }}
-              />
-            </>
-          )}
-        </div>
-
-        <div className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 pb-0.5">
-          {kinds.map((k) => (
-            <FilterButton key={k.id} active={kind === k.id} onClick={() => setKind(k.id)}>
-              {k.label}
-            </FilterButton>
-          ))}
-          <span className="mx-1 h-4 w-px shrink-0 bg-line-subtle" aria-hidden="true" />
-          <FilterButton active={mine} onClick={() => setMine((m) => !m)}>
-            Mine
-          </FilterButton>
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchInput
+            value={q}
+            onChange={setQ}
+            placeholder={inChannel ? 'Search files…' : 'Search resources…'}
+            size="lg"
+            className={clsx('w-full flex-1', inChannel ? 'max-w-[320px] sm:min-w-[200px]' : 'max-w-[420px] sm:min-w-[280px]')}
+          />
+          <div className="hidden h-6 w-px shrink-0 bg-line-subtle sm:block" aria-hidden="true" />
+          <FilterMenu
+            label="Types"
+            value={kind}
+            onChange={(id) => setKind(id as ListKind)}
+            options={kinds.map((k) => ({
+              id: k.id,
+              label: k.id === 'all' ? 'All types' : k.label,
+              leading: KIND_ICON[k.id] ? <FileTypeIcon kind={KIND_ICON[k.id]!} size="xs" /> : undefined,
+            }))}
+          />
+          <FilterMenu
+            label="People"
+            value={mine ? 'mine' : 'anyone'}
+            onChange={(id) => setMine(id === 'mine')}
+            options={[
+              { id: 'anyone', label: 'Anyone' },
+              { id: 'mine', label: 'Added by me' },
+            ]}
+          />
           {!inChannel && channels.length > 0 && (
-            <DropdownFilter
-              label="Channel"
-              active={channel !== null}
-              value={channel ? `#${channels.find((c) => c.id === channel)?.name ?? 'channel'}` : 'Any channel'}
-              items={[
-                { id: 'any', label: 'Any channel', onSelect: () => setChannel(null) },
-                ...channels.map((c) => ({ id: c.id, label: `#${c.name}`, onSelect: () => setChannel(c.id) })),
+            <FilterMenu
+              label="Channels"
+              value={channel ?? 'any'}
+              onChange={(id) => setChannel(id === 'any' ? null : id)}
+              options={[
+                { id: 'any', label: 'All channels' },
+                ...channels.map((c) => ({ id: c.id, label: `#${c.name}` })),
               ]}
             />
           )}
-          <DropdownFilter
-            label="When"
-            active={since !== 'any'}
-            value={SINCE.find((s) => s.id === since)!.label}
-            items={SINCE.map((s) => ({ id: s.id, label: s.label, onSelect: () => setSince(s.id) }))}
+          <FilterMenu
+            label="Dates"
+            value={since}
+            onChange={setSince}
+            options={SINCE.map((s) => ({ id: s.id, label: s.label }))}
           />
-          <DropdownFilter
+          <FilterMenu
             label="Sort"
-            active={sort !== 'recent'}
-            value={SORTS.find((s) => s.id === sort)!.label}
-            items={SORTS.map((s) => ({ id: s.id, label: s.label, onSelect: () => setSort(s.id) }))}
+            value={sort}
+            onChange={(id) => setSort(id as ListSort)}
+            options={SORTS.map((s) => ({ id: s.id, label: s.label }))}
           />
-          {!inChannel && (
-            <FilterButton active={trash} onClick={() => setTrash((t) => !t)}>
-              Trash
-            </FilterButton>
-          )}
+
+          <div className="ml-auto flex items-center gap-2">
+            <div className="flex items-center gap-0.5">
+              <IconButton label="List" icon={<ListIcon />} active={layout === 'list'} onClick={() => setLayout('list')} />
+              <IconButton label="Grid" icon={<LayoutGridIcon />} active={layout === 'grid'} onClick={() => setLayout('grid')} />
+              {!inChannel && (
+                <IconButton label="Trash" icon={<Trash2Icon />} active={trash} onClick={() => setTrash((t) => !t)} />
+              )}
+            </div>
+            {!trash && (canAddToSpace || inChannel) && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  <UploadIcon className="h-4 w-4" />
+                  <span className="hidden sm:inline">Upload</span>
+                </button>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(e) => {
+                    void upload(Array.from(e.target.files ?? []));
+                    e.target.value = '';
+                  }}
+                />
+              </>
+            )}
+          </div>
         </div>
 
         {uploading && (

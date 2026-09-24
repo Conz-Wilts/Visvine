@@ -2,6 +2,7 @@ import { clsx } from 'clsx';
 import { asFileKind, FILE_GLYPH, FILE_TONE } from './fileKinds';
 
 const SIZE = {
+  xs: 'h-5 w-5 rounded [&>svg]:h-3 [&>svg]:w-3',
   sm: 'h-7 w-7 rounded-md [&>svg]:h-3.5 [&>svg]:w-3.5',
   md: 'h-9 w-9 rounded-lg [&>svg]:h-[18px] [&>svg]:w-[18px]',
   lg: 'h-14 w-14 rounded-xl [&>svg]:h-7 [&>svg]:w-7',

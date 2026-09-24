@@ -29,27 +29,31 @@ function writeParams(mutate: (params: URLSearchParams) => void, push: boolean) {
 }
 
 /**
- * The resources viewer, over any page. Its state is the URL — `?resource=<id>`
- * and `&full=1` — so Back closes it, a copied link opens it, and a reload
+ * The resources viewer, over any page. It opens full screen; the side panel
+ * is the one step down from it. Its state is the URL — `?resource=<id>`, and
+ * `&panel=1` in the panel — so Back closes it, a copied link opens it, and a reload
  * keeps it; the list it walks is held here, since a URL of every id would not
  * fit.
  */
 export function ResourceViewerProvider({ children }: { children: ReactNode }) {
   const params = useSearchParams();
   const resourceId = params.get('resource');
-  const full = params.get('full') === '1';
+  const full = params.get('panel') !== '1';
   const [list, setList] = useState<string[]>([]);
 
   const open = useCallback((id: string, next?: string[]) => {
     setList(next ?? []);
     const already = new URL(window.location.href).searchParams.has('resource');
-    writeParams((p) => p.set('resource', id), !already);
+    writeParams((p) => {
+      p.set('resource', id);
+      p.delete('panel');
+    }, !already);
   }, []);
 
   const close = useCallback(() => {
     writeParams((p) => {
       p.delete('resource');
-      p.delete('full');
+      p.delete('panel');
     }, false);
   }, []);
 
@@ -68,7 +72,7 @@ export function ResourceViewerProvider({ children }: { children: ReactNode }) {
         <ResourceViewerHost
           resourceId={resourceId}
           full={full}
-          onModeChange={(mode) => writeParams((p) => (mode === 'full' ? p.set('full', '1') : p.delete('full')), false)}
+          onModeChange={(mode) => writeParams((p) => (mode === 'panel' ? p.set('panel', '1') : p.delete('panel')), false)}
           onClose={close}
           onPrev={index > 0 ? () => step(-1) : null}
           onNext={index >= 0 && index < list.length - 1 ? () => step(1) : null}

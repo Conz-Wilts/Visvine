@@ -125,8 +125,8 @@ Slides and Drive, YouTube, Vimeo, Loom, Figma), whose hosts are the CSP's
 ## Surfaces
 
 - **The viewer** (`features/resources/viewer/`, chrome in `@visvine/ui`'s
-  `ResourceViewer`) — a side panel, or full screen, addressed on the URL
-  (`?resource=<id>`, `&full=1`). A pure registry picks the renderer per kind:
+  `ResourceViewer`) — full screen, or stepped down to a side panel, addressed
+  on the URL (`?resource=<id>`, `&panel=1`). A pure registry picks the renderer per kind:
   the original image with zoom and pan, react-pdf with a page rail,
   docx-preview in a sandboxed frame, SheetJS for sheets, the deck's thumbnail
   and outline, markdown and code as text, native media, an allowlisted embed,
