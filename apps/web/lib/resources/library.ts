@@ -23,6 +23,7 @@ import {
   type LibraryPage,
 } from '@/lib/resources/shared/library'
 import type { NBNode } from '@/lib/types'
+import { resourceViewer, visibleResourceWhere } from '@/lib/resources/visibility'
 
 /** Rows read per source for one page — the fold cuts to a page after merging. */
 const PER_SOURCE = 150
@@ -58,9 +59,10 @@ export async function listLibrary(
   const wantFiles = query.filter !== 'links'
   const wantLinks = query.filter !== 'files'
 
-  const [channels, nodes] = await Promise.all([
+  const [channels, nodes, lens] = await Promise.all([
     readableChannels(spaceId, viewer.userId, viewer.email),
     getSpaceNodes(spaceId),
+    resourceViewer(spaceId, viewer.userId, viewer.email),
   ])
   const channelIds = [...channels.keys()]
   const resourceNodes = nodes.filter((n) => n.type.toLowerCase() === 'resource')
@@ -73,16 +75,12 @@ export async function listLibrary(
   const [files, shares] = await Promise.all([
     wantFiles
       ? prisma.resource.findMany({
-          where: {
-            spaceId,
-            createdAt: olderThan,
-            OR: [{ conversationId: null }, { conversationId: { in: channelIds } }],
-          },
+          where: { AND: [{ spaceId, source: 'upload', createdAt: olderThan }, visibleResourceWhere(lens)] },
           orderBy: { createdAt: 'desc' },
           take: PER_SOURCE,
           select: {
-            id: true, name: true, fileType: true, fileSize: true, uploadedBy: true,
-            conversationId: true, createdAt: true, gcsPath: true,
+            id: true, name: true, fileType: true, fileSize: true, uploadedBy: true, createdAt: true, gcsPath: true,
+            shares: { select: { conversationId: true }, orderBy: { createdAt: 'desc' } },
           },
         })
       : Promise.resolve([]),
@@ -124,10 +122,12 @@ export async function listLibrary(
   for (const file of files) {
     const node = nodeByFile.get(file.id)
     const raw = file.gcsPath ? resourceRawPath(file.id) : null
+    const inSpace = file.shares.some((share) => share.conversationId === null)
+    const channelId = file.shares.find((share) => share.conversationId && channels.has(share.conversationId))?.conversationId ?? null
     items.push({
       key: `file:${file.id}`,
       kind: 'file',
-      source: file.conversationId ? 'channel' : 'drive',
+      source: inSpace ? 'drive' : 'channel',
       name: node?.name ?? file.name,
       fileType: file.fileType,
       fileSize: file.fileSize,
@@ -138,7 +138,7 @@ export async function listLibrary(
       description: node?.subtitle ?? null,
       href: node ? `/directory/${encodeURIComponent(node.id)}` : `/resources/${encodeURIComponent(file.id)}`,
       addedBy: nameOf.get(file.uploadedBy) ?? null,
-      channel: channelOf(file.conversationId),
+      channel: channelOf(channelId),
       shares: 0,
       createdAt: file.createdAt.toISOString(),
     })

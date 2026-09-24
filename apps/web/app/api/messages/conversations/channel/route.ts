@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
       parsed.data.sectionId,
       parsed.data.viewMode,
       parsed.data.context,
+      parsed.data.visibility,
     );
 
     return NextResponse.json({ conversation }, { status: 201 });

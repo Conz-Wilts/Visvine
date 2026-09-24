@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import type { FormEvent, RefObject } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, Icon, PencilIcon, SearchIcon, Trash2Icon, XIcon } from '@/features/shared/icons';
-import { ChannelIcon } from './ChannelIcon';
+import { ChannelIcon, channelFallback } from './ChannelIcon';
 import type { ChannelDirectoryEntry, ChannelSectionEntry, ConversationSummary } from '@/lib/messages/types';
 
 /** Circle-style rail section: one per section (joined + browsable channels filed there), then an unfiled bucket. */
@@ -220,7 +220,7 @@ export default function ConversationListPanel({
                             >
                               <ChannelIcon
                                 icon={conversation.icon}
-                                fallback={conversation.viewMode === 'FEED' ? 'feed' : 'hash'}
+                                fallback={channelFallback(conversation)}
                                 className={`h-[18px] w-[18px] ${isActive || hasUnread ? 'text-fg' : 'text-fg-muted'}`}
                               />
                               <p className={`min-w-0 flex-1 truncate text-[15px] ${
@@ -248,7 +248,7 @@ export default function ConversationListPanel({
                                 key={channel.id}
                                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-surface-subtle"
                               >
-                                <ChannelIcon icon={channel.icon} fallback={channel.viewMode === 'FEED' ? 'feed' : 'hash'} className="mt-0.5 h-[18px] w-[18px] self-start text-fg-muted" />
+                                <ChannelIcon icon={channel.icon} fallback={channelFallback(channel)} className="mt-0.5 h-[18px] w-[18px] self-start text-fg-muted" />
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate text-[15px] font-normal text-fg-secondary">{channel.name}</p>
                                   <p className="truncate text-xs text-fg-muted">

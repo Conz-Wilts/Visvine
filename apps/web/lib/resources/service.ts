@@ -27,7 +27,6 @@
  *    row and deleting it can never take the Drive's file with it.
  */
 import { randomUUID } from 'node:crypto'
-import { extname } from 'node:path'
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import {
@@ -44,19 +43,20 @@ import { setFolderRestricted } from '@/lib/notes/access'
 import { ingestSource, reingestSourceFrom } from '@/lib/notes/sources/ingest'
 import * as sourceStore from '@/lib/notes/sourceStore'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
+import { entityFolderPathOf } from '@/lib/notes/entities'
 import { normalizeSourcePath, sourceKindOf } from '@/lib/notes/shared/sourceTypes'
 import { requireFolderInSpace } from '@/lib/resources/folders'
-import { linkFileNode, removeFileNode, requireResourceNode } from '@/lib/resources/node'
+import { removeFileNode, requireResourceNode } from '@/lib/resources/node'
+import { ensureResourceEntity } from '@/lib/resources/entity'
+import { addShares, type ShareVia } from '@/lib/resources/shares'
+import { syncResourceGrants } from '@/lib/resources/grants'
+import { fileTypeOf, kindOf } from '@/lib/resources/shared/kinds'
 
-/** Per-file ceiling. Buffered whole before sharp runs, so this is a memory bound. */
+/** Per-file ceiling for a file handed over whole (an AI's upload, a drop page). */
 export const MAX_RESOURCE_BYTES = 25 * 1024 * 1024
 
 /** The context folder a space's Drive files are indexed under. */
 const DRIVE_FOLDER = 'resources'
-
-const IMAGE_EXTS = new Set([
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp', '.tiff', '.heic', '.heif', '.ico',
-])
 
 /** Where a file got to in the RAG pipeline. Surfaced in the Drive so "why can't
  *  the AI see my file" has a visible answer instead of silence. */
@@ -81,41 +81,29 @@ export interface DriveFile {
   createdAt: string
 }
 
-/** The display bucket the Drive UI groups by. Derived, never client-supplied. */
-function fileTypeOf(ext: string, isImage: boolean): string {
-  if (isImage) return 'image'
-  if (ext === '.xlsx' || ext === '.xls') return 'xlsx'
-  if (ext === '.csv') return 'csv'
-  if (ext === '.docx' || ext === '.doc') return 'docx'
-  if (ext === '.pdf') return 'pdf'
-  if (ext === '.md' || ext === '.markdown') return 'markdown'
-  if (ext === '.json') return 'json'
-  if (ext === '.txt') return 'text'
-  return ext.replace('.', '') || 'file'
-}
-
 function contextOf(spaceId: string): Context {
   return { spaceId, ownerKey: SHARED_OWNER_KEY }
 }
 
 /**
- * A free context path for this file under `resources/`, suffixing on collision.
+ * A free context path for this file's text, suffixing on collision. It sits
+ * inside the resource's own entity folder (`resources/<slug>/<file>`) when it
+ * has one, so the note's audience — a channel's members, the space — is the
+ * text's audience too.
  *
- * The source namespace is keyed by path and two people uploading `report.csv`
- * must not fight over one row — the second becomes `report-2.csv`. `.md` is
- * rewritten to `.markdown` by normalizeSourcePath so a source can never collide
- * with the note namespace.
+ * `.md` is rewritten to `.markdown` by normalizeSourcePath so a source can
+ * never collide with the note namespace.
  */
-async function freeSourcePath(context: Context, filename: string): Promise<string> {
+async function freeSourcePath(context: Context, folder: string, filename: string): Promise<string> {
   const safe = normalizeSourcePath(filename.replace(/[/\\]/g, '_').trim() || 'file')
   const dot = safe.lastIndexOf('.')
   const stem = dot > 0 ? safe.slice(0, dot) : safe
   const ext = dot > 0 ? safe.slice(dot) : ''
   for (let n = 0; n < 50; n++) {
-    const candidate = `${DRIVE_FOLDER}/${stem}${n ? `-${n + 1}` : ''}${ext}`
+    const candidate = `${folder}/${stem}${n ? `-${n + 1}` : ''}${ext}`
     if (!(await sourceStore.findSource(context, candidate))) return candidate
   }
-  return `${DRIVE_FOLDER}/${stem}-${randomUUID().slice(0, 8)}${ext}`
+  return `${folder}/${stem}-${randomUUID().slice(0, 8)}${ext}`
 }
 
 /**
@@ -159,39 +147,68 @@ export interface UploadInput {
    */
   nodeId?: string | null
   /**
-   * The channel the file was dropped into. Such a file is the channel's and
-   * gets NO resource node — a directory of chat screenshots is noise; it is
-   * listed in Resources to the channel's members instead.
+   * The channel the file is being dropped into. It is shared nowhere yet — the
+   * message that carries it shares it there — so until then it is its
+   * uploader's alone.
    */
   conversationId?: string | null
+  /** How it arrived; a space share records it. Default `upload`. */
+  via?: ShareVia
+  agentName?: string | null
 }
 
-export type UploadedFile = DriveFile & { nodeId: string | null }
+export type UploadedFile = DriveFile & { nodeId: string | null; kind: string }
 
 /**
- * Store a file, index it, and give it its Resource: the node whose page shows
- * it. A file the node already had is replaced — a Resource has one file.
+ * Store a file and make it a resource: its row, its entity, its share, its
+ * note's audience and its searchable text. A file the named node already had
+ * is replaced — a Resource record has one file.
  */
 export async function uploadResource(input: UploadInput): Promise<UploadedFile> {
   if (input.nodeId) await requireResourceNode(input.spaceId, input.nodeId)
-  const file = await storeResource(input)
-  if (input.conversationId) return { ...file, nodeId: null }
-  const { nodeId, replacedFileId } = await linkFileNode(file, input.nodeId ?? null)
-  if (replacedFileId && replacedFileId !== file.id) await deleteResource(replacedFileId)
-  return { ...file, nodeId }
+  const row = await storeResource(input)
+  return finishUpload(row.id, {
+    nodeId: input.conversationId ? null : (input.nodeId ?? null),
+    share: input.conversationId
+      ? null
+      : { sharedBy: input.uploadedBy, via: input.via ?? 'upload', agentName: input.agentName ?? null },
+    bytes: input.buffer,
+  })
 }
 
 /**
- * Store a file and index it. The whole Drive write path, in one call, so the
- * object path, the record and the chunks cannot disagree.
- *
- * Indexing runs inline and is deliberately NOT allowed to fail the upload: the
- * file is safely stored either way, and `indexState`/`indexError` carry the
- * outcome to the UI, where "Re-index" retries it. That ordering is the point —
- * losing an upload because an embedding call timed out would be a far worse
- * failure than an un-indexed file.
+ * Everything after the bytes are stored, for every way a file arrives (a whole
+ * buffer here; a resumable upload's `complete`): the entity, the share, the
+ * note's audience, and the text index. Indexing runs inline and is NOT allowed
+ * to fail the upload — the file is stored either way, and `indexState` carries
+ * the outcome to the UI, where Re-index retries it.
  */
-async function storeResource(input: UploadInput): Promise<DriveFile> {
+async function finishUpload(
+  resourceId: string,
+  opts: {
+    nodeId?: string | null
+    share: { sharedBy: string; via: ShareVia; agentName?: string | null } | null
+    bytes?: Buffer
+  },
+): Promise<UploadedFile> {
+  const { nodeId, replacedResourceId } = await ensureResourceEntity(resourceId, { nodeId: opts.nodeId ?? null })
+  if (replacedResourceId) await deleteResource(replacedResourceId)
+  const row = await prisma.resource.findUniqueOrThrow({ where: { id: resourceId } })
+  if (opts.share) {
+    await addShares([{ resourceId, spaceId: row.spaceId, sharedBy: opts.share.sharedBy, via: opts.share.via, agentName: opts.share.agentName }])
+  } else {
+    await syncResourceGrants(resourceId)
+  }
+  const indexed = await indexResource(resourceId, opts.bytes)
+  return { ...indexed, nodeId, kind: row.kind }
+}
+
+/**
+ * Store a file's bytes exactly as they came and record it. The object path is
+ * server-minted from the row's own id — the one fact that ties the object to
+ * the record.
+ */
+async function storeResource(input: UploadInput) {
   const { spaceId, buffer, uploadedBy } = input
   const folderId = input.folderId ?? null
   await requireFolderInSpace(spaceId, folderId)
@@ -199,86 +216,109 @@ async function storeResource(input: UploadInput): Promise<DriveFile> {
     throw new Error(`File must be less than ${Math.floor(MAX_RESOURCE_BYTES / 1024 / 1024)}MB`)
   }
 
-  const originalName = (input.filename || 'file').split(/[/\\]/).pop() || 'file'
-  const ext = extname(originalName).toLowerCase()
-  const isImage = IMAGE_EXTS.has(ext)
+  const name = (input.filename || 'file').split(/[/\\]/).pop() || 'file'
+  const mimeType = input.mimeType || 'application/octet-stream'
+  const id = randomUUID()
+  const gcsPath = resourceObjectPath(spaceId, id, name)
+  await uploadResourceFile(gcsPath, buffer, mimeType)
 
-  // Images are re-encoded to webp (bounded, stripped of EXIF); everything else
-  // is stored byte-for-byte, because the Drive is storage and not an editor.
-  let bytes = buffer
-  let mimeType = input.mimeType || 'application/octet-stream'
-  let storedName = originalName
-  if (isImage) {
-    const sharp = (await import('sharp')).default
-    bytes = await sharp(buffer)
-      .rotate()
-      .resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 82, effort: 4 })
-      .toBuffer()
-    mimeType = 'image/webp'
-    storedName = `${originalName.slice(0, originalName.length - ext.length)}.webp`
-  }
+  const kind = kindOf(name, mimeType)
+  let dims: { width?: number; height?: number } = {}
+  if (kind === 'image') dims = await imageDimensions(buffer)
 
-  // Server-minted, always. The uuid segment is what makes two files of the same
-  // name distinct objects, and what stops a guessed path resolving to anything.
-  const uuid = randomUUID()
-  const gcsPath = resourceObjectPath(spaceId, uuid, storedName)
-  await uploadResourceFile(gcsPath, bytes, mimeType)
-
-  // A channel's file is not indexed: the space's shared sources are searchable
-  // by every member, and the file is the channel's alone.
-  const inChannel = Boolean(input.conversationId)
-  const kind = isImage || inChannel ? null : sourceKindOf(storedName)
-  const resource = await prisma.resource.create({
+  return prisma.resource.create({
     data: {
+      id,
       spaceId,
-      name: originalName,
-      fileType: fileTypeOf(ext, isImage),
+      name,
+      fileType: fileTypeOf(name, mimeType),
+      kind,
+      source: 'upload',
+      state: 'ready',
       gcsPath,
-      fileSize: bytes.length,
+      fileSize: buffer.length,
+      mimeType,
+      ...dims,
       uploadedBy,
+      createdBy: uploadedBy,
       folderId,
-      conversationId: input.conversationId ?? null,
-      indexState: kind ? 'pending' : 'unsupported',
-      indexError: kind
-        ? null
-        : inChannel
-          ? 'Channel files are not indexed.'
-          : isImage
-            ? 'Images carry no text to index.'
-            : `No text extractor for ${ext || 'this file type'} yet.`,
-      metadata: { originalFilename: originalName, mimeType },
+      indexState: 'pending',
+      metadata: { originalFilename: name, mimeType },
     },
   })
+}
 
-  if (!kind) return toDriveFile(resource, 0)
-
-  const context = contextOf(spaceId)
-  await alignFolderPrivacy(spaceId)
+async function imageDimensions(buffer: Buffer): Promise<{ width?: number; height?: number }> {
   try {
-    const sourcePath = await freeSourcePath(context, storedName)
-    const meta = await ingestSource(context, {
-      path: sourcePath,
-      name: originalName,
-      kind,
-      mimeType,
-      buffer: bytes,
-      createdBy: uploadedBy,
-      // The Resource owns the object; this source is only its chunked projection.
-      storeOriginal: false,
-    })
+    const sharp = (await import('sharp')).default
+    const meta = await sharp(buffer).metadata()
+    // EXIF orientations 5–8 turn the picture a quarter: its shown size is swapped.
+    const turned = (meta.orientation ?? 1) >= 5
+    return turned ? { width: meta.height, height: meta.width } : { width: meta.width, height: meta.height }
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Extract, chunk and embed a stored file's text under its entity folder. With
+ * no `bytes` they are read back from the object. A kind with no extractor is
+ * recorded `unsupported`, never failed.
+ */
+async function indexResource(resourceId: string, bytes?: Buffer): Promise<DriveFile> {
+  const resource = await prisma.resource.findUniqueOrThrow({
+    where: { id: resourceId },
+    include: { node: { select: { id: true, type: true, metadata: true } } },
+  })
+  const sourceKind = resource.kind === 'image' ? null : sourceKindOf(resource.name)
+  if (!sourceKind || !resource.gcsPath) {
     const updated = await prisma.resource.update({
       where: { id: resource.id },
       data: {
-        sourcePath: meta.path,
-        indexState: meta.status === 'ready' ? 'indexed' : 'failed',
-        indexError: meta.error ?? null,
+        indexState: 'unsupported',
+        indexError: resource.kind === 'image' ? 'Images carry no text to index.' : 'No text extractor for this file type yet.',
       },
     })
-    return toDriveFile(updated, meta.chunkCount)
+    return toDriveFile(updated, 0)
+  }
+
+  const context = contextOf(resource.spaceId)
+  await alignFolderPrivacy(resource.spaceId)
+  const folder =
+    (resource.node &&
+      entityFolderPathOf({
+        id: resource.node.id,
+        type: resource.node.type,
+        metadata: (resource.node.metadata ?? {}) as Record<string, unknown>,
+      })) ||
+    DRIVE_FOLDER
+  try {
+    const buffer = bytes ?? (await downloadResourceFile(resource.gcsPath))
+    const existing = resource.sourcePath ? await sourceStore.findSource(context, resource.sourcePath) : null
+    const meta = existing
+      ? await reingestSourceFrom(context, resource.sourcePath!, buffer)
+      : await ingestSource(context, {
+          path: await freeSourcePath(context, folder, resource.name),
+          name: resource.name,
+          kind: sourceKind,
+          mimeType: resource.mimeType ?? 'application/octet-stream',
+          buffer,
+          createdBy: resource.createdBy ?? resource.uploadedBy,
+          // The Resource owns the object; this source is only its chunked projection.
+          storeOriginal: false,
+        })
+    const updated = await prisma.resource.update({
+      where: { id: resource.id },
+      data: {
+        sourcePath: meta?.path ?? resource.sourcePath,
+        indexState: meta?.status === 'ready' ? 'indexed' : 'failed',
+        indexError: meta?.error ?? null,
+      },
+    })
+    return toDriveFile(updated, meta?.chunkCount ?? 0)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Indexing failed'
-    logger.error('resources.index.failed', { spaceId, resourceId: resource.id, err: message })
+    logger.error('resources.index.failed', { spaceId: resource.spaceId, resourceId: resource.id, err })
     const updated = await prisma.resource.update({
       where: { id: resource.id },
       data: { indexState: 'failed', indexError: message.slice(0, 500) },
@@ -291,62 +331,21 @@ async function storeResource(input: UploadInput): Promise<DriveFile> {
  * Re-run extraction, chunking and embedding for one stored file.
  *
  * The repair path for everything that can leave a file un-indexed: an upload
- * that raced a bad embedding key, a file stored before the pipeline existed
- * (every pre-migration row is `pending` for exactly that reason), or a change of
- * embedding model. Bytes come back from the Drive's own object, since the source
- * does not own one.
+ * that raced a bad embedding key, a file stored before the pipeline existed, or
+ * a change of embedding model. Bytes come back from the Drive's own object,
+ * since the source does not own one.
  */
 export async function reindexResource(resourceId: string): Promise<DriveFile | null> {
-  const resource = await prisma.resource.findUnique({ where: { id: resourceId } })
+  const resource = await prisma.resource.findUnique({ where: { id: resourceId }, select: { id: true, gcsPath: true } })
   if (!resource) return null
-  if (!resource.gcsPath || !process.env.GCS_RESOURCES_BUCKET) {
+  if (!resource.gcsPath) {
     const updated = await prisma.resource.update({
       where: { id: resource.id },
       data: { indexState: 'failed', indexError: 'The original file is not in storage — re-upload it.' },
     })
     return toDriveFile(updated, 0)
   }
-
-  const kind = resource.fileType === 'image' || resource.conversationId ? null : sourceKindOf(resource.name)
-  if (!kind) {
-    const indexError = resource.conversationId
-      ? 'Channel files are not indexed.'
-      : 'No text extractor for this file type yet.'
-    const updated = await prisma.resource.update({
-      where: { id: resource.id },
-      data: { indexState: 'unsupported', indexError },
-    })
-    return toDriveFile(updated, 0)
-  }
-
-  const context = contextOf(resource.spaceId)
-  const bytes = await downloadResourceFile(resource.gcsPath)
-  await alignFolderPrivacy(resource.spaceId)
-
-  // Reuse the existing source row when there is one, so a re-index replaces this
-  // file's chunks rather than accumulating a second copy of them in retrieval.
-  const existing = resource.sourcePath ? await sourceStore.findSource(context, resource.sourcePath) : null
-  const meta = existing
-    ? await reingestSourceFrom(context, resource.sourcePath!, bytes)
-    : await ingestSource(context, {
-        path: await freeSourcePath(context, resource.name),
-        name: resource.name,
-        kind,
-        mimeType: (resource.metadata as Record<string, unknown> | null)?.mimeType as string ?? 'application/octet-stream',
-        buffer: bytes,
-        createdBy: resource.uploadedBy,
-        storeOriginal: false,
-      })
-
-  const updated = await prisma.resource.update({
-    where: { id: resource.id },
-    data: {
-      sourcePath: meta?.path ?? resource.sourcePath,
-      indexState: meta?.status === 'ready' ? 'indexed' : 'failed',
-      indexError: meta?.error ?? null,
-    },
-  })
-  return toDriveFile(updated, meta?.chunkCount ?? 0)
+  return indexResource(resource.id)
 }
 
 /** Delete a file: its chunks, its record, and last the bytes it owns. */
@@ -418,9 +417,12 @@ function toDriveFile(row: ResourceRow, chunkCount: number, fileUrl?: string | nu
 export async function listResources(spaceId: string): Promise<DriveFile[]> {
   const context = contextOf(spaceId)
   const [rows, sources] = await Promise.all([
-    // A channel's files are the channel's, listed to its members by
-    // lib/resources/library.ts — never in the space's Drive.
-    prisma.resource.findMany({ where: { spaceId, conversationId: null }, orderBy: { createdAt: 'desc' } }),
+    // The space's Drive: what is shared to the space itself. A channel's
+    // files are listed to its members by lib/resources/library.ts.
+    prisma.resource.findMany({
+      where: { spaceId, source: 'upload', deletedAt: null, shares: { some: { conversationId: null } } },
+      orderBy: { createdAt: 'desc' },
+    }),
     prisma.contextSource.findMany({
       where: { spaceId, ownerKey: SHARED_OWNER_KEY },
       select: { path: true, chunkCount: true },

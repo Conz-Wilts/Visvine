@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { visibleNodesFor } from '@/lib/notes/context/entityVisibility';
 import { logger } from '@/lib/logger';
 import { purgeNodeObjects } from '@/lib/storage/purge';
 import { fileIdsOfNodes } from '@/lib/resources/node';
@@ -68,7 +69,12 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    const nodes: NBNode[] = rows.map(nodeRowToNBNode);
+    const nodes: NBNode[] = await visibleNodesFor(
+      spaceId,
+      session.userId,
+      session.email,
+      rows.map(nodeRowToNBNode),
+    );
     return NextResponse.json({ nodes });
   } catch (err) {
     return handleApiError(err, 'api.data.nodes.get.failed');

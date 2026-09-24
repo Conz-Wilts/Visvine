@@ -14,6 +14,7 @@ import {
   reparentEntityNode,
   syncEntityNodeSafe,
 } from '@/lib/notes/context/entityNodes';
+import { syncChannelNoteGrants } from '@/lib/resources/grants';
 
 export async function listConversationsForUser(userId: string, searchQuery?: string): Promise<ConversationSummary[]> {
   const query = searchQuery?.trim();
@@ -168,6 +169,7 @@ export async function createChannelConversation(
   sectionId?: string,
   viewMode?: 'CHAT' | 'FEED',
   context?: string,
+  visibility: 'PUBLIC' | 'PRIVATE' = 'PUBLIC',
 ): Promise<ConversationSummary> {
   const space = await prisma.space.findUnique({
     where: { id: spaceId },
@@ -189,6 +191,7 @@ export async function createChannelConversation(
       description: description?.trim() || null,
       icon: icon ?? null,
       viewMode: viewMode ?? 'CHAT',
+      visibility,
       sectionId: sectionId ?? null,
       spaceId,
       createdById: currentUserId,
@@ -219,6 +222,7 @@ export async function createChannelConversation(
     parentNodeId: await parentNodeForChannel(spaceId, created.sectionId),
     actor: { id: currentUserId, name: '' },
   });
+  if (visibility === 'PRIVATE') await syncChannelNoteGrants(created.id);
 
   return serializeConversation(created, currentUserId, 0, ConversationMemberRole.ADMIN);
 }
@@ -240,7 +244,11 @@ async function parentNodeForChannel(
   return node?.id ?? spaceNodeId(spaceId);
 }
 
-/** All channels in a space, flagged with whether the user has joined. */
+/**
+ * The channels of a space a person can see, flagged with whether they have
+ * joined: every public channel, and the private ones they are in. A private
+ * channel is closed AND unlisted — someone outside it never learns its name.
+ */
 export async function listChannelsForSpace(
   userId: string,
   spaceId: string,
@@ -255,13 +263,18 @@ export async function listChannelsForSpace(
   }
 
   const channels = await prisma.conversation.findMany({
-    where: { type: ConversationType.CHANNEL, spaceId },
+    where: {
+      type: ConversationType.CHANNEL,
+      spaceId,
+      OR: [{ visibility: 'PUBLIC' }, { members: { some: { userId } } }],
+    },
     select: {
       id: true,
       name: true,
       description: true,
       icon: true,
       viewMode: true,
+      visibility: true,
       sectionId: true,
       _count: { select: { members: true } },
       members: {
@@ -278,6 +291,7 @@ export async function listChannelsForSpace(
     description: channel.description,
     icon: channel.icon,
     viewMode: channel.viewMode,
+    visibility: channel.visibility,
     sectionId: channel.sectionId,
     memberCount: channel._count.members,
     isMember: channel.members.length > 0,
@@ -411,15 +425,23 @@ export async function deleteChannelSection(sectionId: string): Promise<void> {
   await removeEntityNode(existing.spaceId, 'section', sectionId);
 }
 
-/** Join a space channel (any member of the channel's space can join). */
+/**
+ * Join a public channel of a space you are in. A private channel is joined
+ * only by being added by one of its members — to anyone else it does not
+ * exist, so the refusal is the same 404 as a channel that never did.
+ */
 export async function joinChannel(userId: string, conversationId: string): Promise<ConversationSummary> {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { type: true, spaceId: true },
+    select: { type: true, spaceId: true, visibility: true, members: { where: { userId }, select: { id: true } } },
   });
 
   if (!conversation || conversation.type !== ConversationType.CHANNEL) {
     throw new MessagingError(404, 'Channel not found');
+  }
+  if (conversation.visibility === 'PRIVATE') {
+    if (conversation.members.length === 0) throw new MessagingError(404, 'Channel not found');
+    return getConversationSummaryForUser(userId, conversationId);
   }
 
   if (conversation.spaceId) {
@@ -457,7 +479,10 @@ export async function addMembersToGroup(
     throw new MessagingError(400, 'Members cannot be added to direct messages');
   }
 
-  if (membership.role !== ConversationMemberRole.ADMIN) {
+  // A private channel grows only from inside: any member may add a member.
+  // Elsewhere people join themselves, and adding them is the admin's.
+  const isPrivate = membership.conversation.visibility === 'PRIVATE';
+  if (!isPrivate && membership.role !== ConversationMemberRole.ADMIN) {
     throw new MessagingError(403, 'Only admins can add members');
   }
 
@@ -627,7 +652,15 @@ export async function leaveConversation(currentUserId: string, conversationId: s
 export async function updateGroupConversation(
   currentUserId: string,
   conversationId: string,
-  payload: { name?: string; description?: string | null; avatarUrl?: string | null; icon?: string | null; sectionId?: string | null; viewMode?: 'CHAT' | 'FEED' },
+  payload: {
+    name?: string;
+    description?: string | null;
+    avatarUrl?: string | null;
+    icon?: string | null;
+    sectionId?: string | null;
+    viewMode?: 'CHAT' | 'FEED';
+    visibility?: 'PUBLIC' | 'PRIVATE';
+  },
 ): Promise<ConversationSummary> {
   const membership = await ensureConversationMember(conversationId, currentUserId);
 
@@ -641,8 +674,14 @@ export async function updateGroupConversation(
 
   const isChannel = membership.conversation.type === ConversationType.CHANNEL;
 
-  if ((payload.icon !== undefined || payload.sectionId !== undefined || payload.viewMode !== undefined) && !isChannel) {
-    throw new MessagingError(400, 'Icons, sections and view styles only apply to channels');
+  if (
+    (payload.icon !== undefined ||
+      payload.sectionId !== undefined ||
+      payload.viewMode !== undefined ||
+      payload.visibility !== undefined) &&
+    !isChannel
+  ) {
+    throw new MessagingError(400, 'Icons, sections, view styles and privacy only apply to channels');
   }
 
   if (payload.sectionId) {
@@ -673,6 +712,10 @@ export async function updateGroupConversation(
 
   if (payload.viewMode !== undefined) {
     updates.viewMode = payload.viewMode;
+  }
+
+  if (payload.visibility !== undefined) {
+    updates.visibility = payload.visibility;
   }
 
   if (payload.sectionId !== undefined) {
@@ -706,6 +749,7 @@ export async function updateGroupConversation(
       const parent = await parentNodeForChannel(updated.spaceId, updated.sectionId);
       if (parent) await reparentEntityNode(updated.spaceId, result.nodeId, parent);
     }
+    if (payload.visibility !== undefined) await syncChannelNoteGrants(conversationId);
   }
 
   return getConversationSummaryForUser(currentUserId, conversationId);

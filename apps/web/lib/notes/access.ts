@@ -7,6 +7,7 @@
 
 import prisma from '@/lib/prisma'
 import { heldAliasIds } from '@/lib/auth'
+import { memberChannelIds } from '@/lib/messages/channelMembership'
 import { SHARED_OWNER_KEY } from './store'
 import { readJson, writeJson } from './sidecar'
 import { resolveRegistry } from './registry'
@@ -173,11 +174,12 @@ async function aliasIdsOf(spaceId: string, userId: string): Promise<string[]> {
 
 /**
  * The pre-scoped ContextAccess for one member: space-wide grants + their
- * aliases' grants + their direct grants, plus the context's folder boundaries.
- * A handful of indexed rows — this is the whole per-request cost.
+ * aliases' grants + their channels' grants + their direct grants, plus the
+ * context's folder boundaries. A handful of indexed rows — this is the whole
+ * per-request cost.
  */
 export async function contextAccessFor(spaceId: string, userId: string): Promise<ContextAccess> {
-  const aliasIds = await aliasIdsOf(spaceId, userId)
+  const [aliasIds, channelIds] = await Promise.all([aliasIdsOf(spaceId, userId), memberChannelIds(spaceId, userId)])
   const [rows, flags] = await Promise.all([
     prisma.contextGrant.findMany({
       where: {
@@ -187,6 +189,9 @@ export async function contextAccessFor(spaceId: string, userId: string): Promise
           { subjectType: 'user', subjectId: userId },
           ...(aliasIds.length
             ? [{ subjectType: 'alias' as const, subjectId: { in: aliasIds } }]
+            : []),
+          ...(channelIds.length
+            ? [{ subjectType: 'channel' as const, subjectId: { in: channelIds } }]
             : []),
         ],
       },
@@ -297,7 +302,8 @@ export async function subjectNamer(
   subjects: Array<{ subjectType: GrantSubjectType; subjectId: string }>,
 ): Promise<(subjectType: GrantSubjectType, subjectId: string) => { name: string; email?: string }> {
   const userIds = [...new Set(subjects.filter((s) => s.subjectType === 'user').map((s) => s.subjectId))]
-  const [space, users] = await Promise.all([
+  const channelIds = [...new Set(subjects.filter((s) => s.subjectType === 'channel').map((s) => s.subjectId))]
+  const [space, users, channels] = await Promise.all([
     prisma.space.findUnique({ where: { id: spaceId }, select: { name: true, aliases: true } }),
     userIds.length
       ? prisma.user.findMany({
@@ -305,14 +311,19 @@ export async function subjectNamer(
           select: { id: true, name: true, email: true },
         })
       : Promise.resolve([]),
+    channelIds.length
+      ? prisma.conversation.findMany({ where: { id: { in: channelIds } }, select: { id: true, name: true } })
+      : Promise.resolve([]),
   ])
   const userById = new Map(users.map((u) => [u.id, u]))
+  const channelName = new Map(channels.map((c) => [c.id, c.name]))
   const spaceAliases = (space?.aliases ?? []) as unknown as SpaceAlias[]
   return (subjectType, subjectId) => {
     if (subjectType === 'space') return { name: `Everyone in ${space?.name ?? 'this space'}` }
     // A grant outlives the alias it names only if the delete cascade failed,
     // so falling back to the id is a diagnostic, not a label.
     if (subjectType === 'alias') return { name: findAliasByRef(spaceAliases, subjectId, 'Person')?.name ?? subjectId }
+    if (subjectType === 'channel') return { name: `Members of #${channelName.get(subjectId) ?? 'a deleted channel'}` }
     const user = userById.get(subjectId)
     return { name: user?.name ?? 'Former member', email: user?.email ?? undefined }
   }
@@ -355,7 +366,7 @@ export async function accessListFor(spaceId: string, path: string): Promise<Acce
     })
   }
   // Broadest audience first (space, aliases, people), then by level desc.
-  const order: Record<GrantSubjectType, number> = { space: 0, alias: 1, user: 2 }
+  const order: Record<GrantSubjectType, number> = { space: 0, alias: 1, channel: 2, user: 3 }
   return entries.sort(
     (a, b) => order[a.subjectType] - order[b.subjectType] || b.level - a.level || a.name.localeCompare(b.name),
   )
@@ -411,6 +422,15 @@ export async function grantAccess(
       throw new Error(`Unknown alias "${subjectId}" — add it on the Types page first`)
     }
     subjectId = alias.id
+  }
+  if (input.subjectType === 'channel') {
+    const channel = await prisma.conversation.findUnique({
+      where: { id: subjectId },
+      select: { spaceId: true, type: true },
+    })
+    if (!channel || channel.type !== 'CHANNEL' || channel.spaceId !== spaceId) {
+      throw new Error('That channel is not in this space')
+    }
   }
 
   const row = await prisma.contextGrant.upsert({

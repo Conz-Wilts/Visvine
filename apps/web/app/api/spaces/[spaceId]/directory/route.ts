@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSpaceNodes } from '@/lib/eventRepo';
+import { visibleNodesFor } from '@/lib/notes/context/entityVisibility';
 import { normalizeNode } from '@/lib/notes/context/normalize';
 import { isStructuralNodeType } from '@/lib/types/context';
 import { visibleNodes } from '@/lib/notes/context/featureVisibility';
@@ -52,7 +53,12 @@ export async function GET(
     // (lib/directory/samePerson.ts), never as a card here.
     const featureConfig = await getFeatureConfig(spaceId);
     const nodes = visibleNodes(
-      (await getSpaceNodes(spaceId)).filter((node) => !isStructuralNodeType(node.type)),
+      await visibleNodesFor(
+        spaceId,
+        session.userId,
+        session.email,
+        (await getSpaceNodes(spaceId)).filter((node) => !isStructuralNodeType(node.type)),
+      ),
       featureConfig,
     ).map(normalizeNode);
 

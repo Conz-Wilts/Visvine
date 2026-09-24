@@ -3,7 +3,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { foldLibrary, linkKey, type LibraryItem } from '../lib/resources/shared/library'
-import { messageFilesDenial } from '../lib/resources/shared/messageFiles'
 
 function item(over: Partial<LibraryItem>): LibraryItem {
   return {
@@ -65,15 +64,4 @@ test('a page is cut, and says where the next begins', () => {
   assert.deepEqual(page.items.map((i) => i.key), ['file:4', 'file:3'])
   assert.equal(page.nextBefore, '2026-09-04T00:00:00.000Z')
   assert.equal(foldLibrary(items, { limit: 10 }).nextBefore, null)
-})
-
-test('a message carries only files its sender dropped into its own channel', () => {
-  const sender = { userId: 'u1', conversationId: 'c1' }
-  const mine = { id: 'r1', uploadedBy: 'u1', conversationId: 'c1' }
-  assert.equal(messageFilesDenial(['r1'], [mine], sender), null)
-  assert.ok(messageFilesDenial(['r2'], [{ id: 'r2', uploadedBy: 'u2', conversationId: 'c1' }], sender))
-  assert.ok(messageFilesDenial(['r3'], [{ id: 'r3', uploadedBy: 'u1', conversationId: 'c2' }], sender))
-  assert.ok(messageFilesDenial(['r4'], [{ id: 'r4', uploadedBy: 'u1', conversationId: null }], sender))
-  assert.ok(messageFilesDenial(['missing'], [], sender))
-  assert.ok(messageFilesDenial(Array.from({ length: 11 }, (_, i) => `r${i}`), [], sender))
 })

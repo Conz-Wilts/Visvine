@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
-import { requireApiSession, forbiddenResponse, handleApiError } from '@/lib/api/route';
+import { requireApiSession, handleApiError } from '@/lib/api/route';
 import { downloadResourceFile } from '@/lib/gcs';
+import { requireVisibleResource } from '@/lib/resources/visibility';
 
 // Mammoth emits well-formed HTML derived from docx. The primary XSS control is
 // the sandboxed (no-scripts) iframe the client renders this in; this scrub is
@@ -22,22 +22,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ res
   if (session instanceof NextResponse) return session;
 
   const { resourceId } = await params;
-  const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
-  if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  let resource;
+  try {
+    resource = await requireVisibleResource(resourceId, session.userId, session.email);
+  } catch (err) {
+    return handleApiError(err, 'api.resources.docxPreview.gate');
+  }
 
-  const membership = await prisma.spaceMember.findUnique({
-    where: { userId_spaceId: { userId: session.userId, spaceId: resource.spaceId } },
-    select: { id: true },
-  });
-  if (!membership) return forbiddenResponse();
-
-  if (!/\.docx?$/i.test(resource.name) && resource.fileType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+  if (resource.kind !== 'doc' || !/\.docx?$/i.test(resource.name)) {
     return NextResponse.json({ error: 'Not a docx' }, { status: 400 });
   }
 
   // The bytes live in the Drive's bucket; a row without an object has nothing
   // to render (a seeded demo file, or an upload whose object was lost).
-  if (!resource.gcsPath || !process.env.GCS_RESOURCES_BUCKET) {
+  if (!resource.gcsPath) {
     return NextResponse.json({ error: 'The original file is not in storage' }, { status: 404 });
   }
 

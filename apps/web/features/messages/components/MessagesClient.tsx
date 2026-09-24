@@ -11,6 +11,7 @@ import type {
   ChannelDirectoryEntry,
   ChannelSectionEntry,
   ChannelViewMode,
+  ChannelVisibility,
   ConversationSummary,
   SavedMessageEntry,
   SerializedMessage,
@@ -489,7 +490,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   }, [fetchChannels, fetchConversations, conversationSearch]);
 
   /** PATCH the open channel (icon / section / view style) and refresh everything that shows it. */
-  const updateSelectedChannel = useCallback(async (patch: { icon?: string | null; sectionId?: string | null; viewMode?: ChannelViewMode }) => {
+  const updateSelectedChannel = useCallback(async (patch: { icon?: string | null; sectionId?: string | null; viewMode?: ChannelViewMode; visibility?: ChannelVisibility }) => {
     const conversationId = selectedConversationRef.current;
     if (!conversationId) return;
     try {
@@ -811,6 +812,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
             onLeave={handleLeaveChannel}
             onRemoveMember={handleRemoveMember}
             onChangeViewMode={(mode) => void updateSelectedChannel({ viewMode: mode })}
+            onChangeVisibility={(visibility) => void updateSelectedChannel({ visibility })}
             onClose={() => toggleDetails(false)}
           />
         </aside>

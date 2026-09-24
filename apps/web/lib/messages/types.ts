@@ -3,6 +3,9 @@ import type { ConversationMemberRole, ConversationType } from '@prisma/client';
 /** How a channel renders: classic chat thread or social-feed post cards. */
 export type ChannelViewMode = 'CHAT' | 'FEED';
 
+/** Who a channel is for: everyone in the space, or its members alone. */
+export type ChannelVisibility = 'PUBLIC' | 'PRIVATE';
+
 interface ConversationParticipant {
   id: string;
   name: string;
@@ -63,12 +66,16 @@ export interface ComposerPayload {
   replyToId?: string;
 }
 
-/** A Drive file a message carries; `url` is the gated `/api/resources/<id>/raw`. */
+/** A file a message shares; `url` is the gated `/api/resources/<id>/raw` (the original). */
 export interface SerializedMessageFile {
   id: string;
   name: string;
   fileType: string;
+  /** The resource's kind (lib/resources/shared/kinds.ts); absent on an optimistic copy. */
+  kind?: string;
   fileSize: number | null;
+  width?: number | null;
+  height?: number | null;
   url: string;
 }
 
@@ -109,6 +116,8 @@ export interface ConversationSummary {
   icon?: string | null;
   /** Channel rendering style — absent means 'CHAT' (classic thread). */
   viewMode?: ChannelViewMode;
+  /** Channel privacy — absent means 'PUBLIC'. */
+  visibility?: ChannelVisibility;
   /** Channel section (section) this channel is filed under, if any. */
   sectionId?: string | null;
   participants: ConversationParticipant[];
@@ -135,6 +144,8 @@ export interface ChannelDirectoryEntry {
   description: string | null;
   icon: string | null;
   viewMode: ChannelViewMode;
+  /** PRIVATE: listed to and joined by its members only. */
+  visibility: ChannelVisibility;
   sectionId: string | null;
   memberCount: number;
   isMember: boolean;

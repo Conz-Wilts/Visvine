@@ -64,9 +64,14 @@ export function parseLevel(name: unknown): number | null {
 
 // grants
 
-export type GrantSubjectType = 'space' | 'alias' | 'user'
+/**
+ * Who a grant is for: everyone in the space, the wearers of an alias, one
+ * person, or the members of one channel (a private channel's note, a file
+ * shared only in channels — lib/resources/grants.ts writes those).
+ */
+export type GrantSubjectType = 'space' | 'alias' | 'user' | 'channel'
 
-export const SUBJECT_TYPES: readonly GrantSubjectType[] = ['space', 'alias', 'user']
+export const SUBJECT_TYPES: readonly GrantSubjectType[] = ['space', 'alias', 'user', 'channel']
 
 /** One access grant: *subject* gets *level* on *resource*. */
 export interface AccessGrant {
@@ -199,14 +204,14 @@ export function accessSignature(access: ContextAccess): string {
 /**
  * The one grant that answers "why can this subject act here": the highest
  * reaching level, tie-broken toward the most specific resource, then the most
- * specific subject (user > alias > space). Null when nothing reaches.
+ * specific subject (user > channel > alias > space). Null when nothing reaches.
  */
 export function winningGrant(
   grants: AccessGrant[],
   path: string,
   restricted: string[],
 ): AccessGrant | null {
-  const specificity: Record<GrantSubjectType, number> = { user: 2, alias: 1, space: 0 }
+  const specificity: Record<GrantSubjectType, number> = { user: 3, channel: 2, alias: 1, space: 0 }
   let win: AccessGrant | null = null
   for (const g of grants) {
     if (!grantReaches(g, path, restricted)) continue

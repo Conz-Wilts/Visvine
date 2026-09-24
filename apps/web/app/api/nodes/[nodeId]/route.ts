@@ -4,6 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { entityLensFor } from '@/lib/notes/context/entityVisibility';
+import { isEntityHidden } from '@/lib/notes/shared/entityVisibility';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { spaceMemberForbidden } from '@/lib/auth';
@@ -71,6 +73,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   // runs before the graph is read, so a refused caller costs one row.
   if (node.spaceId && (await spaceMemberForbidden(session.userId, node.spaceId, session.email))) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+  }
+  // A file shared only where this viewer is not, a private channel they are
+  // not in: the node is as private as its note.
+  if (node.spaceId) {
+    const lens = await entityLensFor(node.spaceId, session.userId, session.email);
+    if (lens && isEntityHidden({ ...node, metadata: (node.metadata ?? {}) as Record<string, unknown> }, lens)) {
+      return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+    }
   }
 
   // Links + connected node data in one shot, bounded: a hub's page shows its

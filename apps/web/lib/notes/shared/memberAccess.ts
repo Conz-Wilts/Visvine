@@ -35,16 +35,19 @@ export interface MemberStanding {
 /**
  * Every grant that applies to this member, in the order a reader wants: what
  * everyone has, then each alias they wear, then what is theirs alone. Grants for
- * aliases they do not hold and other people are left out.
+ * aliases they do not hold, other people and channels are left out.
  */
 export function reachFor<G extends AccessGrant>(
   grants: readonly G[],
   member: MemberStanding,
 ): Reach<G>[] {
   const byAlias = new Map(member.aliases.map((a) => [a.id, a]))
-  const rank: Record<GrantSubjectType, number> = { space: 0, alias: 1, user: 2 }
+  const rank: Record<GrantSubjectType, number> = { space: 0, alias: 1, channel: 2, user: 3 }
   const out: Reach<G>[] = []
   for (const grant of grants) {
+    // A channel grant follows channel membership (a private channel, a file
+    // shared in one): not a standing an admin manages per member.
+    if (grant.subjectType === 'channel') continue
     if (grant.subjectType === 'space') out.push({ grant, via: { kind: 'everyone' } })
     else if (grant.subjectType === 'alias') {
       const alias = byAlias.get(grant.subjectId)

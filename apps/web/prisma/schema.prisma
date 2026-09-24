@@ -109,6 +109,7 @@ model Space {
   appToolInstalls    AppToolInstall[]
   sharedToolInstalls AppToolInstall[]      @relation("SharedToolInstalls")
   resources          Resource[]
+  resourceShares     ResourceShare[]
   resourceFolders    ResourceFolder[]
   projectionJobs     NoteProjectionJob[]
   cleanSchedule      ContextCleanSchedule?
@@ -511,13 +512,13 @@ model AgentSubscription {
 /// Who changed how an agent runs, and to what — the history a note revision
 /// used to be for these fields (lib/agents/service.ts#configureAgent).
 model AgentConfigChange {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId   String   @map("space_id")
-  name      String
-  userId    String?  @map("user_id") // null for a machine write
-  patch     Json
-  at        DateTime @default(now())
-  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  id      String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId String   @map("space_id")
+  name    String
+  userId  String?  @map("user_id") // null for a machine write
+  patch   Json
+  at      DateTime @default(now())
+  space   Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   @@index([spaceId, name, at(sort: Desc)])
   @@map("agent_config_changes")
@@ -1010,7 +1011,7 @@ model UserAlias {
 model ContextGrant {
   id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId      String   @map("space_id")
-  subjectType  String   @map("subject_type") // 'space' | 'alias' | 'user'
+  subjectType  String   @map("subject_type") // 'space' | 'alias' | 'user' | 'channel'
   // '' for the space itself | SpaceAlias.id | userId. Alias grants hold the
   // alias's stable id, never its name — see the note on UserAlias.
   subjectId    String   @default("") @map("subject_id")
@@ -1306,6 +1307,7 @@ model Node {
   linksAsSource  Link[]          @relation("SourceNode")
   linksAsTarget  Link[]          @relation("TargetNode")
   space          Space?          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  resource       Resource?
 
   @@index([type])
   @@index([spaceId, type])
@@ -1438,6 +1440,9 @@ model User {
   messagesSent            Message[]            @relation("MessageSender")
   messageReactions        MessageReaction[]    @relation("ReactionAuthor")
   messageStars            MessageStar[]        @relation("StarAuthor")
+  resourcesCreated        Resource[]           @relation("ResourceCreator")
+  resourceShares          ResourceShare[]      @relation("ResourceSharer")
+  resourceAccesses        ResourceAccess[]     @relation("ResourceAccessor")
 
   appToolVersionsAuthored AppToolVersion[] @relation("AppToolVersionAuthor")
 
@@ -1539,56 +1544,230 @@ model IdentityResolution {
   @@map("identity_resolutions")
 }
 
-/// A file in a space's Drive: bytes in GCS, a record here, and — when the kind
-/// is text-extractable — a ContextSource beside it holding the chunked, embedded
-/// contents that make the file searchable. The Drive is deliberately NOT an
-/// editor: a Resource is stored, described and retrieved, never mutated in place.
+/// One thing a space holds that is not a note: a file whose bytes we store
+/// (`source: upload`) or a link we unfurl (`source: link`). A resource is
+/// SHARED into places — the space itself, or a channel's message — through
+/// `resource_shares`, the way Slack keeps one File and many shares of it; who
+/// can see a resource is the union of its shares (lib/resources/shared/visibility.ts).
+/// Every resource is also a context entity: `nodeId` names its `resource:` node,
+/// whose note at `resources/<slug>/index.md` is the prose about it.
 ///
 /// The three tiers meet on this row (docs/data-architecture.md): `gcsPath` is the
 /// tier-3 pointer, this row is the tier-2 record, and `sourcePath` addresses the
 /// tier-1 context entry whose chunks carry the contents into retrieval.
 model Resource {
-  id             String            @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId        String            @map("space_id")
+  id             String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId        String              @map("space_id")
   name           String
-  fileType       String            @map("file_type")
+  /// The display bucket older readers key on (pdf, docx, xlsx, image…). `kind`
+  /// is the family the viewer and filters read; both are written together.
+  fileType       String              @map("file_type")
+  source         ResourceSource      @default(upload)
+  kind           ResourceKind        @default(other)
+  state          ResourceState       @default(ready)
+  /// The resource's entity. Unique: one resource, one node, one note.
+  nodeId         String?             @unique @map("node_id")
   /// The object in GCS_RESOURCES_BUCKET. SERVER-MINTED, never accepted from a
   /// client: this is the string the API signs a download URL for, so a
   /// client-supplied one would sign any object in the bucket — including another
-  /// space's. Null for a row whose bytes were never stored (a seeded demo file).
-  gcsPath        String?           @map("gcs_path")
-  fileSize       Int?              @map("file_size")
-  uploadedBy     String            @map("uploaded_by")
+  /// space's. Null for a link, or a row whose bytes were never stored (a seed).
+  gcsPath        String?             @map("gcs_path")
+  fileSize       Int?                @map("file_size")
+  mimeType       String?             @map("mime_type")
+  /// md5 of the stored bytes, from the object store.
+  contentHash    String?             @map("content_hash")
+  width          Int?
+  height         Int?
+  durationMs     Int?                @map("duration_ms")
+  pageCount      Int?                @map("page_count")
+  /// pending | clean | blocked | skipped — what the upload scanner said. Bytes
+  /// are served only when clean or skipped (no scanner configured).
+  scanState      String              @default("skipped") @map("scan_state")
+  /// Unused since resource_shares; awaiting a drop migration.
+  uploadedBy     String              @map("uploaded_by")
+  createdBy      String?             @map("created_by")
   /// The ContextSource path holding this file's extracted chunks, or null when
   /// the kind carries no text (images). The source row is the RAG projection of
   /// this record and is rebuildable from the GCS object by re-ingesting.
-  sourcePath     String?           @map("source_path")
+  sourcePath     String?             @map("source_path")
   /// pending | indexed | unsupported | failed — where this file got to in the
   /// RAG pipeline, surfaced in the Drive so "why can't the AI see my file" has a
   /// visible answer instead of silence.
-  indexState     String            @default("pending") @map("index_state")
-  indexError     String?           @map("index_error")
-  metadata       Json              @default("{}")
-  createdAt      DateTime          @default(now()) @map("created_at")
+  indexState     String              @default("pending") @map("index_state")
+  indexError     String?             @map("index_error")
+  metadata       Json                @default("{}")
+  // ── a link ──
+  url            String?
+  /// The dedupe key: the same page shared five times is one resource.
+  canonicalUrl   String?             @map("canonical_url")
+  /// google-doc | google-sheet | google-slides | google-drive | figma | youtube | loom | vimeo | web
+  provider       String?
+  /// What the page says about itself: title, description, siteName, authorName,
+  /// publishedAt, mediaType, imageLayout, faviconPath. Never oEmbed html.
+  unfurl         Json?
+  /// An embed URL WE built for an allowlisted provider (lib/links/shared/providers.ts).
+  embedUrl       String?             @map("embed_url")
+  /// The page's image, re-hosted in the resources bucket — never hotlinked.
+  previewPath    String?             @map("preview_path")
+  fetchedAt      DateTime?           @map("fetched_at")
+  /// pending | ok | failed
+  fetchState     String?             @map("fetch_state")
+  /// 'scrape', or 'connector:<name>' when the provider's own API supplied it.
+  entitySource   String?             @map("entity_source")
+  /// What the provider's API said: owner, modifiedAt, size, mimeType.
+  external       Json?
+  createdAt      DateTime            @default(now()) @map("created_at")
+  deletedAt      DateTime?           @map("deleted_at")
+  deletedBy      String?             @map("deleted_by")
   /// The Drive folder it sits in; null is the Drive's root. Deleting a folder
   /// moves its files to its parent (see lib/resources/folders.ts) — never to
   /// the bin — so the FK only ever needs to SET NULL as a last resort.
-  folderId       String?           @map("folder_id")
-  /// The channel a file was dropped into. Such a file is the channel's: it has
-  /// no directory node, is listed in Resources only to that channel's members,
-  /// and a message carries it through `message_files`.
-  conversationId String?           @map("conversation_id")
-  space          Space             @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  folder         ResourceFolder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  conversation   Conversation?     @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  folderId       String?             @map("folder_id")
+  /// Unused since resource_shares (a channel file is a share); awaiting a drop.
+  conversationId String?             @map("conversation_id")
+  space          Space               @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  node           Node?               @relation(fields: [nodeId], references: [id], onDelete: SetNull)
+  creator        User?               @relation("ResourceCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  folder         ResourceFolder?     @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  conversation   Conversation?       @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   changes        ResourceChange[]
   comments       ResourceComment[]
   messages       MessageFile[]
+  shares         ResourceShare[]
+  renditions     ResourceRendition[]
+  accesses       ResourceAccess[]
+  jobs           ResourceJob[]
 
+  @@unique([spaceId, canonicalUrl])
   @@index([spaceId, createdAt(sort: Desc)])
+  @@index([spaceId, kind, createdAt(sort: Desc)])
+  @@index([spaceId, state])
   @@index([spaceId, folderId])
   @@index([spaceId, conversationId])
   @@map("resources")
+}
+
+/// Where a resource was shared. `conversationId` null is the space itself (added
+/// in Resources, uploaded by an AI); otherwise a channel, and `messageId` the
+/// message that carried it. A channel's Files tab is a query over these rows.
+model ResourceShare {
+  id             String        @id @default(dbgenerated("(gen_random_uuid())::text"))
+  resourceId     String        @map("resource_id")
+  spaceId        String        @map("space_id")
+  conversationId String?       @map("conversation_id")
+  messageId      String?       @map("message_id")
+  sharedBy       String?       @map("shared_by")
+  /// The agent that shared it on sharedBy's behalf, when one did.
+  agentName      String?       @map("agent_name")
+  /// upload | message | link | action | agent
+  via            String        @default("upload")
+  position       Int           @default(0)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  resource       Resource      @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  space          Space         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        Message?      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  sharer         User?         @relation("ResourceSharer", fields: [sharedBy], references: [id], onDelete: SetNull)
+
+  @@unique([messageId, resourceId])
+  @@index([resourceId])
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([spaceId, createdAt(sort: Desc)])
+  @@map("resource_shares")
+}
+
+/// A derived image of a resource: `thumb` (360), `preview` (2048), `poster`
+/// (a video's frame), `page1` (a document's first page). Never the original —
+/// downloads always serve the resource's own bytes.
+model ResourceRendition {
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  resourceId String   @map("resource_id")
+  kind       String
+  gcsPath    String   @map("gcs_path")
+  width      Int?
+  height     Int?
+  mimeType   String   @default("image/webp") @map("mime_type")
+  createdAt  DateTime @default(now()) @map("created_at")
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceId, kind])
+  @@map("resource_renditions")
+}
+
+/// Who used a resource and how: every access through the MCP, an agent or the
+/// API, and a person's downloads and deletes. `targetNodeId` names what it was
+/// used AS (an event whose cover it became, a person whose photo).
+model ResourceAccess {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  resourceId   String   @map("resource_id")
+  spaceId      String   @map("space_id")
+  userId       String?  @map("user_id")
+  agentName    String?  @map("agent_name")
+  runId        String?  @map("run_id")
+  /// web | mcp | agent | api
+  via          String
+  /// read | download | upload | share | use | delete
+  action       String
+  targetNodeId String?  @map("target_node_id")
+  at           DateTime @default(now())
+  resource     Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  user         User?    @relation("ResourceAccessor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([resourceId, at(sort: Desc)])
+  @@index([spaceId, at(sort: Desc)])
+  @@index([userId])
+  @@map("resource_access")
+}
+
+/// Work a resource still owes: renditions, text extraction, an unfurl. A row,
+/// because the runtime scales to zero and throttles CPU after a response — the
+/// work is done inside a request (the one that made it, the one that pulls it,
+/// or the minute tick), never after one (lib/resources/jobs.ts).
+model ResourceJob {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  resourceId  String    @map("resource_id")
+  /// rendition | extract | unfurl | refresh | scan
+  kind        String
+  /// queued | running | done | failed
+  state       String    @default("queued")
+  attempts    Int       @default(0)
+  runAfter    DateTime  @default(now()) @map("run_after")
+  lockedUntil DateTime? @map("locked_until")
+  error       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  resource    Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceId, kind])
+  @@index([state, runAfter])
+  @@map("resource_jobs")
+}
+
+enum ResourceSource {
+  upload
+  link
+}
+
+enum ResourceKind {
+  image
+  video
+  audio
+  pdf
+  doc
+  sheet
+  slides
+  text
+  code
+  archive
+  link
+  other
+}
+
+enum ResourceState {
+  uploading
+  ready
+  failed
+  deleted
 }
 
 /// A folder in a Space's Drive. Purely organisational: files index, search and
@@ -1691,6 +1870,9 @@ model Conversation {
   icon        String?
   /// How a CHANNEL renders: classic chat thread or social-feed post cards.
   viewMode    ChannelViewMode      @default(CHAT) @map("view_mode")
+  /// A PRIVATE channel is listed to, and joined by, its members only; a member
+  /// adds a member. Its note and its files' notes are granted to the channel.
+  visibility  ChannelVisibility    @default(PUBLIC)
   /// Set for CHANNEL conversations — channels are space-scoped and discoverable by space members.
   spaceId     String?              @map("space_id")
   /// Optional grouping of CHANNEL conversations into a named section.
@@ -1704,6 +1886,7 @@ model Conversation {
   createdBy   User                 @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
   messages    Message[]
   resources   Resource[]
+  shares      ResourceShare[]
 
   @@index([type])
   @@index([updatedAt])
@@ -1768,6 +1951,7 @@ model Message {
   reactions      MessageReaction[]
   linkPreviews   MessageLinkPreview[]
   stars          MessageStar[]
+  shares         ResourceShare[]
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
@@ -1885,6 +2069,11 @@ enum ConversationType {
 enum ConversationMemberRole {
   MEMBER
   ADMIN
+}
+
+enum ChannelVisibility {
+  PUBLIC
+  PRIVATE
 }
 
 /// How a CHANNEL conversation renders: classic chat thread or social-feed post cards.

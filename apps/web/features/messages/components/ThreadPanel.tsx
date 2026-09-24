@@ -4,7 +4,7 @@ import type { Dispatch, KeyboardEvent, MutableRefObject, RefObject, SetStateActi
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowLeftIcon, HashIcon, LogOutIcon, PencilIcon, SearchIcon, StarIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
 import { Avatar } from '@visvine/ui';
-import { ChannelIcon, ChannelIconPicker } from './ChannelIcon';
+import { channelFallback, ChannelIcon, ChannelIconPicker } from './ChannelIcon';
 import MessageComposer from './MessageComposer';
 import MessageRow from './MessageRow';
 import FeedView from './FeedView';
@@ -33,7 +33,7 @@ interface ThreadPanelProps {
   // Channel header extras
   showHeaderIconPicker: boolean;
   setShowHeaderIconPicker: Dispatch<SetStateAction<boolean>>;
-  updateSelectedChannel: (patch: { icon?: string | null; viewMode?: 'CHAT' | 'FEED' }) => Promise<void>;
+  updateSelectedChannel: (patch: { icon?: string | null; viewMode?: 'CHAT' | 'FEED'; visibility?: 'PUBLIC' | 'PRIVATE' }) => Promise<void>;
   headerPanel: 'saved' | null;
   setHeaderPanel: Dispatch<SetStateAction<'saved' | null>>;
   openHeaderPanel: (panel: 'saved') => Promise<void>;
@@ -187,7 +187,7 @@ export default function ThreadPanel({
                         title="Change channel icon"
                         className="flex items-center justify-center rounded-md p-0.5 transition-colors hover:bg-surface-subtle"
                       >
-                        <ChannelIcon icon={selectedConversation.icon} fallback={isFeed ? 'feed' : 'hash'} className="h-5 w-5" />
+                        <ChannelIcon icon={selectedConversation.icon} fallback={channelFallback(selectedConversation)} className="h-5 w-5" />
                       </button>
                       {showHeaderIconPicker && (
                         <span className="absolute left-0 top-7 z-30">
@@ -200,7 +200,7 @@ export default function ThreadPanel({
                       )}
                     </span>
                   ) : (
-                    <ChannelIcon icon={selectedConversation.icon} fallback={isFeed ? 'feed' : 'hash'} className="h-5 w-5" />
+                    <ChannelIcon icon={selectedConversation.icon} fallback={channelFallback(selectedConversation)} className="h-5 w-5" />
                   )}
                   <span className="truncate">{selectedConversation.name}</span>
                 </p>

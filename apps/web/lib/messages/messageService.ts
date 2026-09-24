@@ -16,6 +16,9 @@ import {
 import { takeToken } from '@/lib/rateLimit';
 import { attachPreviewsToMessage } from '@/lib/linkPreview';
 import { messageFilesDenial } from '@/lib/resources/shared/messageFiles';
+import { canSeeResource } from '@/lib/resources/shared/visibility';
+import { resourceViewer } from '@/lib/resources/visibility';
+import { addShares, syncGrantsOf } from '@/lib/resources/shares';
 
 export async function listMessagesForConversation(
   currentUserId: string,
@@ -84,15 +87,24 @@ export async function sendMessage(
     replyToId?: string;
   },
 ): Promise<{ message: SerializedMessage; memberIds: string[] }> {
-  await ensureConversationMember(conversationId, currentUserId);
+  const membership = await ensureConversationMember(conversationId, currentUserId);
+  const spaceId = membership.conversation.spaceId;
 
   const fileIds = Array.from(new Set(payload.fileIds ?? []));
   if (fileIds.length) {
     const rows = await prisma.resource.findMany({
       where: { id: { in: fileIds } },
-      select: { id: true, uploadedBy: true, conversationId: true },
+      select: { id: true, spaceId: true, createdBy: true, deletedAt: true, shares: { select: { conversationId: true } } },
     });
-    const denial = messageFilesDenial(fileIds, rows, { userId: currentUserId, conversationId });
+    const viewer = spaceId ? await resourceViewer(spaceId, currentUserId) : null;
+    const candidates = rows.map((row) => ({
+      id: row.id,
+      spaceId: row.spaceId,
+      visible:
+        !!viewer &&
+        canSeeResource(viewer, { createdBy: row.createdBy, deleted: row.deletedAt !== null, shares: row.shares }),
+    }));
+    const denial = messageFilesDenial(fileIds, candidates, { spaceId });
     if (denial) throw new MessagingError(400, denial);
   }
 
@@ -122,10 +134,19 @@ export async function sendMessage(
       });
     }
 
-    if (fileIds.length) {
-      await tx.messageFile.createMany({
-        data: fileIds.map((resourceId, i) => ({ messageId: message.id, resourceId, position: i })),
-      });
+    if (fileIds.length && spaceId) {
+      await addShares(
+        fileIds.map((resourceId, i) => ({
+          resourceId,
+          spaceId,
+          conversationId,
+          messageId: message.id,
+          sharedBy: currentUserId,
+          via: 'message' as const,
+          position: i,
+        })),
+        tx,
+      );
     }
 
     if (payload.mentions?.length) {
@@ -156,6 +177,8 @@ export async function sendMessage(
 
     return message.id;
   });
+
+  if (fileIds.length) await syncGrantsOf(fileIds);
 
   const fullMessage = await prisma.message.findUniqueOrThrow({
     where: { id: messageId },

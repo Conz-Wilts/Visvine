@@ -105,23 +105,34 @@ function signingSecret(): string {
   return secret;
 }
 
-function signature(bucket: string, objectPath: string, expires: number): string {
-  return createHmac('sha256', signingSecret()).update(`${bucket}\n${objectPath}\n${expires}`).digest('hex');
+function signature(bucket: string, objectPath: string, expires: number, disposition = ''): string {
+  const payload = `${bucket}\n${objectPath}\n${expires}${disposition ? `\n${disposition}` : ''}`;
+  return createHmac('sha256', signingSecret()).update(payload).digest('hex');
 }
 
-/** A relative URL that reads one object until `expires` (epoch ms). */
-export function localSignedUrl(bucket: string, objectPath: string, expires: number): string {
+/**
+ * A relative URL that reads one object until `expires` (epoch ms). A
+ * `disposition` is signed with it, as GCS signs `response-content-disposition`.
+ */
+export function localSignedUrl(bucket: string, objectPath: string, expires: number, disposition?: string): string {
   const encoded = objectPath.split('/').map(encodeURIComponent).join('/');
-  const sig = signature(bucket, objectPath, expires);
-  return `/api/storage/local/${encodeURIComponent(bucket)}/${encoded}?exp=${expires}&sig=${sig}`;
+  const sig = signature(bucket, objectPath, expires, disposition);
+  const cd = disposition ? `&cd=${encodeURIComponent(disposition)}` : '';
+  return `/api/storage/local/${encodeURIComponent(bucket)}/${encoded}?exp=${expires}${cd}&sig=${sig}`;
 }
 
 /** Whether a URL's signature is the one this server minted, and still live. */
-export function verifyLocalSignature(bucket: string, objectPath: string, exp: string | null, sig: string | null): boolean {
+export function verifyLocalSignature(
+  bucket: string,
+  objectPath: string,
+  exp: string | null,
+  sig: string | null,
+  disposition?: string | null,
+): boolean {
   if (!exp || !sig) return false;
   const expires = Number(exp);
   if (!Number.isFinite(expires) || expires < Date.now()) return false;
-  const expected = Buffer.from(signature(bucket, objectPath, expires));
+  const expected = Buffer.from(signature(bucket, objectPath, expires, disposition ?? ''));
   const given = Buffer.from(sig);
   return expected.length === given.length && timingSafeEqual(expected, given);
 }

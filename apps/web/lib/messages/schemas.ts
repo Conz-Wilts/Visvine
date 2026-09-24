@@ -11,6 +11,9 @@ const iconSchema = z.enum(ICON_NAMES);
 /** Rendering style of a channel: classic chat thread or social-feed post cards. */
 const viewModeSchema = z.enum(['CHAT', 'FEED']);
 
+/** Who a channel is for: everyone in the space, or its members alone. */
+const visibilitySchema = z.enum(['PUBLIC', 'PRIVATE']);
+
 export const createChannelSchema = z.object({
   spaceId: z.string().min(1),
   name: z.string().trim().min(1).max(80),
@@ -18,6 +21,7 @@ export const createChannelSchema = z.object({
   icon: iconSchema.optional(),
   sectionId: z.string().min(1).optional(),
   viewMode: viewModeSchema.optional(),
+  visibility: visibilitySchema.optional(),
   // Starting text for the channel's context note (channels/<slug>.md). Optional
   // — the note is created either way, this just saves an empty first edit.
   context: z.string().trim().max(5000).optional(),
@@ -30,6 +34,7 @@ export const updateGroupSchema = z.object({
   icon: iconSchema.nullable().optional(),
   sectionId: z.string().min(1).nullable().optional(),
   viewMode: viewModeSchema.optional(),
+  visibility: visibilitySchema.optional(),
 });
 
 export const createSectionSchema = z.object({

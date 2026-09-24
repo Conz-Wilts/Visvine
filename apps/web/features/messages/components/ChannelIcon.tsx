@@ -13,16 +13,25 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { HashIcon, Icon, FeedIcon } from '@/features/shared/icons';
+import { HashIcon, Icon, FeedIcon, LockIcon } from '@/features/shared/icons';
+
+/** The glyph a channel wears when it has no icon of its own. */
+export function channelFallback(channel: { viewMode?: string | null; visibility?: string | null }): 'hash' | 'feed' | 'lock' {
+  if (channel.visibility === 'PRIVATE') return 'lock';
+  return channel.viewMode === 'FEED' ? 'feed' : 'hash';
+}
 
 export function ChannelIcon({ icon, fallback = 'hash', className = 'h-4 w-4' }: {
   icon?: string | null;
-  /** Glyph when no icon is set — 'feed' marks feed-style channels. */
-  fallback?: 'hash' | 'feed';
+  /** Glyph when no icon is set — 'feed' marks feed-style channels, 'lock' private ones. */
+  fallback?: 'hash' | 'feed' | 'lock';
   className?: string;
 }) {
   if (icon) {
     return <Icon name={icon} className={`shrink-0 ${className}`} strokeWidth={2} />;
+  }
+  if (fallback === 'lock') {
+    return <LockIcon className={`shrink-0 ${className}`} strokeWidth={2} />;
   }
   if (fallback === 'feed') {
     return <FeedIcon className={`shrink-0 ${className}`} strokeWidth={2} />;

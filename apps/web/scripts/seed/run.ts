@@ -48,6 +48,7 @@ import { seedDirectory } from './steps/directory'
 import { seedChannels, seedDrive, seedEvents } from './steps/tools'
 import { seedAgents, seedConnectors, seedLivedIn } from './steps/machinery'
 import { putNotes } from './write'
+import { reshapeResources } from '../../lib/resources/reshape'
 
 async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
   const t0 = Date.now()
@@ -99,6 +100,9 @@ async function main() {
     const tally = await seedLivedIn()
     return { tables: Object.keys(tally).length, rows: Object.values(tally).reduce((a, b) => a + b, 0) }
   })
+  // Every file and shared link as a resource with its shares, entity and
+  // note audience — the shape the app writes (lib/resources/reshape.ts).
+  await step('resources', () => reshapeResources())
 
   const [nodes, links, notes] = await Promise.all([
     prisma.node.count({ where: { spaceId: SPACE_ID } }),

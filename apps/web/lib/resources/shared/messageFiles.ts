@@ -1,28 +1,31 @@
-// Which Drive files a message may carry. Pure — `sendMessage` loads the rows,
-// this decides. A message carries only files its sender dropped into its own
-// channel: anything else would let a message lift another channel's file (or a
-// file someone else uploaded) into a place its readers were never given it.
+// Which resources a message may carry. Pure — `sendMessage` loads the rows and
+// asks the visibility rule, this decides. A message shares a resource into its
+// channel, so the sender must be able to see it already and it must belong to
+// the channel's space: a message can never lift a file its readers were not
+// already allowed to be given, nor carry one across tenants.
 
 const MAX_MESSAGE_FILES = 10
 
 export interface CandidateFile {
   id: string
-  uploadedBy: string
-  conversationId: string | null
+  spaceId: string
+  /** Whether the sender can see it (shared/visibility.ts#canSeeResource). */
+  visible: boolean
 }
 
-/** The refusal, or null when every requested file may ride this message. */
+/** The refusal, or null when every requested resource may ride this message. */
 export function messageFilesDenial(
   requested: string[],
   rows: CandidateFile[],
-  sender: { userId: string; conversationId: string },
+  conversation: { spaceId: string | null },
 ): string | null {
   if (requested.length > MAX_MESSAGE_FILES) return `A message carries at most ${MAX_MESSAGE_FILES} files`
+  if (requested.length && !conversation.spaceId) return 'Files can be shared in a space’s channels only'
   const byId = new Map(rows.map((row) => [row.id, row]))
   for (const id of requested) {
     const row = byId.get(id)
-    if (!row || row.uploadedBy !== sender.userId || row.conversationId !== sender.conversationId) {
-      return 'One of the files was not dropped into this conversation by you'
+    if (!row || !row.visible || row.spaceId !== conversation.spaceId) {
+      return 'One of the files is not one you can share here'
     }
   }
   return null

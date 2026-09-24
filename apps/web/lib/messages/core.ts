@@ -54,9 +54,23 @@ export const MESSAGE_INCLUDE = {
   images: {
     orderBy: { position: 'asc' as const },
   },
-  files: {
+  shares: {
+    where: { resource: { source: 'upload' as const } },
     orderBy: { position: 'asc' as const },
-    select: { resource: { select: { id: true, name: true, fileType: true, fileSize: true } } },
+    select: {
+      resource: {
+        select: {
+          id: true,
+          name: true,
+          fileType: true,
+          kind: true,
+          fileSize: true,
+          width: true,
+          height: true,
+          deletedAt: true,
+        },
+      },
+    },
   },
   mentions: true,
   reactions: true,
@@ -179,13 +193,18 @@ export function serializeMessage(
           senderName: message.replyTo.sender.name,
         }
       : null,
-    files: message.files.map(({ resource }) => ({
-      id: resource.id,
-      name: resource.name,
-      fileType: resource.fileType,
-      fileSize: resource.fileSize,
-      url: resourceRawPath(resource.id),
-    })),
+    files: message.shares
+      .filter(({ resource }) => resource.deletedAt === null)
+      .map(({ resource }) => ({
+        id: resource.id,
+        name: resource.name,
+        fileType: resource.fileType,
+        kind: resource.kind,
+        fileSize: resource.fileSize,
+        width: resource.width,
+        height: resource.height,
+        url: resourceRawPath(resource.id),
+      })),
     linkPreviews: message.linkPreviews.map((lp) => serializeLinkPreview(lp.linkPreview)),
     starred: message.stars.some((star) => star.userId === currentUserId),
   };
@@ -246,6 +265,7 @@ export function serializeConversation(
     avatarUrl: getConversationAvatar(conversation, currentUserId),
     icon: conversation.icon,
     viewMode: conversation.viewMode,
+    visibility: conversation.visibility,
     sectionId: conversation.sectionId,
     participants: conversation.members.map((member) => ({
       id: member.user.id,

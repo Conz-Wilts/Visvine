@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSignedUrl, RESOURCES_BUCKET } from '@/lib/gcs';
-import { isSuperAdmin } from '@/lib/session';
 import { z } from 'zod';
 import { requireApiSession, forbiddenResponse, parseBody, handleApiError } from '@/lib/api/route';
-import { featureAccessForbidden, isAdmin } from '@/lib/auth';
 import { moveResource, renameResource } from '@/lib/resources/folders';
-import { findNodeIdByRecord } from '@/lib/notes/context/entityNodes';
+import { requireVisibleResource } from '@/lib/resources/visibility';
+import { canManageResource } from '@/lib/resources/shared/visibility';
 
 /**
- * GET /api/resources/[resourceId] — single resource with a fresh signed URL,
- * uploader profile, activity counts and its Resource node. Space members only.
+ * GET /api/resources/[resourceId] — one resource the caller can see (through a
+ * share, or as an admin; a trashed one only to whoever may restore it), with a
+ * fresh signed URL, uploader profile, activity counts and its Resource node.
  */
 export async function GET(
   _req: NextRequest,
@@ -20,29 +20,17 @@ export async function GET(
   if (session instanceof NextResponse) return session;
 
   const { resourceId } = await params;
-  const resource = await prisma.resource.findUnique({
+  let gate;
+  try {
+    gate = await requireVisibleResource(resourceId, session.userId, session.email, { trash: true });
+  } catch (err) {
+    return handleApiError(err, 'resources.get');
+  }
+  const resource = await prisma.resource.findUniqueOrThrow({
     where: { id: resourceId },
     include: { _count: { select: { comments: true, changes: true } } },
   });
-  if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  const membership = await prisma.spaceMember.findUnique({
-    where: { userId_spaceId: { userId: session.userId, spaceId: resource.spaceId } },
-    select: { id: true },
-  });
-  const superAdmin = isSuperAdmin(session.email);
-  if (!membership && !superAdmin) {
-    return forbiddenResponse();
-  }
-  // A file dropped into a channel is read by that channel's members.
-  if (resource.conversationId && !superAdmin) {
-    const inChannel = await prisma.conversationMember.findUnique({
-      where: { conversationId_userId: { conversationId: resource.conversationId, userId: session.userId } },
-      select: { id: true },
-    });
-    if (!inChannel) return forbiddenResponse();
-  }
-  const canManage = await isAdmin(session.userId, resource.spaceId, session.email);
+  const canManage = canManageResource(gate.viewer, resource);
 
   // A download URL is signed per read and never stored — see the note on
   // Resource.gcsPath. A row with no object (a seeded demo file) has no URL.
@@ -55,20 +43,25 @@ export async function GET(
     }
   }
 
-  const [uploader, pendingChanges, nodeId] = await Promise.all([
-    resource.uploadedBy
+  const nodeId = resource.nodeId;
+  const [uploader, pendingChanges] = await Promise.all([
+    resource.createdBy
       ? prisma.user.findUnique({
-          where: { id: resource.uploadedBy },
+          where: { id: resource.createdBy },
           select: { id: true, name: true, image: true, nodeId: true },
         })
       : Promise.resolve(null),
     prisma.resourceChange.count({ where: { resourceId, status: 'pending' } }),
-    findNodeIdByRecord(resource.spaceId, 'resource', resource.id),
   ]);
 
   const { _count, ...rest } = resource;
   return NextResponse.json({
-    resource: { ...rest, fileUrl, createdAt: resource.createdAt.toISOString() },
+    resource: {
+      ...rest,
+      fileUrl,
+      createdAt: resource.createdAt.toISOString(),
+      deletedAt: resource.deletedAt?.toISOString() ?? null,
+    },
     /** The Resource this file is the content of — its page is where it is shown. */
     nodeId,
     uploader: uploader
@@ -101,10 +94,11 @@ export async function PATCH(
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
   const { resourceId } = await params;
-  const resource = await prisma.resource.findUnique({ where: { id: resourceId }, select: { spaceId: true } });
-  if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (await featureAccessForbidden(session.userId, resource.spaceId, 'directory', session.email)) {
-    return forbiddenResponse();
+  try {
+    const gate = await requireVisibleResource(resourceId, session.userId, session.email);
+    if (!canManageResource(gate.viewer, gate)) return forbiddenResponse();
+  } catch (err) {
+    return handleApiError(err, 'resources.update');
   }
   const body = await parseBody(req, patchSchema);
   if (body instanceof NextResponse) return body;

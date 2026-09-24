@@ -1,7 +1,7 @@
 // A one-line "who can see this path" summary computed purely from grant rows —
 // the shape the MCP tools expose so an agent can pick where to store a note.
 // Structurally incapable of enumerating members: the input is grant rows only
-// (space/alias/user + level + path), never user names, and user grants are
+// (space/alias/user/channel + level + path), never user names, and user grants are
 // COUNTED in the output rather than named. Space admins always see
 // everything, so every summary ends in "admins".
 //
@@ -58,13 +58,14 @@ export function audienceSummary(
   )
   const selfReached = userIds.delete(opts.selfUserId)
   const otherUsers = userIds.size
+  const channels = new Set(reaching.filter((g) => g.subjectType === 'channel').map((g) => g.subjectId)).size
 
   let audience: AudienceKind
   let line: string
   if (everyone) {
     audience = 'everyone'
     line = `everyone in ${opts.spaceName ?? 'this space'}`
-  } else if (aliasNames.length === 0 && otherUsers === 0) {
+  } else if (aliasNames.length === 0 && otherUsers === 0 && channels === 0) {
     if (selfReached) {
       audience = 'you-only'
       line = 'you + admins only'
@@ -80,9 +81,10 @@ export function audienceSummary(
       const more = aliasNames.length > max ? ` (+${aliasNames.length - max} more)` : ''
       parts.push(`aliases: ${shown}${more}`)
     }
+    if (channels > 0) parts.push(`members of ${channels} channel${channels === 1 ? '' : 's'}`)
     if (otherUsers > 0) parts.push(`${otherUsers} direct grant${otherUsers === 1 ? '' : 's'}`)
     if (selfReached) parts.push('you')
-    audience = otherUsers > 0 ? 'mixed' : 'aliases'
+    audience = otherUsers > 0 || channels > 0 ? 'mixed' : 'aliases'
     line = `${parts.join(' + ')} + admins`
   }
 

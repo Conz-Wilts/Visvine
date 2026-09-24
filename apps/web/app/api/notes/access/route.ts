@@ -27,6 +27,7 @@ import {
   revokeAccess,
   setFolderLocked,
   setFolderRestricted,
+  subjectNamer,
 } from '@/lib/notes/access'
 import { listAliases, loadPersonAliases } from '@/lib/notes/aliases'
 import { findAliasByRef } from '@/lib/types/context'
@@ -77,6 +78,7 @@ export async function GET(req: NextRequest) {
       const all = await loadSpaceAccess(context.spaceId)
       // Alias grants store the alias ID, so the display name comes from the
       // space's own vocabulary.
+      const nameOf = await subjectNamer(context.spaceId, all.grants)
       const userIds = [...new Set(all.grants.filter((g) => g.subjectType === 'user').map((g) => g.subjectId))]
       const [users, vocabulary] = await Promise.all([
         userIds.length
@@ -92,7 +94,9 @@ export async function GET(req: NextRequest) {
             ? 'Everyone'
             : g.subjectType === 'alias'
               ? (findAliasByRef(vocabulary, g.subjectId, 'Person')?.name ?? g.subjectId)
-              : (userName.get(g.subjectId) ?? 'Former member'),
+              : g.subjectType === 'channel'
+                ? nameOf('channel', g.subjectId).name
+                : (userName.get(g.subjectId) ?? 'Former member'),
       }))
     }
     return NextResponse.json({

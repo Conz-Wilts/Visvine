@@ -254,9 +254,11 @@ const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 export async function getSignedUrl(
   bucketName: string,
   objectPath: string,
-  expiresInMs = 15 * 60 * 1000
+  expiresInMs = 15 * 60 * 1000,
+  /** A Content-Disposition the response must carry — a download under its real name. */
+  { disposition }: { disposition?: string } = {},
 ): Promise<string> {
-  const key = `${bucketName}/${objectPath}`;
+  const key = `${bucketName}/${objectPath}${disposition ? `\n${disposition}` : ''}`;
   const now = Date.now();
 
   const cached = signedUrlCache.get(key);
@@ -266,7 +268,7 @@ export async function getSignedUrl(
   if (cached) signedUrlCache.delete(key);
 
   if (storageDriver() === 'local') {
-    const url = localSignedUrl(bucketName, objectPath, now + expiresInMs);
+    const url = localSignedUrl(bucketName, objectPath, now + expiresInMs, disposition);
     signedUrlCache.set(key, { url, expiresAt: now + expiresInMs });
     return url;
   }
@@ -278,6 +280,7 @@ export async function getSignedUrl(
     .getSignedUrl({
       action: 'read',
       expires: now + expiresInMs,
+      ...(disposition ? { responseDisposition: disposition } : {}),
     });
 
   signedUrlCache.set(key, { url, expiresAt: now + expiresInMs });

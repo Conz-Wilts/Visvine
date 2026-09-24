@@ -6,9 +6,11 @@
  * actions.
  */
 
-import { Tabs, Avatar } from '@visvine/ui';
-import { HashIcon, LogOutIcon, MessageCircleIcon, FeedIcon, PencilIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
-import type { ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
+import { useState } from 'react';
+import { Tabs, Avatar, Toggle, ConfirmDialog } from '@visvine/ui';
+import { LogOutIcon, MessageCircleIcon, FeedIcon, PencilIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
+import type { ChannelViewMode, ChannelVisibility, ConversationSummary } from '@/lib/messages/types';
+import { ChannelIcon, channelFallback } from './ChannelIcon';
 
 export interface ProfilePanelProps {
   conversation: ConversationSummary;
@@ -20,6 +22,8 @@ export interface ProfilePanelProps {
   onRemoveMember: (memberUserId: string) => void;
   /** Change a channel's rendering style (chat thread vs feed cards); admin-only UI. */
   onChangeViewMode?: (mode: ChannelViewMode) => void;
+  /** Make a channel private or public; admin-only UI. */
+  onChangeVisibility?: (visibility: ChannelVisibility) => void;
   /** When set (docked Slack-style pane), the header gains a close button. */
   onClose?: () => void;
 }
@@ -28,7 +32,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{children}</p>;
 }
 
-function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRename, onLeave, onRemoveMember, onChangeViewMode }: ProfilePanelProps) {
+function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRename, onLeave, onRemoveMember, onChangeViewMode, onChangeVisibility }: ProfilePanelProps) {
+  const isPrivate = conversation.visibility === 'PRIVATE';
+  const [confirmPublic, setConfirmPublic] = useState(false);
   const viewMode: ChannelViewMode = conversation.viewMode ?? 'CHAT';
 
   return (
@@ -36,7 +42,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
       {/* Identity */}
       <div className="flex flex-col items-center px-6 pb-5 pt-7 text-center">
         <p className="flex items-center gap-1 text-base font-semibold text-fg">
-          <HashIcon className="h-[18px] w-[18px] shrink-0" strokeWidth={2.5} />
+          <ChannelIcon icon={conversation.icon} fallback={channelFallback(conversation)} className="h-[18px] w-[18px]" />
           <span>{conversation.name}</span>
         </p>
         <p className="mt-0.5 text-xs text-fg-muted">
@@ -60,6 +66,30 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
               { id: 'CHAT' as const, label: 'Chat', icon: <MessageCircleIcon className="h-3.5 w-3.5" /> },
               { id: 'FEED' as const, label: 'Feed', icon: <FeedIcon className="h-3.5 w-3.5" /> },
             ]}
+          />
+        </div>
+      )}
+
+      {/* Private (channel admins): members only, unlisted; its note and the
+          files shared only here follow it. The switch sits in the header. */}
+      {isAdmin && onChangeVisibility && (
+        <div className="flex items-center justify-between px-5 pb-4">
+          <SectionLabel>Private</SectionLabel>
+          <Toggle
+            aria-label="Private"
+            checked={isPrivate}
+            onChange={(next) => (next ? onChangeVisibility('PRIVATE') : setConfirmPublic(true))}
+          />
+          <ConfirmDialog
+            open={confirmPublic}
+            title={`Make #${conversation.name} public?`}
+            body="Everyone in the space will see it, its history and its files."
+            confirmLabel="Make public"
+            onConfirm={() => {
+              onChangeVisibility('PUBLIC');
+              setConfirmPublic(false);
+            }}
+            onClose={() => setConfirmPublic(false)}
           />
         </div>
       )}
@@ -92,7 +122,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
 
       {/* Actions */}
       <div className="section-y-0.5 border-t border-line-subtle px-3 py-3">
-        {isAdmin && (
+        {(isAdmin || isPrivate) && (
           <>
             <button
               type="button"
@@ -102,6 +132,10 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
               <UserPlusIcon className="h-4 w-4 text-fg-muted" />
               Add members
             </button>
+          </>
+        )}
+        {isAdmin && (
+          <>
             <button
               type="button"
               onClick={onRename}

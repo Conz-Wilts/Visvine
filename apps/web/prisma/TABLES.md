@@ -88,7 +88,11 @@ the entity notes in Context. They're the shared graph primitives.
 
 | Table | Controls |
 | --- | --- |
-| `resources` | An uploaded file in a Space — name, type, object path, size, uploader, the folder it sits in, and the channel it was dropped in. |
+| `resources` | One thing a Space holds that is not a note: an uploaded file (object path, type, size, dimensions, scan state) or a link (URL, canonical URL, provider, unfurl, re-hosted image). One per link per space; its `resource:` node is its context entity. |
+| `resource_shares` | Where a resource was shared: the space itself, or a channel's message. Who can see a resource is the union of these. |
+| `resource_renditions` | Images derived from a resource — thumb, preview, poster, a document's first page. Never the original. |
+| `resource_access` | Who used a resource and how — every MCP, agent and API access, and a person's downloads and deletes. |
+| `resource_jobs` | Work a resource still owes (renditions, text, an unfurl), done inside a request or by the minute tick. |
 | `resource_folders` | A folder in a Space's Drive — name and parent. Organisational only; files index and search the same anywhere. |
 | `resource_comments` | Comments on a resource, optionally pinned to a specific cell. |
 | `resource_changes` | Proposed edits to a specific cell, with an approve/reject workflow (who proposed, who reviewed). |

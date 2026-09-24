@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSpaceContextData } from '@/lib/eventRepo';
 import { normalizeNode, normalizeLink } from '@/lib/notes/context/normalize';
 import { visibleGraph } from '@/lib/notes/context/featureVisibility';
+import { visibleNodesFor } from '@/lib/notes/context/entityVisibility';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
 import { spaceMemberForbidden, directoryAccessForbidden, getFeatureConfig } from '@/lib/auth';
 
@@ -14,6 +15,11 @@ type RouteContext = {
 };
 
 export const runtime = 'nodejs';
+
+/** A link end is an id, or (in older cached payloads) the node itself. */
+function endId(end: string | { id: string }): string {
+  return typeof end === 'string' ? end : end.id;
+}
 
 export async function GET(
   _request: NextRequest,
@@ -37,9 +43,14 @@ export async function GET(
     // Types belonging to a switched-off tool leave the graph with their edges —
     // see lib/notes/context/featureVisibility.ts.
     const featureConfig = await getFeatureConfig(spaceId);
+    const seen = new Set(
+      (await visibleNodesFor(spaceId, session.userId, session.email, contextData.nodes)).map((node) => node.id),
+    );
     const graph = visibleGraph(
-      contextData.nodes.map(normalizeNode),
-      contextData.links.map(normalizeLink),
+      contextData.nodes.filter((node) => seen.has(node.id)).map(normalizeNode),
+      contextData.links
+        .filter((link) => seen.has(endId(link.source)) && seen.has(endId(link.target)))
+        .map(normalizeLink),
       featureConfig,
     );
     const { nodes, links } = graph;

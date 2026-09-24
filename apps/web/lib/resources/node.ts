@@ -39,7 +39,7 @@ async function actorOf(userId: string): Promise<Actor | null> {
 }
 
 /** A `resource:<slug>` id no node holds and whose note path is free. */
-async function freeNodeId(spaceId: string, name: string): Promise<string> {
+export async function freeNodeId(spaceId: string, name: string): Promise<string> {
   const context = { spaceId, ownerKey: SHARED_OWNER_KEY }
   const base = `resource:${slugify(name) || 'file'}`
   for (let attempt = 1; attempt <= MAX_ID_ATTEMPTS; attempt++) {

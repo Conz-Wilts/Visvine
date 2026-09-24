@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiSession } from '@/lib/api/route';
+import { requireApiSession, handleApiError } from '@/lib/api/route';
 import { featureAccessForbidden } from '@/lib/auth';
-import prisma from '@/lib/prisma';
+import { requireVisibleResource } from '@/lib/resources/visibility';
 import { reindexResource } from '@/lib/resources/service';
 
 export const maxDuration = 300;
@@ -21,11 +21,12 @@ export async function POST(_req: NextRequest, context: RouteContext) {
   if (session instanceof NextResponse) return session;
 
   const { resourceId } = await context.params;
-  const resource = await prisma.resource.findUnique({
-    where: { id: resourceId },
-    select: { spaceId: true },
-  });
-  if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  let resource;
+  try {
+    resource = await requireVisibleResource(resourceId, session.userId, session.email);
+  } catch (err) {
+    return handleApiError(err, 'resources.reindex.gate');
+  }
   if (await featureAccessForbidden(session.userId, resource.spaceId, 'directory', session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

@@ -51,15 +51,18 @@ export const CHANNEL_ACTIONS = [
     summary: 'Create a channel in a space — a chat thread, or a feed of posts — with its context note.',
     description:
       'Create a CHANNEL: a conversation every member of the space can join, and its context note at ' +
-      'channels/<slug>/index.md. `view_mode` FEED makes it a stream of posts with comments (what the Feed ' +
-      'shows); CHAT (default) is a classic thread. File it under a section with `section_id` (create_section ' +
-      'makes one). Space admins only, and only in a space with the Channels tool on. Ask for the name and ' +
-      'whether it is a chat or a feed if the person has not said.',
+      'channels/<slug>/index.md. `private: true` makes it invite-only and unlisted: only its members see it, ' +
+      'its note and the files shared in it, and a member adds a member. `view_mode` FEED makes it a stream of ' +
+      'posts with comments (what the Feed shows); CHAT (default) is a classic thread. File it under a section ' +
+      'with `section_id` (create_section makes one). Space admins only, and only in a space with the Channels ' +
+      'tool on. Ask for the name, whether it is a chat or a feed, and whether it is private if the person has ' +
+      'not said.',
     input: {
       space_id: spaceArg,
       name: z.string().trim().min(1).max(80).describe("The channel's name, e.g. 'launch-night'"),
       description: z.string().trim().max(500).optional().describe('One line on what the channel is for'),
       view_mode: z.enum(['CHAT', 'FEED']).optional().describe("'CHAT' (default) or 'FEED'"),
+      private: z.boolean().optional().describe('True for an invite-only channel only its members can see'),
       section_id: z.string().min(1).optional().describe('A section to file it under'),
       icon: iconArg,
       context: z.string().trim().max(5000).optional().describe("Starting text for the channel's context note"),
@@ -76,11 +79,13 @@ export const CHANNEL_ACTIONS = [
           args.section_id,
           args.view_mode,
           args.context,
+          args.private ? 'PRIVATE' : 'PUBLIC',
         ),
       )
       return {
         channel_id: channel.id,
         name: channel.name,
+        private: channel.visibility === 'PRIVATE',
         view_mode: channel.viewMode ?? 'CHAT',
         section_id: channel.sectionId ?? null,
         href: inSpace(args.space_id, `/channels/${encodeURIComponent(channel.id)}`),
