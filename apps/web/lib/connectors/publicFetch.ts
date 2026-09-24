@@ -17,10 +17,13 @@
 import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf'
 import { allowPrivateHosts } from './config'
 import { readCapped } from './hostFetch'
+import { readableText } from '@/lib/links/shared/readable'
 
 /** Most redirects one fetch may follow; every hop is re-gated. */
 const MAX_HOPS = 3
 const CAP_CHARS = 60_000
+/** What is read off the wire before the page is made readable — markup is most of a page's bytes. */
+const RAW_CAP_BYTES = 1_000_000
 const TIMEOUT_MS = 15_000
 
 /** The seam tests run through: fake fetch + host check, no network, no DNS. */
@@ -81,14 +84,23 @@ async function openPublic(
   }
 }
 
+/**
+ * A public page as text a model reads well: HTML and JSON made readable
+ * (lib/links/shared/readable.ts), then capped. The first line is the status,
+ * and says so when the text is a readable form of a larger body.
+ */
 export async function fetchPublicText(rawUrl: string, io: PublicFetchIo = defaultIo()): Promise<string> {
   const opened = await openPublic(rawUrl, io)
   if (!opened.ok) {
     return opened.status ? `status ${opened.status}\n…[${opened.error}]` : `error: ${opened.error}`
   }
   try {
-    const { text, truncated } = await readCapped(opened.res, CAP_CHARS)
-    return `status ${opened.res.status}\n${truncated ? text + '\n…[truncated]' : text}`
+    const { text: raw, truncated: cutOnWire } = await readCapped(opened.res, RAW_CAP_BYTES)
+    const readable = readableText(raw, opened.res.headers.get('content-type'), opened.url.href)
+    const text = readable.length > CAP_CHARS ? readable.slice(0, CAP_CHARS) : readable
+    const truncated = cutOnWire || readable.length > CAP_CHARS
+    const note = readable !== raw ? ` · readable text, ${readable.length.toLocaleString('en-US')} of ${raw.length.toLocaleString('en-US')} chars` : ''
+    return `status ${opened.res.status}${note}\n${truncated ? text + '\n…[truncated]' : text}`
   } catch (e) {
     return `error: ${e instanceof Error ? e.message : 'fetch failed'}`
   }

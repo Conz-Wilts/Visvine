@@ -11,7 +11,9 @@ import { noulOf } from './shared/types'
 import { INJECTION_AT, INJECTION_QUESTION } from './shared/questions'
 
 const WINDOW_CHARS = 6_000
-const RISK_DEADLINE_MS = 2_000
+// A run already takes tens of seconds; two more for a verdict is cheaper than
+// reading a page with no signal at all.
+const RISK_DEADLINE_MS = 4_000
 
 /** The highest injection reading over the start, middle and end of the text, or null for no verdict. */
 async function injectionRisk(text: string): Promise<number | null> {

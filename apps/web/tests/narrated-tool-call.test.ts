@@ -12,7 +12,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { announcedNextStep, narratedToolCall, NEXT_STEP_NUDGE } from '@/lib/notes/shared/narratedToolCall'
-import { runToolLoop, type ChatFn, type ToolHandler } from '@/lib/notes/toolLoop'
+import { MAX_REVIEWS, runToolLoop, type ChatFn, type ToolHandler } from '@/lib/notes/toolLoop'
 import type { ChatWithToolsResult } from '@/lib/notes/ai'
 
 const TOOLS = ['fetch_url', 'write_context', 'read_context']
@@ -109,4 +109,36 @@ test('a reply that stops on its next step is told once, then believed', async ()
   const r2 = await runToolLoop({ messages: [{ role: 'user', content: 'go' }], tools: [fetchUrl], maxTurns: 5, chatFn: twice })
   assert.equal(r2.reason, 'finished')
   assert.equal(r2.turns, 2)
+})
+
+test('a review hands a short answer back, a bounded number of times', async () => {
+  const chatFn = scripted([
+    { content: 'Fetched the page.' },
+    { content: 'Wrote the digest.' },
+  ])
+  const asked: (string | null)[] = []
+  const r = await runToolLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [fetchUrl],
+    maxTurns: 6,
+    chatFn,
+    review: async (text) => {
+      asked.push(text)
+      return text === 'Fetched the page.' ? 'Carry on and write it.' : null
+    },
+  })
+  assert.equal(r.reason, 'finished')
+  assert.equal(r.finalText, 'Wrote the digest.')
+  assert.deepEqual(asked, ['Fetched the page.', 'Wrote the digest.'])
+  assert.ok(chatFn.seen.includes('Carry on and write it.'))
+
+  // A reviewer that is never satisfied cannot hold the run open.
+  const stubborn = scripted([{ content: 'a' }, { content: 'b' }, { content: 'c' }, { content: 'd' }])
+  const r2 = await runToolLoop({ messages: [{ role: 'user', content: 'go' }], tools: [fetchUrl], maxTurns: 9, chatFn: stubborn, review: async () => 'again' })
+  assert.equal(r2.reason, 'finished')
+  assert.equal(r2.turns, MAX_REVIEWS + 1)
+
+  // A review that throws accepts the answer.
+  const r3 = await runToolLoop({ messages: [{ role: 'user', content: 'go' }], tools: [fetchUrl], maxTurns: 3, chatFn: scripted([{ content: 'x' }]), review: async () => { throw new Error('judge down') } })
+  assert.equal(r3.finalText, 'x')
 })

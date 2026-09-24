@@ -41,6 +41,7 @@ import { adoptNoteConfig, deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
 import { localRuntimeOf, localRuntimeRefusal } from './local'
+import { modelToolsProblem } from '@/lib/models/capabilities'
 import { currentStepOf, latestRun, type RunListItem } from './runs'
 import { memoryPath } from './shared/memory'
 import { lastHeartbeat } from './schedule'
@@ -203,6 +204,13 @@ function modelStateOf(
   return { modelEffective: fallback.ref, modelNote: fallback.path, modelProblem: null }
 }
 
+/** The model state, with a model that cannot call tools said as the problem it is (lib/models/capabilities.ts). */
+async function withToolsProblem<T extends Pick<AgentSummary, 'modelEffective' | 'modelProblem'>>(state: T): Promise<T> {
+  if (state.modelProblem || !state.modelEffective) return state
+  const problem = await modelToolsProblem(state.modelEffective).catch(() => null)
+  return problem ? { ...state, modelProblem: problem } : state
+}
+
 async function summarise(
   context: Context,
   name: string,
@@ -277,7 +285,7 @@ async function summarise(
     tags: brief?.tags ?? [],
     runsFor: { names: forNames, count: forIds.length },
     currentStep,
-    ...modelStateOf(brief, opts.models),
+    ...(await withToolsProblem(modelStateOf(brief, opts.models))),
     rowState: 'off',
     spend: null,
   }
@@ -646,6 +654,8 @@ export async function activateAgent(
 
   const resolved = await resolveAgentChatConfig(context.spaceId, modelFor(brief, p.userId))
   if (!resolved.ok) return { ok: false, status: 400, error: resolved.message }
+  const toolsProblem = await modelToolsProblem(`${resolved.ref.provider.id}/${resolved.ref.modelId}`).catch(() => null)
+  if (toolsProblem) return { ok: false, status: 409, error: `Not turned on: ${toolsProblem}` }
   const probe = await probeModelKey(resolved.config, resolved.ref.provider)
   if (!probe.ok && probe.kind === 'auth') return { ok: false, status: 400, error: probe.message }
   const warning = [probe.ok ? null : probe.message, ...unsigned.map((n) => `${n.why} ${n.fix}`)].filter(Boolean).join(' ') || null

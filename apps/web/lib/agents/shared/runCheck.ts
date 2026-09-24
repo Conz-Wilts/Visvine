@@ -41,3 +41,49 @@ export function unbackedClaims(claims: RunClaims, trace: RunTrace, at: number): 
   }
   return out
 }
+
+export interface RunVerdict {
+  unbacked: string[]
+  outcome: RunOutcome | null
+}
+
+/**
+ * Whether a run that ended on `verdict` finished the job. A claim the trace
+ * does not back, a run that says it is only partly done or could not do what
+ * it was asked — none of those is a success, however the loop ended. No
+ * verdict (no judge) is not evidence of anything, so it passes.
+ */
+export function incompleteBecause(verdict: RunVerdict | null): string | null {
+  if (!verdict) return null
+  if (verdict.unbacked.length) return verdict.unbacked.join(' ')
+  if (verdict.outcome === 'partial') return 'It ended saying only part of the job was done.'
+  if (verdict.outcome === 'blocked') return 'It ended saying it could not do what it was asked.'
+  return null
+}
+
+/**
+ * What a run that is about to end short is told, so it can finish instead:
+ * the missing step in words, then the instruction to do it with the tools.
+ * Null when the verdict is a finished run. Pure; lib/agents/runner.ts hands
+ * it to the loop's `review`.
+ */
+export function nudgeFor(verdict: RunVerdict | null, trace: RunTrace): string | null {
+  if (!verdict) return null
+  const lines: string[] = []
+  const wroteNothing = trace.writes === 0
+  for (const line of verdict.unbacked) {
+    if (line.startsWith('It says it wrote')) {
+      lines.push('You said you wrote or updated a note, but no note was written — nothing was saved. Call write_context (or append_context) now with the content.')
+    } else {
+      lines.push('You said you sent something or acted in an outside service, but no tool that could was called. Make that call now, or say plainly that you did not.')
+    }
+  }
+  if (!lines.length && verdict.outcome === 'partial') {
+    lines.push('Your reply says the job is only partly done. Carry on with the remaining steps now, calling the tools yourself.')
+  }
+  if (!lines.length && verdict.outcome === 'blocked' && wroteNothing) {
+    lines.push('Your reply says you are blocked. If a tool you have can get past it, use it now; if not, reply with exactly what is missing and who can fix it.')
+  }
+  if (!lines.length) return null
+  return `${lines.join(' ')} Do not describe the steps — make the calls, then reply with a one-line summary of what you did.`
+}

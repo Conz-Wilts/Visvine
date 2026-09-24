@@ -5,22 +5,19 @@
 import { decide } from '@/lib/judge/client'
 import { choiceOf, noulOf } from '@/lib/judge/shared/types'
 import { RUN_CLAIM_AT, RUN_CLAIM_QUESTIONS, RUN_OUTCOME_CONFIDENCE, RUN_OUTCOME_QUESTION } from '@/lib/judge/shared/questions'
-import { unbackedClaims, type RunOutcome, type RunTrace } from './shared/runCheck'
+import { unbackedClaims, type RunOutcome, type RunTrace, type RunVerdict } from './shared/runCheck'
 
 const CHECK_DEADLINE_MS = 3_000
 
-export interface RunCheck {
-  unbacked: string[]
-  outcome: RunOutcome | null
-}
-
-export async function checkRun(finalText: string | null, trace: RunTrace): Promise<RunCheck> {
-  if (!finalText?.trim()) return { unbacked: [], outcome: null }
+/** Null when the judge gave no verdict — which says nothing about the run. */
+export async function checkRun(finalText: string | null, trace: RunTrace): Promise<RunVerdict | null> {
+  if (!finalText?.trim()) return null
   const answers = await decide(
     finalText.slice(0, 6_000),
     { ...RUN_CLAIM_QUESTIONS, outcome: RUN_OUTCOME_QUESTION },
     { deadlineMs: CHECK_DEADLINE_MS, patient: true },
   )
+  if (!answers) return null
   const outcome = choiceOf(answers, 'outcome')
   return {
     unbacked: unbackedClaims({ wrote: noulOf(answers, 'wrote'), reached: noulOf(answers, 'reached') }, trace, RUN_CLAIM_AT),

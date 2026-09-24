@@ -46,6 +46,8 @@ export type TerminalReason =
   | 'finished'
   | 'max_turns'
   | 'narrated'
+  /** The loop ended, but the run had not done the job it described (shared/runCheck.ts#incompleteBecause). */
+  | 'incomplete'
   | 'budget'
   | 'run_cap'
   | 'timeout'

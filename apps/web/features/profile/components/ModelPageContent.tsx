@@ -35,6 +35,7 @@ import { PROVIDERS } from '@/lib/agents/registry';
 import { modelCatalogEntryFor } from '@/lib/models/catalog';
 import type { ModelDetail, ModelRunRow, ModelUserLine } from '@/lib/models/service';
 import { timeAgo } from '@/lib/date';
+import { trackRecords } from '@/lib/models/shared/capabilities';
 
 interface DetailResponse {
   model: ModelDetail;
@@ -306,7 +307,17 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
 
       {/* ══ HISTORY — every recent run, newest first ══ */}
       {info && (
-        <Section title="History" meta={history.runs.length === 0 ? undefined : `${history.runs.length} recent`}>
+        <Section
+          title="History"
+          meta={
+            history.runs.length === 0
+              ? undefined
+              : [
+                  `${history.runs.length} recent`,
+                  ...trackRecords(history.runs).map((t) => `${t.model.slice(t.model.indexOf('/') + 1)} finished ${t.finished} of ${t.finished + t.short}`),
+                ].join(' · ')
+          }
+        >
           {history.runs.length === 0 ? (
             <p className="text-sm text-fg-muted">No runs on {info.providerLabel} in the last 90 days.</p>
           ) : (

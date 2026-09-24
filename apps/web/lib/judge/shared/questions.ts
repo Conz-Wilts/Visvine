@@ -284,7 +284,7 @@ export type AskedQuestion =
   | { id: string; type: 'scale'; ask: string; options: string[] }
 
 const ASKED_MAX_QUESTIONS = 6
-export const ASKED_MAX_ITEMS = 48
+export const ASKED_MAX_ITEMS = 240
 export const ASKED_ITEM_CHARS = 6_000
 
 export function askedQuestion(q: AskedQuestion): NoulQuestion | ChoiceQuestion | ScoreQuestion {

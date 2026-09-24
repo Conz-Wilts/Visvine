@@ -16,6 +16,7 @@ import {
   type ChatWithToolsResult,
   type ToolSpec,
 } from './ai'
+import { compactOlderResults } from './shared/compactMessages'
 import { announcedNextStep, MAX_NARRATION_NUDGES, NEXT_STEP_NUDGE, narratedToolCall, narrationNudge } from './shared/narratedToolCall'
 
 export type ChatFn = (
@@ -53,7 +54,17 @@ export interface ToolLoopOptions {
    * reason string to stop the loop (result.reason = 'stopped'), or null to go on.
    */
   beforeTurn?: (state: { turn: number; usage: ChatUsage }) => string | null
+  /**
+   * Read a plain answer before it ends the loop. Return a message to hand the
+   * turn back with — the answer says the job is half done, or claims a write
+   * nothing made — or null to accept it. Asked at most MAX_REVIEWS times a run,
+   * after which the answer stands; a review that throws accepts it.
+   */
+  review?: (finalText: string | null) => Promise<string | null>
 }
+
+/** How often one run's answer may be handed back by `review`. */
+export const MAX_REVIEWS = 2
 
 export interface ToolLoopResult {
   reason: ToolLoopReason
@@ -90,6 +101,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   /** How often this run has written a call out as text instead of making it. */
   let nudges = 0
   let promptedNextStep = false
+  let reviews = 0
 
   const done = (
     reason: ToolLoopReason,
@@ -112,7 +124,9 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
 
     let reply: ChatWithToolsResult
     try {
-      reply = await chatFn(messages, specs, { config: opts.config, signal: opts.signal })
+      // Older long results go out shortened (shared/compactMessages.ts); the
+      // conversation itself keeps them whole.
+      reply = await chatFn(compactOlderResults(messages), specs, { config: opts.config, signal: opts.signal })
     } catch (e) {
       if (opts.signal?.aborted) return done('aborted', turn)
       return done('error', turn, { error: e instanceof Error ? e : new Error(String(e)) })
@@ -144,6 +158,18 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         messages.push({ role: 'assistant', content: reply.content ?? '' })
         messages.push({ role: 'user', content: NEXT_STEP_NUDGE })
         continue
+      }
+      // The caller's own read of the answer: a run that stopped short gets the
+      // turn back with what is missing, a bounded number of times.
+      if (opts.review && reviews < MAX_REVIEWS) {
+        const nudge = await opts.review(reply.content?.trim() || null).catch(() => null)
+        if (nudge) {
+          reviews++
+          if (reply.content?.trim()) emit({ type: 'assistant', text: reply.content.trim() })
+          messages.push({ role: 'assistant', content: reply.content ?? '' })
+          messages.push({ role: 'user', content: nudge })
+          continue
+        }
       }
       // The final answer is returned, not emitted — callers render it their way.
       return done('finished', turn + 1, { finalText: reply.content?.trim() || null })

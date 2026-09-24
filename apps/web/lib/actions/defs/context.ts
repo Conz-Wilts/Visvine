@@ -88,6 +88,7 @@ import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
 import { activateAgent, canTriggerRun, configureAgent, createAgentBrief, describeAgent, listAgents, switchOffAgent } from '@/lib/agents/service'
 import { agentConfigInput, configPatchOf } from '@/lib/agents/configInput'
+import { modelToolsProblem } from '@/lib/models/capabilities'
 import { defaultModelOf, noModelReason, spaceModels } from '@/lib/agents/spaceModels'
 import {
   AGENT_TOOL_EXTRAS,
@@ -2174,7 +2175,8 @@ export const CONTEXT_ACTIONS = [
         // the person instead of guessing a provider on their behalf.
         const models = await spaceModels(context.spaceId)
         const fallback = defaultModelOf(models)
-        const problem = r.brief.model ? null : noModelReason(models)
+        const effective = r.brief.model ?? fallback?.ref ?? null
+        const problem = (r.brief.model ? null : noModelReason(models)) ?? (await modelToolsProblem(effective).catch(() => null))
         // What stands between this brief and a working run, judged for the
         // caller: a declared connector that is not there, a service the
         // instructions name that nothing reaches, no model at all — each with

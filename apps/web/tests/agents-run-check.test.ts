@@ -3,7 +3,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { unbackedClaims } from '../lib/agents/shared/runCheck'
+import { incompleteBecause, nudgeFor, unbackedClaims } from '../lib/agents/shared/runCheck'
 
 test('a claimed write with no write and no writing tool is unbacked', () => {
   assert.equal(unbackedClaims({ wrote: 0.95 }, { writes: 0, tools: ['search_context', 'read_context'] }, 0.8).length, 1)
@@ -19,4 +19,25 @@ test('a claimed send with nothing that could reach outside is unbacked', () => {
 test('no verdict, or a claim under the floor, accuses nothing', () => {
   assert.deepEqual(unbackedClaims({}, { writes: 0, tools: [] }, 0.8), [])
   assert.deepEqual(unbackedClaims({ wrote: 0.5, reached: 0.79 }, { writes: 0, tools: [] }, 0.8), [])
+})
+
+test('a run that stopped short is handed back with what is missing, and fails if it stays short', () => {
+  const noWrite = { writes: 0, tools: ['fetch_url'] }
+  const claimed = { unbacked: ['It says it wrote or updated something, but the run made no write.'], outcome: 'done' as const }
+  assert.match(nudgeFor(claimed, noWrite) ?? '', /call write_context/i)
+  assert.ok(incompleteBecause(claimed))
+
+  const partial = { unbacked: [], outcome: 'partial' as const }
+  assert.match(nudgeFor(partial, noWrite) ?? '', /remaining steps/)
+  assert.ok(incompleteBecause(partial))
+
+  const blocked = { unbacked: [], outcome: 'blocked' as const }
+  assert.match(nudgeFor(blocked, noWrite) ?? '', /blocked/)
+  assert.equal(nudgeFor(blocked, { writes: 1, tools: ['write_context'] }), null, 'a blocked run that wrote says so; it is not nudged')
+  assert.ok(incompleteBecause(blocked))
+
+  for (const fine of [{ unbacked: [], outcome: 'done' as const }, { unbacked: [], outcome: 'nothing' as const }, { unbacked: [], outcome: null }, null]) {
+    assert.equal(nudgeFor(fine, noWrite), null)
+    assert.equal(incompleteBecause(fine), null)
+  }
 })

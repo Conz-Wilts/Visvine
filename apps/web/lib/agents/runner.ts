@@ -30,6 +30,7 @@ import { readAgent } from './briefs'
 import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, type DeactivationReason, copyStillAllowed } from './hooks'
 import { checkRun } from './runCheck'
+import { incompleteBecause, nudgeFor, type RunVerdict } from './shared/runCheck'
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
 import { releaseMachineAfterRun } from '@/lib/vm/lease'
 import { principalForUser } from './principal'
@@ -340,6 +341,8 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           .map((a) => `- ${a.name} (${a.scope}): ${a.summary}`)
           .join('\n')
       : undefined
+    const trace = () => ({ writes: writes.length, tools: events.flatMap((e) => (e.type === 'tool' ? [e.tool] : [])) })
+    const judged: { text?: string | null; verdict?: RunVerdict | null } = {}
     const result = await runToolLoop({
       messages: [
         { role: 'system', content: system },
@@ -378,6 +381,15 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         turns = turn
         return perTurnStop(budget, usage)
       },
+      // Before an answer ends the run, the judge reads it against what the run
+      // did: a job it says is half done, or a write nothing made, gets the turn
+      // back with what is missing (shared/runCheck.ts#nudgeFor). The last
+      // verdict is kept, so the answer that stands is not judged twice.
+      review: async (finalText) => {
+        judged.text = finalText
+        judged.verdict = await checkRun(finalText, trace()).catch(() => null)
+        return nudgeFor(judged.verdict, trace())
+      },
     })
     const cost = costMicros(result.usage, ref.pricing)
     const common = { usage: result.usage, cost, turns: result.turns, model: modelUsed }
@@ -388,17 +400,17 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         if (result.finalText) events.push({ at: Date.now(), type: 'assistant', text: clipEventText(result.finalText) })
         if (result.reason === 'max_turns') events.push({ at: Date.now(), type: 'system', text: `Stopped at the turn cap (${brief.maxTurns}).` })
         // What the run SAID it did, held against what it did (shared/runCheck.ts).
-        // A claim the trace does not back is said on the run's own line, and
-        // below it keeps the summary out of the memory note.
-        const check = await checkRun(result.finalText, {
-          writes: writes.length,
-          tools: events.flatMap((e) => (e.type === 'tool' ? [e.tool] : [])),
-        }).catch(() => ({ unbacked: [] as string[], outcome: null }))
-        for (const line of check.unbacked) events.push({ at: Date.now(), type: 'system', text: `Unverified — ${line}` })
-        if (check.outcome && check.outcome !== 'done') {
-          const said = { partial: 'only part of it was done', blocked: 'it could not do what it was asked', nothing: 'there was nothing to do' }[check.outcome]
-          events.push({ at: Date.now(), type: 'system', text: `The run ended saying ${said}.` })
+        // It was already handed back when it stopped short; if it still has,
+        // the run did not finish the job, and says so instead of passing.
+        const verdict =
+          'verdict' in judged && judged.text === result.finalText
+            ? (judged.verdict ?? null)
+            : await checkRun(result.finalText, trace()).catch(() => null)
+        const short = incompleteBecause(verdict)
+        if (short) {
+          return fail('incomplete', `Stopped before finishing. ${short}${result.finalText ? ` It said: “${result.finalText.slice(0, 300)}”` : ''}`, common)
         }
+        if (verdict?.outcome === 'nothing') events.push({ at: Date.now(), type: 'system', text: 'The run ended saying there was nothing to do.' })
         await finishRun(runId, {
           status: 'succeeded',
           terminalReason: result.reason,
@@ -419,9 +431,9 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           const forName = run.runAsUserId && run.runAsUserId !== state.runAsUserId ? principal.name : null
           // Read again: `remember` may have added lines since the run began.
           const current = await readVisible(principal, context, memoryPath(name)).catch(() => null)
-          // Tomorrow's run reads this as fact, so a summary the trace does not
-          // back is not what goes in it.
-          const summary = check.unbacked.length ? `Unverified. ${check.unbacked.join(' ')}` : result.finalText
+          // A summary the trace did not back never gets here: that run failed
+          // `incomplete` above, and tomorrow's run reads this line as fact.
+          const summary = result.finalText
           const next = setLastRun(current, name, { date: now.toISOString().slice(0, 10), trigger: run.trigger, summary, forName })
           await writeGated(principal, context, memoryPath(name), next, 'agent', `agent:${name}`).catch(() => undefined)
         }

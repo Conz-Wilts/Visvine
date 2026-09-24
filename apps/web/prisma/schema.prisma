@@ -542,7 +542,7 @@ model AgentRun {
   completionTokens Int        @default(0) @map("completion_tokens")
   costMicros       BigInt?    @map("cost_micros") // USD micro-dollars; null = pricing unknown
   turns            Int        @default(0)
-  terminalReason   String?    @map("terminal_reason") // finished | max_turns | budget | timeout | crashed | error | auth | quota | upstream | config | author_gone
+  terminalReason   String?    @map("terminal_reason") // finished | max_turns | narrated | incomplete | budget | run_cap | timeout | crashed | error | auth | quota | upstream | config | author_gone | aborted
   summary          String? // the model's final answer, capped
   errorMessage     String?    @map("error_message") // redacted
   events           Json       @default("[]") // AgentEvent[] trace

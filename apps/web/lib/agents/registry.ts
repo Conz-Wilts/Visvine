@@ -114,8 +114,9 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     // wants its cap to bind declares `pricing:` on the connector note.
     models: [
       { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5', pricing: null },
-      { id: 'openai/gpt-4.1', label: 'GPT-4.1', pricing: null },
-      { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', pricing: null },
+      { id: 'openai/gpt-6-sol', label: 'GPT-6 Sol', pricing: null },
+      { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash', pricing: null },
+      { id: 'google/gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite', pricing: null },
     ],
   },
   {

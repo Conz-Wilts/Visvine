@@ -507,7 +507,7 @@ choosing the row — the fallback, and what replaced "write a CDP script to read
 the page".
 
 **`decide`** gives an agent the judge directly: its own yes/no, choice and
-scale questions over up to 48 items a call, numbers back. It exists so that
+scale questions over up to 240 items a call, numbers back. It exists so that
 triage — which of forty emails need a reply — is one call on the platform's
 key rather than forty turns on the space's. It reads and answers; it writes,
 grants and gates nothing. Because it is a tenant spending the deployment's
