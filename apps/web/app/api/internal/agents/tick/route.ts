@@ -9,6 +9,8 @@ import { pruneEgressLog, sweepEgress } from '@/lib/vm/anomaly'
 import { stop as stopMachine, edgeConfigured } from '@/lib/vm/edge'
 import { environment } from '@/lib/vm/lease'
 import { logger } from '@/lib/logger'
+import { drainJobs } from '@/lib/resources/jobs'
+import { reapAbandonedUploads } from '@/lib/resources/upload'
 
 // The tick awaits the dispatches it fans out (each its own request to the run
 // endpoint), so it can last as long as the longest claimed run.
@@ -44,6 +46,15 @@ export async function POST(req: NextRequest) {
     logger.error('notes.clean.tick_failed', { err })
     return null
   })
+  // Work resources still owe (renditions, text, unfurls) that no request
+  // finished — the backstop drain of lib/resources/jobs.ts. Bounded, and
+  // never allowed to fail the tick.
+  const resourceJobs = await drainJobs({ budgetMs: 20_000 })
+    .then(async (drained) => ({ ...drained, abandonedUploads: await reapAbandonedUploads() }))
+    .catch((err) => {
+      logger.error('resources.jobs.tick_failed', { err })
+      return null
+    })
 
   // VM leases ride this tick for the same reason the projection drain does: it
   // is the heartbeat the deployment already has, and a lease nobody has touched
@@ -68,6 +79,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     projections,
     cleans,
+    resourceJobs,
     vmLeasesReaped: vmLeases,
     machines,
     reclaimed: report.reclaimed,

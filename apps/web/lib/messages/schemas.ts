@@ -56,7 +56,7 @@ export const sendMessageSchema = z.object({
   text: z.string().trim().max(4000).default(''),
   attachmentUrl: z.string().url().optional(),
   imageUrls: z.array(z.string().url()).max(10).optional(),
-  /** Drive files the sender dropped into this channel (`POST /api/resources/upload`). */
+  /** Resources the message shares into its channel — any the sender can see (lib/resources/shared/messageFiles.ts). */
   fileIds: z.array(z.string().min(1)).max(10).optional(),
   mentions: z.array(z.object({
     mentionedUserId: z.string().optional(),

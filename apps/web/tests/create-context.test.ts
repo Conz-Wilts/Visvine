@@ -90,8 +90,9 @@ test('sourceKindOf covers the documents the File tile accepts', () => {
   assert.equal(sourceKindOf('model.xlsx'), 'spreadsheet')
   assert.equal(sourceKindOf('legacy.xls'), 'spreadsheet')
   assert.equal(sourceKindOf('export.json'), 'json')
+  assert.equal(sourceKindOf('report.pdf'), 'pdf')
+  assert.equal(sourceKindOf('deck.pptx'), 'slides')
   // Still rejected — no extractor.
-  assert.equal(sourceKindOf('report.pdf'), null)
   assert.equal(sourceKindOf('image.png'), null)
 })
 

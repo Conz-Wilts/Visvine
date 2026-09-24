@@ -6,6 +6,7 @@
 // becomes a resource wearing its preview. Files and links shared in channels
 // arrive on their own (lib/resources/library.ts is the read).
 
+import { uploadResourceFile } from '@/features/resources/lib/upload';
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import Link from '@/features/shared/components/SpaceLink';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -158,12 +159,8 @@ export default function ResourcesView() {
     setProblem(null);
     const failed: string[] = [];
     for (const file of files) {
-      const form = new FormData();
-      form.append('file', file);
-      form.append('spaceId', spaceId);
       try {
-        const res = await fetch('/api/resources/upload', { method: 'POST', body: form });
-        if (!res.ok) failed.push(file.name);
+        await uploadResourceFile(file, { spaceId });
       } catch {
         failed.push(file.name);
       }

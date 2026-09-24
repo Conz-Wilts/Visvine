@@ -1,4 +1,4 @@
-FROM mirror.gcr.io/library/node:20-alpine AS base
+FROM mirror.gcr.io/library/node:22-alpine AS base
 RUN corepack enable && corepack prepare pnpm@10.30.2 --activate
 
 # ── Install dependencies ───────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ RUN pnpm --filter @visvine/web exec prisma generate
 RUN pnpm --filter @visvine/web build
 
 # ── Runtime image ─────────────────────────────────────────────────────────────
-FROM mirror.gcr.io/library/node:20-alpine AS runner
+FROM mirror.gcr.io/library/node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 

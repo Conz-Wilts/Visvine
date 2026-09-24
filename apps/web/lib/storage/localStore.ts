@@ -17,8 +17,8 @@
 // ephemeral and per instance, so a file written there is gone at the next
 // deploy and invisible to the instance beside it.
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { appendFile, mkdir, open, readdir, readFile, rename, rm, stat, truncate, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const META_SUFFIX = '.meta.json';
@@ -63,6 +63,82 @@ export async function localRead(bucket: string, objectPath: string): Promise<{ b
   return { bytes, contentType };
 }
 
+/** An object's size and md5 (base64, as GCS reports it), or null when there is none. */
+export async function localStat(bucket: string, objectPath: string): Promise<{ size: number; md5: string; contentType: string } | null> {
+  const held = await localRead(bucket, objectPath);
+  if (!held) return null;
+  const md5 = createHash('md5').update(held.bytes).digest('base64');
+  return { size: held.bytes.length, md5, contentType: held.contentType };
+}
+
+/** The first `length` bytes of an object — what a type sniff reads. */
+export async function localReadHead(bucket: string, objectPath: string, length: number): Promise<Buffer | null> {
+  let handle;
+  try {
+    handle = await open(objectFile(bucket, objectPath), 'r');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw err;
+  }
+  try {
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, 0);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
+// ── resumable uploads ─────────────────────────────────────────────────────
+// A GCS resumable session, rebuilt: chunks append to a staging file beside the
+// bucket, the offset received so far is the file's size, and the last chunk
+// moves it to its object path. Staging lives under `.uploads/` in the bucket
+// folder, which listing skips like the sidecars.
+
+const STAGING = '.uploads';
+
+function stagingFile(bucket: string, uploadId: string): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(uploadId)) throw new Error('Bad upload id');
+  return objectFile(bucket, `${STAGING}/${uploadId}`);
+}
+
+/** How many bytes of an upload have been received. */
+export async function localStagedSize(bucket: string, uploadId: string): Promise<number> {
+  try {
+    return (await stat(stagingFile(bucket, uploadId))).size;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return 0;
+    throw err;
+  }
+}
+
+/**
+ * Write one chunk at `start`. A chunk that starts past what was received is
+ * refused (the client asks for the offset and resumes); one that starts before
+ * it overwrites from there, the way a retried chunk does.
+ */
+export async function localAppendChunk(bucket: string, uploadId: string, start: number, bytes: Buffer): Promise<number> {
+  const file = stagingFile(bucket, uploadId);
+  await mkdir(path.dirname(file), { recursive: true });
+  const have = await localStagedSize(bucket, uploadId);
+  if (start > have) throw new Error(`Chunk starts at ${start} but ${have} bytes were received`);
+  if (start < have) await truncate(file, start);
+  await appendFile(file, bytes);
+  return start + bytes.length;
+}
+
+/** Move a finished upload to its object path. */
+export async function localFinishStaged(bucket: string, uploadId: string, objectPath: string, contentType: string): Promise<void> {
+  const file = objectFile(bucket, objectPath);
+  await mkdir(path.dirname(file), { recursive: true });
+  await rename(stagingFile(bucket, uploadId), file);
+  await writeFile(file + META_SUFFIX, JSON.stringify({ contentType }));
+}
+
+export async function localDropStaged(bucket: string, uploadId: string): Promise<void> {
+  await rm(stagingFile(bucket, uploadId), { force: true });
+}
+
 export async function localDelete(bucket: string, objectPath: string): Promise<void> {
   const file = objectFile(bucket, objectPath);
   await rm(file, { force: true });
@@ -83,6 +159,7 @@ export async function localList(bucket: string, prefix?: string): Promise<Array<
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
+        if (entry.name === STAGING) continue;
         await walk(full);
         continue;
       }

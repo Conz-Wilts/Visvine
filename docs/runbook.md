@@ -129,6 +129,33 @@ grants and publications are reconciled like any folder delete, and it is a no-op
 on a database that has none. Run it on every database that predates the mirror's
 removal, local ones included.
 
+### Resources: the reshape backfill and bucket CORS
+
+The resources redesign (`docs/resources/PLAN.md`) needs two one-off steps in
+each environment, after its release is serving:
+
+1. **`db:resources:reshape`** — idempotent; gives every upload its entity,
+   every added or channel-shared link its resource row and share, and every
+   resource note its audience. Run it through the proxy like any backfill:
+   `node scripts/with-prod-env.mjs pnpm --filter @visvine/web db:resources:reshape` (`--dry`
+   first). Until it has run, links shared before the release show in messages
+   but not in Resources.
+2. **CORS on the resources bucket.** Uploads go from the browser straight to
+   GCS in resumable chunks, so the bucket must answer the app's origins:
+
+   ```sh
+   cat > /tmp/cors.json <<'JSON'
+   [{"origin": ["https://visvine.com"], "method": ["PUT", "POST", "GET"],
+     "responseHeader": ["Content-Type", "Content-Range", "Range", "X-Goog-Upload-Status"],
+     "maxAgeSeconds": 3600}]
+   JSON
+   gcloud storage buckets update gs://$GCS_RESOURCES_BUCKET --cors-file=/tmp/cors.json
+   ```
+
+   Without it every upload fails at its first chunk with a CORS error in the
+   browser console. The local driver needs nothing: its sessions are this app's
+   own `/api/resources/uploads/<id>`.
+
 ### Requiring an approval
 
 `deploy.yml` names the `Production` GitHub environment, which gives the deploy a

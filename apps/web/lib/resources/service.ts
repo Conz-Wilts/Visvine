@@ -51,6 +51,9 @@ import { ensureResourceEntity } from '@/lib/resources/entity'
 import { addShares, type ShareVia } from '@/lib/resources/shares'
 import { syncResourceGrants } from '@/lib/resources/grants'
 import { fileTypeOf, kindOf } from '@/lib/resources/shared/kinds'
+import { refuseBySniff, refuseUploadByName } from '@/lib/resources/shared/uploadPolicy'
+import { ApiError } from '@/lib/api/route'
+import { drainJobs, enqueueJobs, type JobKind } from '@/lib/resources/jobs'
 
 /** Per-file ceiling for a file handed over whole (an AI's upload, a drop page). */
 export const MAX_RESOURCE_BYTES = 25 * 1024 * 1024
@@ -172,23 +175,23 @@ export async function uploadResource(input: UploadInput): Promise<UploadedFile> 
     share: input.conversationId
       ? null
       : { sharedBy: input.uploadedBy, via: input.via ?? 'upload', agentName: input.agentName ?? null },
-    bytes: input.buffer,
   })
 }
 
 /**
  * Everything after the bytes are stored, for every way a file arrives (a whole
  * buffer here; a resumable upload's `complete`): the entity, the share, the
- * note's audience, and the text index. Indexing runs inline and is NOT allowed
- * to fail the upload — the file is stored either way, and `indexState` carries
- * the outcome to the UI, where Re-index retries it.
+ * note's audience, then the work it owes — renditions and its text — queued
+ * as jobs and drained right here within a budget, so a small file comes back
+ * ready and a large one finishes on the next pull or tick. None of it is
+ * allowed to fail the upload: the file is stored either way, and `indexState`
+ * carries the text's outcome to the UI, where Re-index retries it.
  */
-async function finishUpload(
+export async function finishUpload(
   resourceId: string,
   opts: {
     nodeId?: string | null
     share: { sharedBy: string; via: ShareVia; agentName?: string | null } | null
-    bytes?: Buffer
   },
 ): Promise<UploadedFile> {
   const { nodeId, replacedResourceId } = await ensureResourceEntity(resourceId, { nodeId: opts.nodeId ?? null })
@@ -199,9 +202,30 @@ async function finishUpload(
   } else {
     await syncResourceGrants(resourceId)
   }
-  const indexed = await indexResource(resourceId, opts.bytes)
-  return { ...indexed, nodeId, kind: row.kind }
+  const owed: JobKind[] = []
+  if (['image', 'pdf', 'slides'].includes(row.kind)) owed.push('rendition')
+  if (row.kind !== 'image' && sourceKindOf(row.name)) owed.push('extract')
+  else {
+    await prisma.resource.update({
+      where: { id: resourceId },
+      data: {
+        indexState: 'unsupported',
+        indexError: row.kind === 'image' ? 'Images carry no text to index.' : 'No text extractor for this file type yet.',
+      },
+    })
+  }
+  if (owed.length) {
+    await enqueueJobs(resourceId, owed)
+    await drainJobs({ budgetMs: FINISH_BUDGET_MS, resourceIds: [resourceId] }).catch((err) =>
+      logger.warn('resources.finish.drain', { resourceId, err }),
+    )
+  }
+  const done = await prisma.resource.findUniqueOrThrow({ where: { id: resourceId } })
+  return { ...toDriveFile(done, 0), nodeId, kind: done.kind }
 }
+
+/** How long an upload's own request spends on its renditions and text before handing the rest to a pull. */
+const FINISH_BUDGET_MS = 8_000
 
 /**
  * Store a file's bytes exactly as they came and record it. The object path is
@@ -218,8 +242,14 @@ async function storeResource(input: UploadInput) {
 
   const name = (input.filename || 'file').split(/[/\\]/).pop() || 'file'
   const mimeType = input.mimeType || 'application/octet-stream'
+  const refusal = refuseUploadByName(name.replace(/^~+/, ''), buffer.length, MAX_RESOURCE_BYTES)
+  if (refusal) throw new ApiError(400, refusal)
+  const { fileTypeFromBuffer } = await import('file-type')
+  const sniffed = (await fileTypeFromBuffer(buffer.subarray(0, 4100)))?.mime ?? null
+  const mismatch = refuseBySniff(name, sniffed)
+  if (mismatch) throw new ApiError(415, mismatch)
   const id = randomUUID()
-  const gcsPath = resourceObjectPath(spaceId, id, name)
+  const gcsPath = resourceObjectPath(spaceId, id, name.replace(/^~+/, '') || 'file')
   await uploadResourceFile(gcsPath, buffer, mimeType)
 
   const kind = kindOf(name, mimeType)
@@ -265,7 +295,7 @@ async function imageDimensions(buffer: Buffer): Promise<{ width?: number; height
  * no `bytes` they are read back from the object. A kind with no extractor is
  * recorded `unsupported`, never failed.
  */
-async function indexResource(resourceId: string, bytes?: Buffer): Promise<DriveFile> {
+export async function indexResource(resourceId: string, bytes?: Buffer): Promise<DriveFile> {
   const resource = await prisma.resource.findUniqueOrThrow({
     where: { id: resourceId },
     include: { node: { select: { id: true, type: true, metadata: true } } },
@@ -359,8 +389,13 @@ export async function deleteResource(resourceId: string): Promise<boolean> {
       .deleteSource(contextOf(resource.spaceId), resource.sourcePath)
       .catch((err) => logger.error('resources.deleteSource.failed', { resourceId, err }))
   }
+  const renditions = await prisma.resourceRendition.findMany({ where: { resourceId: resource.id }, select: { gcsPath: true } })
   await prisma.resource.delete({ where: { id: resource.id } })
   await removeFileNode(resource.spaceId, resource.id)
+  for (const { gcsPath } of renditions) {
+    await deleteResourceFile(gcsPath).catch((err) => logger.error('resources.deleteRendition.failed', { resourceId, err }))
+  }
+  if (resource.previewPath) await deleteResourceFile(resource.previewPath).catch(() => {})
 
   // Last, and best-effort: an orphaned object costs storage, an orphaned record
   // costs a broken page.

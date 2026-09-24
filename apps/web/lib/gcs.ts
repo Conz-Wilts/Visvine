@@ -1,6 +1,6 @@
 import { Storage } from '@google-cloud/storage';
 import sharp from 'sharp';
-import { localDelete, localList, localRead, localSave, localSignedUrl } from '@/lib/storage/localStore';
+import { localDelete, localList, localRead, localReadHead, localSave, localSignedUrl, localStat } from '@/lib/storage/localStore';
 
 // Object storage, behind one set of functions and two drivers.
 //
@@ -139,6 +139,52 @@ export async function uploadResourceFile(
 ): Promise<string> {
   await saveObject(RESOURCES_BUCKET(), objectPath, buffer, contentType);
   return objectPath;
+}
+
+/**
+ * Open a resumable upload session for one resources-bucket object and return
+ * the session URI the browser PUTs chunks to directly — the bytes never pass
+ * through this server, so no request carries more than a chunk. `origin` binds
+ * the session to the page's origin for CORS. Null under the local driver,
+ * whose sessions are served by /api/resources/uploads/<id>.
+ */
+export async function startResumableUpload(objectPath: string, contentType: string, origin: string): Promise<string | null> {
+  if (storageDriver() === 'local') return null;
+  const [uri] = await getStorage()
+    .bucket(RESOURCES_BUCKET())
+    .file(objectPath)
+    .createResumableUpload({ origin, metadata: { contentType } });
+  return uri;
+}
+
+/** A resources-bucket object's size and md5 (base64), or null when it is not there. */
+export async function statResourceObject(objectPath: string): Promise<{ size: number; md5: string | null; contentType: string | null } | null> {
+  if (storageDriver() === 'local') {
+    const held = await localStat(RESOURCES_BUCKET(), objectPath);
+    return held ? { size: held.size, md5: held.md5, contentType: held.contentType } : null;
+  }
+  try {
+    const [meta] = await getStorage().bucket(RESOURCES_BUCKET()).file(objectPath).getMetadata();
+    return { size: Number(meta.size ?? 0), md5: meta.md5Hash ? String(meta.md5Hash) : null, contentType: meta.contentType ?? null };
+  } catch (err) {
+    if ((err as { code?: number }).code === 404) return null;
+    throw err;
+  }
+}
+
+/** The first bytes of a resources-bucket object — what a type sniff reads. */
+export async function readResourceHead(objectPath: string, length = 4100): Promise<Buffer | null> {
+  if (storageDriver() === 'local') return localReadHead(RESOURCES_BUCKET(), objectPath, length);
+  try {
+    const [contents] = await getStorage()
+      .bucket(RESOURCES_BUCKET())
+      .file(objectPath)
+      .download({ start: 0, end: length - 1 });
+    return contents;
+  } catch (err) {
+    if ((err as { code?: number }).code === 404) return null;
+    throw err;
+  }
 }
 
 /**

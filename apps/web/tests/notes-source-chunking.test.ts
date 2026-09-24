@@ -22,7 +22,7 @@ test('sourceKindOf maps supported extensions and rejects the rest', () => {
   assert.equal(sourceKindOf('readme.md'), 'markdown')
   assert.equal(sourceKindOf('notes.markdown'), 'markdown')
   assert.equal(sourceKindOf('log.txt'), 'text')
-  assert.equal(sourceKindOf('report.pdf'), null)
+  assert.equal(sourceKindOf('report.pdf'), 'pdf')
   assert.equal(sourceKindOf('image.png'), null)
 })
 

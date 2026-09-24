@@ -28,6 +28,8 @@ const nextConfig: NextConfig = {
     "esbuild",
     "pg",
     "mysql2",
+    // Native: a PDF's first page is drawn server-side (lib/resources/renditions.ts).
+    "@napi-rs/canvas",
   ],
   async headers() {
     // TRANSPORT headers only. The Content-Security-Policy is NOT here, and that

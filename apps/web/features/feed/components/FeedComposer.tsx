@@ -1,5 +1,6 @@
 'use client';
 
+import { uploadResourceFile } from '@/features/resources/lib/upload';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Avatar, Chip, Modal } from '@visvine/ui';
 import {
@@ -138,15 +139,9 @@ export default function FeedComposer({
     const added: SerializedMessageFile[] = [];
     const failed: string[] = [];
     for (const file of picked.slice(0, MAX_FILES)) {
-      const form = new FormData();
-      form.append('file', file);
-      form.append('spaceId', target.space.id);
-      form.append('conversationId', target.conversationId);
       try {
-        const res = await fetch('/api/resources/upload', { method: 'POST', body: form });
-        if (!res.ok) { failed.push(file.name); continue; }
-        const data = await res.json() as { id: string; name: string; fileType: string; fileSize: number | null };
-        added.push({ id: data.id, name: data.name, fileType: data.fileType, fileSize: data.fileSize, url: resourceRawPath(data.id) });
+        const data = await uploadResourceFile(file, { spaceId: target.space.id, conversationId: target.conversationId });
+        added.push({ id: data.id, name: data.name, fileType: data.fileType, kind: data.kind, fileSize: data.fileSize, url: resourceRawPath(data.id) });
       } catch {
         failed.push(file.name);
       }

@@ -1,5 +1,6 @@
 'use client';
 
+import { uploadResourceFile } from '@/features/resources/lib/upload';
 import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
 import { AtSignIcon, ImagePlusIcon, Link2Icon, PlusIcon, SendIcon, SmileIcon, XIcon } from '@/features/shared/icons';
@@ -138,15 +139,9 @@ export default function MessageComposer({
     const added: SerializedMessageFile[] = [];
     const failed: string[] = [];
     for (const file of picked) {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('spaceId', filesSpaceId);
-      formData.append('conversationId', conversationId);
       try {
-        const res = await fetch('/api/resources/upload', { method: 'POST', body: formData });
-        if (!res.ok) { failed.push(file.name); continue; }
-        const data = await res.json() as { id: string; name: string; fileType: string; fileSize: number | null };
-        added.push({ id: data.id, name: data.name, fileType: data.fileType, fileSize: data.fileSize, url: resourceRawPath(data.id) });
+        const data = await uploadResourceFile(file, { spaceId: filesSpaceId, conversationId });
+        added.push({ id: data.id, name: data.name, fileType: data.fileType, kind: data.kind, fileSize: data.fileSize, url: resourceRawPath(data.id) });
       } catch {
         failed.push(file.name);
       }

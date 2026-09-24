@@ -43,6 +43,16 @@ export function resourceObjectPath(spaceId: string, uuid: string, storedName: st
   return `${spaceResourcesPrefix(spaceId)}${assertId('resource', uuid)}/${storedName}`;
 }
 
+/**
+ * An image derived from one resource — its thumb, preview, poster or first
+ * page — beside no original: under a `~renditions` folder no stored name can
+ * take (an upload's name never starts with `~`, see resourceObjectPath's callers).
+ */
+export function resourceRenditionPath(spaceId: string, resourceId: string, kind: string): string {
+  if (!/^[a-z0-9-]+$/.test(kind)) throw new Error(`Bad rendition kind: ${kind}`);
+  return `${spaceResourcesPrefix(spaceId)}${assertId('resource', resourceId)}/~renditions/${kind}.webp`;
+}
+
 /** Every context-source original in one space, across all of its contexts. */
 export function spaceContextSourcesPrefix(spaceId: string): string {
   return `context-sources/${assertId('space', spaceId)}/`;

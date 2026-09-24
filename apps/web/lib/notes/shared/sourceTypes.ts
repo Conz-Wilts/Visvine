@@ -5,7 +5,7 @@
 // note namespace stays disjoint. Pure — no Node/DOM/Prisma imports.
 
 /** File kinds the extractor understands. PDF is the documented extension point. */
-export type SourceKind = 'csv' | 'markdown' | 'text' | 'json' | 'docx' | 'spreadsheet'
+export type SourceKind = 'csv' | 'markdown' | 'text' | 'json' | 'docx' | 'spreadsheet' | 'pdf' | 'slides'
 
 export type SourceStatus = 'pending' | 'ready' | 'failed'
 
@@ -37,6 +37,8 @@ const SOURCE_EXTENSIONS: Record<string, SourceKind> = {
   docx: 'docx',
   xlsx: 'spreadsheet',
   xls: 'spreadsheet',
+  pdf: 'pdf',
+  pptx: 'slides',
 }
 
 /** Detect a source kind from a filename, or null when unsupported. */

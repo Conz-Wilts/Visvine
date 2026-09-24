@@ -38,7 +38,7 @@ export function visibleResourceWhere(
   if (trash) {
     return viewer.admin ? { deletedAt: { not: null } } : { deletedAt: { not: null }, createdBy: viewer.userId }
   }
-  const live: Prisma.ResourceWhereInput = { deletedAt: null, state: { not: 'deleted' } }
+  const live: Prisma.ResourceWhereInput = { deletedAt: null, state: 'ready' }
   if (viewer.admin) return live
   if (!viewer.member) return { id: { in: [] } }
   const reach: Prisma.ResourceShareWhereInput[] = [{ conversationId: null }]
