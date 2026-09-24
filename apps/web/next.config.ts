@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
     // at the 10MB default a 20MB Drive upload reached its route truncated. Just
     // above lib/resources/service.ts#MAX_RESOURCE_BYTES, plus multipart framing.
     proxyClientMaxBodySize: "26mb",
+    // Dev only: compile routes when first visited instead of every entry at
+    // startup. The default preload holds the whole app in the dev server's
+    // memory, which is most of what an 8GB machine has to spare.
+    preloadEntriesOnStart: false,
   },
   // Native/CJS packages the bundler must leave alone. The QuickJS build is the
   // load-bearing one: the singlefile variant base64-inlines its wasm into a CJS
