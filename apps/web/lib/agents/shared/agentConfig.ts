@@ -273,11 +273,23 @@ export function configFromColumns(row: AgentConfigColumns, subs: RunsForColumns[
   }
 }
 
+/** JSON with object keys in one order — a JSONB column hands keys back in its own. */
+function stable(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stable((value as Record<string, unknown>)[k])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
 /** The fields of `patch` that actually change `before` — what the audit row records. */
 export function configDiff(before: AgentConfig, after: AgentConfig): Partial<AgentConfig> {
   const out: Partial<AgentConfig> = {}
   for (const k of Object.keys(after) as (keyof AgentConfig)[]) {
-    if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) (out as Record<string, unknown>)[k] = after[k]
+    if (stable(before[k]) !== stable(after[k])) (out as Record<string, unknown>)[k] = after[k]
   }
   return out
 }

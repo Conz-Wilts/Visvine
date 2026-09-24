@@ -203,7 +203,9 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         next.set(item.id, [...(prev.get(item.id) ?? []), patch]);
         return next;
       });
-      handleDataChanged();
+      // An agent's row is the roster's, which follows itself; the directory's
+      // own records are refetched.
+      if (item.type !== 'agent') handleDataChanged();
     },
     [spaceId, handleDataChanged, roster.data],
   );

@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import {
   applyConfigPatch,
   configColumns,
+  configDiff,
   configFromColumns,
   configFromFrontmatter,
   configFrontmatter,
@@ -463,4 +464,15 @@ test('on.wake: `always` is kept, `relevant` is the silent default, anything else
   const relevant = parseTriggers({ context: ['people/**'], wake: 'relevant' })
   assert.deepEqual(relevant, { ok: true, triggers: { context: ['people/**'], webhook: null } })
   assert.equal(parseTriggers({ context: ['people/**'], wake: 'sometimes' }).ok, false)
+})
+
+test('configDiff ignores key order, so a JSONB round trip is not a change', () => {
+  const cron = parseEvery('0 7 1 1,4,7,10 *')
+  assert.ok(cron.ok)
+  if (!cron.ok) return
+  const before = { ...defaultAgentConfig(), schedule: cron.schedule }
+  const reordered = JSON.parse(JSON.stringify(cron.schedule, Object.keys(cron.schedule).sort()))
+  const shuffled = { ...before, schedule: { ...reordered, fields: Object.fromEntries(Object.entries(cron.schedule.kind === 'cron' ? cron.schedule.fields : {}).reverse()) } }
+  assert.deepEqual(configDiff(before, shuffled), {})
+  assert.deepEqual(Object.keys(configDiff(before, { ...before, tools: ['web'] })), ['tools'])
 })
