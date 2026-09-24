@@ -27,14 +27,10 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * There is no POST.
- *
- * A record used to be created here from a body the browser composed — including
- * the GCS object path, which the listing then signed a download URL for. That
- * made the object path client-controlled: a crafted create could name any object
- * in the shared resources bucket, another space's context-source originals
- * included, and be handed a signed URL to it. Uploading is now the only way a
- * row appears, and POST /api/resources/upload mints the path server-side.
+ * There is no POST. A row appears only through an upload
+ * (`POST /api/resources/uploads`), which mints the object path server-side:
+ * a path a browser composed could name any object in the shared resources
+ * bucket — another space's originals included — and be signed a download URL.
  */
 
 /**

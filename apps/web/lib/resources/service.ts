@@ -480,8 +480,8 @@ function toDriveFile(row: ResourceRow, chunkCount: number, fileUrl?: string | nu
 export async function listResources(spaceId: string): Promise<DriveFile[]> {
   const context = contextOf(spaceId)
   const [rows, sources] = await Promise.all([
-    // The space's Drive: what is shared to the space itself. A channel's
-    // files are listed to its members by lib/resources/library.ts.
+    // The space's Drive: what is shared to the space itself. Everything a
+    // viewer can see, channels included, is lib/resources/list.ts.
     prisma.resource.findMany({
       where: { spaceId, source: 'upload', deletedAt: null, shares: { some: { conversationId: null } } },
       orderBy: { createdAt: 'desc' },
