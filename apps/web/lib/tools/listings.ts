@@ -23,7 +23,6 @@
  */
 import prisma from '@/lib/prisma'
 import { isAdmin } from '@/lib/auth'
-import { isSuperAdmin } from '@/lib/session'
 import { logAudit } from '@/lib/notes/audit'
 import { manifestOf, toolIndexPath } from './config'
 import {
@@ -43,6 +42,7 @@ import {
   type ListingRequestState,
 } from './shared/listing'
 import { enqueueReview } from './review/queue'
+import { isVerifiedPublisher } from './publishers'
 
 type Admin = { userId: string; email: string; spaceId: string; isAdmin: boolean }
 type Person = { userId: string; email: string }
@@ -259,14 +259,15 @@ export async function markListed(versionId: string, now: Date = new Date()): Pro
   if (!row?.listingId) return
   const listing = await prisma.appToolListing.findUnique({
     where: { id: row.listingId },
-    select: { listedAt: true, verified: true, publisherSpaceId: true },
+    select: { listedAt: true, publisherSpaceId: true },
   })
   if (!listing) return
   const first = !listing.listedAt
   const earlier = first
     ? await prisma.appToolListing.count({ where: { publisherSpaceId: listing.publisherSpaceId, listedAt: { not: null } } })
     : 0
-  const stage = first ? initialStage({ verified: listing.verified, publisherListings: earlier, now }) : null
+  const verified = first ? await isVerifiedPublisher(listing.publisherSpaceId) : false
+  const stage = first ? initialStage({ verified, publisherListings: earlier, now }) : null
   await prisma.appToolListing.update({
     where: { id: row.listingId },
     data: {
@@ -296,26 +297,6 @@ export async function stagedInstallRefusal(listingId: string, spaceId: string, n
   if (!listing || listing.publisherSpaceId === spaceId) return null
   const spaces = await spacesRunning(listingId, listing.publisherSpaceId, spaceId)
   return stagedInstallDenial({ listing, spaces, now })
-}
-
-/** Visvine's word on a publisher, for one listing. Reviewers only. */
-export async function setListingVerified(listingId: string, reviewer: Person, verified: boolean): Promise<{ ok: true } | RegistryError> {
-  if (!isSuperAdmin(reviewer.email)) return { ok: false, status: 403, error: 'Only Visvine reviewers can verify a publisher.' }
-  const row = await prisma.appToolListing.findUnique({ where: { id: listingId }, select: { publisherSpaceId: true, key: true } })
-  if (!row) return { ok: false, status: 404, error: 'No such listing.' }
-  await prisma.appToolListing.update({
-    where: { id: listingId },
-    // A verified publisher's listing is out of its stage.
-    data: { verified, ...(verified ? { stagedUntil: null } : {}) },
-  })
-  void logAudit(row.publisherSpaceId, {
-    userId: reviewer.userId,
-    name: reviewer.email,
-    action: 'tool',
-    path: toolIndexPath(row.key.slice(row.key.indexOf('/') + 1)),
-    detail: verified ? 'publisher verified by Visvine' : 'publisher no longer verified',
-  })
-  return { ok: true }
 }
 
 // ── transfer ─────────────────────────────────────────────────────────────────
@@ -404,7 +385,7 @@ export async function answerTransfer(
   const from = listing.publisherSpaceId
   await prisma.appToolListing.update({
     where: { id: listing.id },
-    data: { key, publisherSpaceId: actor.spaceId, transferTo: null, transferBy: null, transferAt: null, verified: false },
+    data: { key, publisherSpaceId: actor.spaceId, transferTo: null, transferBy: null, transferAt: null },
   })
   for (const [spaceId, detail] of [
     [from, `transferred the listing to ${actor.spaceId}`],

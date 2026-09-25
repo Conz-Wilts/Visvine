@@ -284,7 +284,11 @@ export default function ToolFrame({
       maxHeight: () => paneHeightRef.current,
       onReady: () => setStatus('ready'),
       onResize: setContentHeight,
-      onError: (frameError) => setError(frameError.message),
+      onError: (frameError) => {
+        setError(frameError.message);
+        // Counted, never read: a Tool that crashes for many is a quality signal.
+        void fetchJsonBody('/api/tools/telemetry', 'POST', { target, event: 'frame_error' }).catch(() => {});
+      },
       navigate: (path) => router.push(path),
       onRevoked: setStopped,
       onSection: (next) => onSectionRef.current?.(next),

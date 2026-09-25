@@ -69,6 +69,18 @@ export async function runNightlyMaintenance(): Promise<{ ran: boolean; ms: numbe
     } catch (err) {
       logger.warn('notes.nightly.model_prices_failed', { err })
     }
+    // Tools: the advisory feed for the curated dependencies, then a rescan of
+    // every listed version the rules or the feed moved under (lib/tools/rescan.ts).
+    // Needs no key; a feed that is down costs freshness, never the sweep.
+    try {
+      const { refreshAdvisories } = await import('@/lib/tools/advisories')
+      const { rescanListed } = await import('@/lib/tools/rescan')
+      const feed = await refreshAdvisories()
+      const rescan = await rescanListed({ packages: feed.changed })
+      logger.info('notes.nightly.tool_rescan', { ...feed, ...rescan })
+    } catch (err) {
+      logger.warn('notes.nightly.tool_rescan_failed', { err })
+    }
     // Drain before the sweeps, and unconditionally: they read derived state, so
     // running them over projections that were never rebuilt would embed the
     // staleness (an un-synced mention has no edge for the link-reason pass to

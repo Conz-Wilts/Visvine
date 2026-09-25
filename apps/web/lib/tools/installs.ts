@@ -64,6 +64,7 @@ import {
 } from './registry'
 import { decodeListingState, listingHoldFor, runDenial, type ListingHold } from './verdicts'
 import { stagedInstallRefusal } from './listings'
+import { verifiedPublishers } from './publishers'
 import {
   boundRequirements,
   isDegraded,
@@ -522,12 +523,13 @@ async function holdsFor(rows: readonly InstallRow[]): Promise<HoldLookup> {
   const keys = [...new Set(foreign.filter((row) => !row.listingId).map((row) => row.key))]
   const listings = await prisma.appToolListing.findMany({
     where: { OR: [...(ids.length ? [{ id: { in: ids } }] : []), ...(keys.length ? [{ key: { in: keys } }] : [])] },
-    select: { id: true, key: true, state: true, stateReason: true, stagedUntil: true, publisherSpaceId: true, verified: true },
+    select: { id: true, key: true, state: true, stateReason: true, stagedUntil: true, publisherSpaceId: true },
   })
-  const spaces = await prisma.space.findMany({
-    where: { id: { in: [...new Set(listings.map((l) => l.publisherSpaceId))] } },
-    select: { id: true, name: true },
-  })
+  const publisherIds = [...new Set(listings.map((l) => l.publisherSpaceId))]
+  const [spaces, verified] = await Promise.all([
+    prisma.space.findMany({ where: { id: { in: publisherIds } }, select: { id: true, name: true } }),
+    verifiedPublishers(publisherIds),
+  ])
   const names = new Map(spaces.map((space) => [space.id, space.name]))
   const out = new Map<string, ListingHold>()
   for (const listing of listings) {
@@ -536,7 +538,7 @@ async function holdsFor(rows: readonly InstallRow[]): Promise<HoldLookup> {
       stateReason: listing.stateReason,
       stagedUntil: listing.stagedUntil,
       publisher: names.get(listing.publisherSpaceId) ?? null,
-      verified: listing.verified,
+      verified: verified.has(listing.publisherSpaceId),
     }
     out.set(listing.id, hold)
     out.set(listing.key, hold)

@@ -11,7 +11,7 @@
  */
 import { parse, type Program } from 'acorn'
 import { transform } from 'esbuild'
-import type { ToolConfig } from '../config'
+import { manifestOf, type ToolConfig } from '../config'
 import { scanCode, type CodeScan } from './codeRules'
 import { compatibilityFindings, type CompatibilityInput } from './compatibility'
 import {
@@ -28,7 +28,7 @@ import { scanSecrets, scanSourceText, scanStrings } from './textRules'
 import { declaredVsUsed, riskFindings, riskScore, sourceReach } from './usage'
 
 /** Bumped whenever a rule is added or changed, so a rescan knows which versions to re-read. */
-const ANALYZER_VERSION = 'static-1'
+export const ANALYZER_VERSION = 'static-1'
 
 export interface StaticCheckInput {
   /** The sources as the author wrote them: index.md whole, ui.tsx and data.js unwrapped. */
@@ -40,6 +40,8 @@ export interface StaticCheckInput {
   config: ToolConfig | null
   build: CompatibilityInput['build']
   facts?: CompatibilityInput['facts']
+  /** What is known against the curated dependencies it declares (lib/tools/advisories.ts). */
+  advisories?: ReadonlyArray<{ package: string; advisoryId: string; summary: string; severity: 'low' | 'medium' | 'high' }>
 }
 
 const EMPTY_SCAN: CodeScan = { findings: [], calls: [], handlers: [], strings: [] }
@@ -124,6 +126,18 @@ export async function runStaticChecks(input: StaticCheckInput): Promise<CheckRep
     findings.push(...declaredVsUsed(sourceReach(input.config), calls, hasData ? data.handlers : []))
     risk = riskScore(input.config)
     findings.push(...riskFindings(risk))
+    // A known advisory flags, never blocks: the vendored version is the
+    // deployment's to move, not the author's.
+    const declared = new Set(Object.keys(manifestOf(input.config).dependencies))
+    for (const advisory of input.advisories ?? []) {
+      if (!declared.has(advisory.package)) continue
+      findings.push({
+        rule: 'dependency.advisory',
+        severity: advisory.severity === 'high' ? 'medium' : 'low',
+        message: `${advisory.package}: ${advisory.advisoryId} — ${advisory.summary}`.slice(0, 240),
+        file: 'index.md',
+      })
+    }
   }
   const security = stage('security', findings, securityStarted)
   return { compatibility, security: risk ? { ...security, risk } : security }

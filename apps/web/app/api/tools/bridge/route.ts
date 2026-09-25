@@ -7,6 +7,7 @@ import { resolveBridgeTarget, targetKey } from '@/lib/tools/target'
 import { appOrigin } from '@/lib/tools/origin'
 import { BRIDGE_LIMITS, isBridgeMethod, type BridgeResponse } from '@/lib/tools/protocol'
 import { stagedRate } from '@/lib/tools/shared/listing'
+import { countCall, maybeFlushTelemetry } from '@/lib/tools/telemetry'
 
 /**
  * The bridge endpoint — every Tool's only way to Visvine data.
@@ -121,5 +122,24 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  return json(await handleBridgeCall(resolved, method, params))
+  const started = Date.now()
+  const response = await handleBridgeCall(resolved, method, params)
+  // What an install did, as counts (lib/tools/telemetry.ts); flushed on the
+  // request path once a minute has passed, never on a timer.
+  if (resolved.installId && resolved.versionId) {
+    const path = params && typeof params === 'object' && typeof (params as { path?: unknown }).path === 'string' ? (params as { path: string }).path : null
+    countCall({
+      installId: resolved.installId,
+      versionId: resolved.versionId,
+      viewerId: session.userId,
+      method,
+      refused: response.ok ? null : response.error.code,
+      bytesIn: raw.length,
+      bytesOut: response.ok ? (JSON.stringify(response.value) ?? '').length : 0,
+      path: method === 'context.read' ? path : null,
+      dataMs: method === 'data.call' ? Date.now() - started : 0,
+    })
+    await maybeFlushTelemetry()
+  }
+  return json(response)
 }

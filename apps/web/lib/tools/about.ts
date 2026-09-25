@@ -14,6 +14,7 @@ import prisma from '@/lib/prisma'
 import { describePerimeter } from './perimeter'
 import { decodeToolConfig, decodeToolPerimeter, decodeVersionStatus, type ToolVersionStatus } from './registry'
 import { decodeListingState, runDenial, type ListingState } from './verdicts'
+import { isVerifiedPublisher } from './publishers'
 
 export interface ToolAbout {
   title: string
@@ -84,7 +85,7 @@ export async function aboutInstall(spaceId: string, installId: string): Promise<
     prisma.appToolInstall.count({ where: install.listingId ? { listingId: install.listingId } : { key: install.key } }),
     prisma.appToolListing.findFirst({
       where: install.listingId ? { id: install.listingId } : { key: install.key },
-      select: { state: true, stateReason: true, verified: true, license: true },
+      select: { state: true, stateReason: true, license: true, publisherSpaceId: true },
     }),
     // A publisher outside this space is named only when its Tool is listed —
     // listing is the publisher's own choice to be seen.
@@ -109,7 +110,7 @@ export async function aboutInstall(spaceId: string, installId: string): Promise<
     listed: v.marketplaceStatus === 'approved',
     listing: hold?.state ?? null,
     license: v.license ?? listing?.license ?? null,
-    verified: listing?.verified ?? false,
+    verified: listing ? await isVerifiedPublisher(listing.publisherSpaceId) : false,
     reviewedAt: v.marketplaceStatus === 'approved' ? (v.marketplaceReviewedAt?.toISOString() ?? null) : null,
     stopped:
       runDenial({

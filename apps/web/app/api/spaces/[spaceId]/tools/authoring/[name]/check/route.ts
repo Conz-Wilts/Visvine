@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { describeAuthoredTool } from '@/lib/tools/service'
 import { bad, requireToolsAccess } from '@/lib/tools/route'
 import { runStaticChecks } from '@/lib/tools/checks/analyze'
+import { advisoriesFor } from '@/lib/tools/advisories'
+import { manifestOf } from '@/lib/tools/config'
 import { latestWorkingReport, recordReport } from '@/lib/tools/checks/runs'
 import type { CheckResponse } from '@/lib/tools/api'
 
@@ -36,6 +38,7 @@ export async function POST(
       warnings: tool.build.warnings,
       configError: tool.build.configError,
     },
+    advisories: tool.config ? await advisoriesFor(Object.keys(manifestOf(tool.config).dependencies)) : [],
   })
   await recordReport({
     spaceId: ctx.resolved.spaceId,

@@ -13,8 +13,8 @@ import {
 } from '@/lib/tools/registry'
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
 import { versionReports } from '@/lib/tools/checks/runs'
-import { revokeVersion, setListingState } from '@/lib/tools/verdicts'
-import { setListingVerified } from '@/lib/tools/listings'
+import { holdListing, revokeVersion } from '@/lib/tools/verdicts'
+import { isVerifiedPublisher, setPublisherVerified } from '@/lib/tools/publishers'
 import { runReviewNow } from '@/lib/tools/review/run'
 import type {
   ReviewDecisionResponse,
@@ -66,9 +66,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
     }),
     prisma.appToolVersion.findUnique({
       where: { id: versionId },
-      select: { cosignedBy: true, listing: { select: { id: true, verified: true } } },
+      select: { cosignedBy: true, listingId: true },
     }),
   ])
+  const verified = await isVerifiedPublisher(version.sourceSpaceId)
   const cosigner = listed?.cosignedBy
     ? await prisma.user.findUnique({ where: { id: listed.cosignedBy }, select: { name: true } })
     : null
@@ -109,7 +110,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
           error: run.error,
         }
       : null,
-    listing: listed?.listing ? { id: listed.listing.id, verified: listed.listing.verified, cosigner: cosigner?.name ?? null } : null,
+    listing: listed?.listingId ? { id: listed.listingId, verified, cosigner: cosigner?.name ?? null } : null,
   }
   return NextResponse.json(body)
 }
@@ -150,8 +151,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ver
   }
   if ('verified' in body) {
     const version = await getVersion(versionId)
-    if (!version?.listingId) return NextResponse.json({ error: 'This version has no listing.' }, { status: 404 })
-    const set = await setListingVerified(version.listingId, reviewer, body.verified)
+    if (!version) return NextResponse.json({ error: 'No such tool version.' }, { status: 404 })
+    const set = await setPublisherVerified(version.sourceSpaceId, reviewer, body.verified)
     if (!set.ok) return NextResponse.json({ error: set.error }, { status: set.status })
     return NextResponse.json({ ok: true })
   }
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ver
   if ('hold' in body) {
     const version = await getVersion(versionId)
     if (!version) return NextResponse.json({ error: 'No such tool version.' }, { status: 404 })
-    const held = await setListingState(version.key, body.hold, reviewer, body.reason ?? null)
+    const held = await holdListing(version.listingId ? { listingId: version.listingId } : { key: version.key }, body.hold, reviewer, body.reason ?? null)
     if (!held.ok) return NextResponse.json({ error: held.error }, { status: held.status })
     return NextResponse.json({ ok: true })
   }

@@ -10,7 +10,7 @@
  * the review runner, a browser watching (./runners.ts), then the evidence read
  * and scanned (./shared/canaries.ts#scanEvidence), and the honeypot deleted.
  *
- * A trusted publisher's version is listed without a person when every stage
+ * A verified publisher's version is listed without a person when every stage
  * came back clean (registry.ts#shouldAutoApprove) — never before the stages
  * have run, and never when the dynamic run could not.
  */
@@ -29,8 +29,8 @@ import {
   decodeToolPerimeter,
   previousApprovedVersion,
   shouldAutoApprove,
-  trustedPublishers,
 } from '../registry'
+import { verifiedPublishers } from '../publishers'
 import { recordGlobalStage, versionReports } from '../checks/runs'
 import { stageStatus, type CheckFinding, type StageResult } from '../checks/findings'
 import { aiReviewMessages, AI_ANALYZER, parseAiReview } from './shared/aiReview'
@@ -40,6 +40,7 @@ import { pickRunner, RUN_WATCH_MS, type DynamicRunner } from './runners'
 import { recordReviewEvent, reviewEvents } from './events'
 import { mintReviewTicket } from './ticket'
 import { claimReview, MAX_REVIEW_ATTEMPTS } from './queue'
+import { raiseIncident } from '../monitor'
 
 export type ReviewStatus = 'passed' | 'flagged' | 'blocked' | 'unavailable' | 'error'
 
@@ -224,6 +225,9 @@ async function runReview(runId: string, deps: ReviewDeps = {}): Promise<ReviewSt
           : 'passed'
     await prisma.appToolReviewRun.update({ where: { id: runId }, data: { status, finishedAt: new Date(), error: null } })
     if (dynamic.ran && status !== 'blocked') await maybeAutoApprove(version, all)
+    // A version already listed that its dynamic run now catches is Visvine's
+    // own severe signal: it holds the listing at once (lib/tools/monitor.ts).
+    if (version.marketplaceStatus === 'approved') await raiseDynamicIncidents(version, dynamic.result.findings)
     return status
   } catch (err) {
     logger.error('tools.review.run_failed', { err, runId })
@@ -239,19 +243,47 @@ async function runReview(runId: string, deps: ReviewDeps = {}): Promise<ReviewSt
   }
 }
 
-/** The trusted publisher's fast path, once every automated stage has read the version. */
+const KIND_OF_RULE: Record<string, 'navigation' | 'csp' | 'canary'> = {
+  'dynamic.navigation': 'navigation',
+  'dynamic.csp': 'csp',
+  'dynamic.egress': 'csp',
+}
+
+async function raiseDynamicIncidents(
+  version: { id: string; key: string; listingId: string | null; sourceSpaceId: string },
+  findings: CheckFinding[],
+): Promise<void> {
+  const seen = new Set<string>()
+  for (const finding of findings) {
+    if (finding.severity !== 'high' || seen.has(finding.rule)) continue
+    seen.add(finding.rule)
+    await raiseIncident({
+      kind: KIND_OF_RULE[finding.rule] ?? 'canary',
+      severity: 'severe',
+      source: 'dynamic',
+      key: version.key,
+      listingId: version.listingId,
+      versionId: version.id,
+      spaceId: version.sourceSpaceId,
+      detail: { rule: finding.rule, message: finding.message },
+    })
+  }
+}
+
+/** A verified publisher's fast path, once every automated stage has read the version. */
 async function maybeAutoApprove(
   version: { id: string; key: string; name: string; version: number; config: unknown; sourceSpaceId: string; listingId: string | null; marketplaceStatus: string | null },
   globalFindings: CheckFinding[],
 ): Promise<void> {
   if (version.marketplaceStatus !== 'pending') return
-  const [previous, reports] = await Promise.all([
+  const [previous, reports, verified] = await Promise.all([
     previousApprovedVersion(version.key, version.version, 'marketplace'),
     versionReports([version.id]),
+    verifiedPublishers([version.sourceSpaceId]),
   ])
   const security = reports.get(version.id)?.report.security.findings ?? null
   const approve = shouldAutoApprove({
-    trustedPublishers: trustedPublishers(),
+    verifiedPublishers: verified,
     sourceSpaceId: version.sourceSpaceId,
     previous: previous?.config ?? null,
     next: decodeToolConfig(version.config, version.name),

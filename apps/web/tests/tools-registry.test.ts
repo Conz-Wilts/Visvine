@@ -31,7 +31,6 @@ import {
   versionHistory,
   previousApprovedVersion,
   shouldAutoApprove,
-  trustedPublishers,
   AUTO_APPROVE_NOTE,
   AUTO_REVIEWER,
   withdrawVersion,
@@ -506,15 +505,9 @@ test('the install shapes carry what the rail, the page and the banner need', () 
   assert.equal(refreshed.ok && refreshed.installs.length, 1)
 })
 
-// ── trusted publishers (ticket 4.2) ─────────────────────────────────────────
+// ── verified publishers' fast path ──────────────────────────────────────────
 
-test('trustedPublishers reads a comma-separated list, trimmed, and unset means nobody', () => {
-  assert.deepEqual([...trustedPublishers(undefined)], [])
-  assert.deepEqual([...trustedPublishers('')], [])
-  assert.deepEqual([...trustedPublishers(' space_a, space_b ,,')], ['space_a', 'space_b'])
-})
-
-test('shouldAutoApprove needs a trusted space, a listed predecessor, an unchanged manifest and a clean scan', () => {
+test('shouldAutoApprove needs a verified publisher, a listed predecessor, an unchanged manifest and clean stages', () => {
   const trusted = new Set(['space_trusted'])
   const base = decodeToolConfig(
     {
@@ -526,7 +519,7 @@ test('shouldAutoApprove needs a trusted space, a listed predecessor, an unchange
   )
   const go = (over: Partial<Parameters<typeof shouldAutoApprove>[0]> = {}) =>
     shouldAutoApprove({
-      trustedPublishers: trusted,
+      verifiedPublishers: trusted,
       sourceSpaceId: 'space_trusted',
       previous: base,
       next: { ...base, version: 2, description: 'Now with totals' },
@@ -547,12 +540,12 @@ test('shouldAutoApprove needs a trusted space, a listed predecessor, an unchange
   assert.equal(go({ securityFindings: [{ rule: 'exfil.built-url', severity: 'medium', message: 'x' }] }), false)
   assert.equal(go({ securityFindings: [{ rule: 'usage.unused-write', severity: 'low', message: 'x' }] }), true)
   assert.equal(go({ securityFindings: null }), false)
-  // Nobody trusted, nothing skips.
-  assert.equal(go({ trustedPublishers: new Set() }), false)
+  // Nobody verified, nothing skips.
+  assert.equal(go({ verifiedPublishers: new Set() }), false)
 })
 
 test('the auto-review markers are what the audit line and the panel read', () => {
   assert.equal(AUTO_REVIEWER, 'auto')
-  assert.match(AUTO_APPROVE_NOTE, /trusted publisher/)
-  assert.match(AUTO_APPROVE_NOTE, /unchanged manifest, clean scan/)
+  assert.match(AUTO_APPROVE_NOTE, /verified publisher/)
+  assert.match(AUTO_APPROVE_NOTE, /unchanged manifest, clean stages/)
 })

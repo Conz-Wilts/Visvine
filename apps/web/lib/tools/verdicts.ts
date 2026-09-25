@@ -90,16 +90,19 @@ export async function listingHoldFor(ref: string | { listingId?: string | null; 
   const { listingId, key } = typeof ref === 'string' ? { listingId: null, key: ref } : ref
   const row = await prisma.appToolListing.findFirst({
     where: listingId ? { id: listingId } : { key },
-    select: { state: true, stateReason: true, stagedUntil: true, publisherSpaceId: true, verified: true },
+    select: { state: true, stateReason: true, stagedUntil: true, publisherSpaceId: true },
   })
   if (!row) return null
-  const space = await prisma.space.findUnique({ where: { id: row.publisherSpaceId }, select: { name: true } })
+  const [space, publisher] = await Promise.all([
+    prisma.space.findUnique({ where: { id: row.publisherSpaceId }, select: { name: true } }),
+    prisma.appToolPublisher.findUnique({ where: { spaceId: row.publisherSpaceId }, select: { verified: true } }),
+  ])
   return {
     state: decodeListingState(row.state),
     stateReason: row.stateReason,
     stagedUntil: row.stagedUntil,
     publisher: space?.name ?? null,
-    verified: row.verified,
+    verified: publisher?.verified ?? false,
   }
 }
 
@@ -113,8 +116,9 @@ export async function listingHoldFor(ref: string | { listingId?: string | null; 
 export interface VerdictEvent {
   /** Set when one version was pulled. */
   versionId?: string
-  /** Set when a whole listing changed state. */
+  /** Set when a whole listing changed state: its key now, and its id. */
   key?: string
+  listingId?: string
 }
 
 declare global {
@@ -185,40 +189,57 @@ export async function revokeVersion(
   return { ok: true }
 }
 
+/** Who holds a listing: a Visvine reviewer, or the monitor's own rules (lib/tools/monitor.ts). */
+export type HoldActor = { userId: string; email: string } | 'monitor'
+
 /**
- * Visvine's hold over a whole listing. `revoked` is final: a revoked listing
- * never goes back to active, and the installs it stopped are the installing
- * admins' to remove.
+ * Visvine's hold over a whole listing, named by its id (which a transfer
+ * keeps) or its current key. `revoked` is final: a revoked listing never goes
+ * back to active, and the installs it stopped are the installing admins' to
+ * remove. The monitor may only SUSPEND — a person reinstates or removes.
+ *
+ * Every space the hold reaches is told where its admins look: an audit line
+ * in the publisher's space and in each space that installed it, and the
+ * Tool's own page, which says why it stopped.
  */
-export async function setListingState(
-  key: string,
+export async function holdListing(
+  ref: { listingId?: string; key?: string },
   state: ListingState,
-  reviewer: { userId: string; email: string },
+  by: HoldActor,
   reason: string | null,
 ): Promise<VerdictResult> {
-  if (!isSuperAdmin(reviewer.email)) {
+  if (by === 'monitor' ? state !== 'suspended' : !isSuperAdmin(by.email)) {
     return { ok: false, status: 403, error: 'Only Visvine reviewers can hold a listing.' }
   }
-  const row = await prisma.appToolListing.findUnique({ where: { key }, select: { state: true, publisherSpaceId: true } })
+  if (!ref.listingId && !ref.key) return { ok: false, status: 400, error: 'Name a listing.' }
+  const row = await prisma.appToolListing.findFirst({
+    where: ref.listingId ? { id: ref.listingId } : { key: ref.key },
+    select: { id: true, key: true, state: true, publisherSpaceId: true },
+  })
   if (!row) return { ok: false, status: 404, error: 'This tool was never listed.' }
   const current = decodeListingState(row.state)
   if (current === 'revoked') return { ok: false, status: 409, error: 'This listing was removed for good.' }
   if (current === state) return { ok: true }
 
   const note = reason?.trim() ? reason.trim().slice(0, 500) : null
+  const actorId = by === 'monitor' ? 'monitor' : by.userId
   await prisma.appToolListing.update({
-    where: { key },
-    data: { state, stateReason: note, stateBy: reviewer.userId, stateAt: new Date() },
+    where: { id: row.id },
+    data: { state, stateReason: note, stateBy: actorId, stateAt: new Date() },
   })
-  const name = key.slice(key.indexOf('/') + 1)
-  void logAudit(row.publisherSpaceId, {
-    userId: reviewer.userId,
-    name: reviewer.email,
-    action: 'tool',
-    path: toolIndexPath(name),
-    detail: `listing ${state} by Visvine${note ? ` — ${note}` : ''}`,
+  const name = row.key.slice(row.key.indexOf('/') + 1)
+  const installs = await prisma.appToolInstall.findMany({
+    where: { OR: [{ listingId: row.id }, { key: row.key }], spaceId: { not: row.publisherSpaceId } },
+    select: { spaceId: true, slug: true },
   })
-  publishVerdict({ key })
+  const word = state === 'active' ? 'reinstated' : state === 'suspended' ? 'suspended' : 'removed'
+  const who = by === 'monitor' ? 'Visvine’s monitoring' : 'Visvine'
+  const detail = `${name} ${word} by ${who}${note ? ` — ${note}` : ''}`
+  const author = by === 'monitor' ? { userId: 'monitor', name: 'Visvine' } : { userId: by.userId, name: by.email }
+  void logAudit(row.publisherSpaceId, { ...author, action: 'tool', path: toolIndexPath(name), detail })
+  for (const install of installs) {
+    void logAudit(install.spaceId, { ...author, action: 'tool', path: `tools/${install.slug}`, detail })
+  }
+  publishVerdict({ key: row.key, listingId: row.id })
   return { ok: true }
 }
-

@@ -13,6 +13,8 @@ import { drainJobs } from '@/lib/resources/jobs'
 import { reapAbandonedUploads } from '@/lib/resources/upload'
 import { purgeTrash } from '@/lib/resources/service'
 import { drainToolReviews } from '@/lib/tools/review/run'
+import { flushTelemetry, rollUpTelemetry } from '@/lib/tools/telemetry'
+import { sweepAnomalies } from '@/lib/tools/monitor'
 
 // The tick awaits the dispatches it fans out (each its own request to the run
 // endpoint), so it can last as long as the longest claimed run.
@@ -71,6 +73,18 @@ export async function POST(req: NextRequest) {
     return null
   })
 
+  // Watching listed Tools (lib/tools/monitor.ts): this instance's counts
+  // written, finished days rolled up, and today's read against each install's
+  // own week. Best-effort, like the rest.
+  const toolMonitoring = await (async () => ({
+    telemetryRows: await flushTelemetry(),
+    rolledUp: await rollUpTelemetry(),
+    anomalies: await sweepAnomalies(),
+  }))().catch((err) => {
+    logger.error('tools.monitor.tick_failed', { err })
+    return null
+  })
+
   // VM leases ride this tick for the same reason the projection drain does: it
   // is the heartbeat the deployment already has, and a lease nobody has touched
   // in a fortnight is not urgent enough to justify a second scheduler job. Never
@@ -96,6 +110,7 @@ export async function POST(req: NextRequest) {
     cleans,
     resourceJobs,
     toolReviews,
+    toolMonitoring,
     vmLeasesReaped: vmLeases,
     machines,
     reclaimed: report.reclaimed,

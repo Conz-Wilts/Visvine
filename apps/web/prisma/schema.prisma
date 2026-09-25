@@ -1040,6 +1040,7 @@ model AppToolInstall {
   version           AppToolVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
   state             AppToolState[]
   consents          AppToolConsent[]
+  telemetry         AppToolTelemetry[]
 
   @@unique([spaceId, key], name: "app_tool_install_identity")
   @@unique([spaceId, slug], name: "app_tool_install_slug")
@@ -1105,8 +1106,6 @@ model AppToolListing {
   /// The author who co-signed the listing, and the license they chose.
   authorUserId     String?          @map("author_user_id")
   license          String?
-  /// Visvine's word that the publisher is who they say they are.
-  verified         Boolean          @default(false)
   /// When Visvine first listed a version of it.
   listedAt         DateTime?        @map("listed_at")
   /// Staged reach: until this moment at most `stagedCap` spaces outside the
@@ -1242,21 +1241,101 @@ model AppToolCheckRun {
 /// the viewer's content. `viewerId` is redacted when that person deletes their
 /// account; the incident stays.
 model AppToolIncident {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  kind      String // navigation | csp | report | canary | anomaly
-  severity  String // severe | flag | quality | report
-  status    String   @default("open") // open | cleared | confirmed
-  key       String?
-  versionId String?  @map("version_id")
-  installId String?  @map("install_id")
-  spaceId   String?  @map("space_id")
-  viewerId  String?  @map("viewer_id")
-  detail    Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
+  id         String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  kind       String // navigation | csp | report | canary | anomaly | rescan
+  severity   String // severe | flag | quality | report
+  status     String    @default("open") // open | cleared | confirmed
+  /// Who saw it: a viewer's browser, Visvine's dynamic run, the monitor's
+  /// rules, or a rescan. Suspension weighs them differently (lib/tools/monitor.ts).
+  source     String    @default("viewer") // viewer | dynamic | monitor | rescan
+  key        String?
+  /// The listing the Tool was installed from, when it was — what a hold acts on.
+  listingId  String?   @map("listing_id")
+  versionId  String?   @map("version_id")
+  installId  String?   @map("install_id")
+  spaceId    String?   @map("space_id")
+  viewerId   String?   @map("viewer_id")
+  detail     Json      @default("{}")
+  /// The reviewer who cleared or confirmed it, and when.
+  resolvedBy String?   @map("resolved_by")
+  resolvedAt DateTime? @map("resolved_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
 
   @@index([key, createdAt])
   @@index([status, createdAt])
+  @@index([listingId, status])
   @@map("app_tool_incidents")
+}
+
+/// A publishing space as Visvine knows it: whether Visvine has verified it is
+/// who it says it is. A verified publisher's listings are not staged after
+/// its first, and its re-listings that change nothing reviewed and come back
+/// clean from every stage are listed without a person (registry.ts#shouldAutoApprove).
+/// Keyed by the space, and kept when the space goes — a listing outlives it.
+model AppToolPublisher {
+  spaceId    String    @id @map("space_id")
+  verified   Boolean   @default(false)
+  verifiedBy String?   @map("verified_by")
+  verifiedAt DateTime? @map("verified_at")
+  /// The reviewer's own words about this publisher.
+  note       String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@map("app_tool_publishers")
+}
+
+/// What each install of a Tool did, as counts — never content — one row per
+/// install, day and server instance. Each instance adds up in memory and, on
+/// the request path once a minute has passed, adds its counts to ITS OWN row,
+/// so no row is written by two instances and N instances still sum
+/// (lib/tools/telemetry.ts). Rolled into one row per install and day when the
+/// day is over, and kept 90 days.
+model AppToolTelemetry {
+  id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  installId   String         @map("install_id")
+  versionId   String         @map("version_id")
+  day         DateTime       @db.Date
+  /// The server instance that counted these, or `day` once rolled up.
+  instance    String
+  calls       Int            @default(0)
+  refusals    Int            @default(0)
+  /// method → { calls, refusals: { code: n } }.
+  methods     Json           @default("{}")
+  bytesRead   BigInt         @default(0) @map("bytes_read")
+  bytesWritten BigInt        @default(0) @map("bytes_written")
+  /// Distinct note paths read in each flush, summed — an upper bound.
+  paths       Int            @default(0)
+  dataMs      Int            @default(0) @map("data_ms")
+  aiTokens    Int            @default(0) @map("ai_tokens")
+  cspReports  Int            @default(0) @map("csp_reports")
+  navigations Int            @default(0)
+  frameErrors Int            @default(0) @map("frame_errors")
+  /// Distinct viewers in each flush, summed — an upper bound.
+  viewers     Int            @default(0)
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  install     AppToolInstall @relation(fields: [installId], references: [id], onDelete: Cascade)
+
+  @@unique([installId, day, instance], name: "app_tool_telemetry_identity")
+  @@index([day])
+  @@map("app_tool_telemetry")
+}
+
+/// A known advisory against a curated dependency at the version Visvine
+/// vendors (lib/tools/advisories.ts, from OSV). A new one makes every listed
+/// version that declares the package a rescan's business.
+model AppToolAdvisory {
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  package    String
+  version    String
+  advisoryId String   @map("advisory_id")
+  summary    String
+  severity   String // low | medium | high
+  url        String?
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  @@unique([package, version, advisoryId], name: "app_tool_advisory_identity")
+  @@map("app_tool_advisories")
 }
 
 /// Which of its space's PERSON ALIASES a member holds. The aliases themselves

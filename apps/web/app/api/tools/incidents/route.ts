@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireToolSession } from '@/lib/tools/route'
 import { takeToken } from '@/lib/rateLimit'
 import { resolveBridgeTarget } from '@/lib/tools/target'
-import { incidentSubject, recordIncident } from '@/lib/tools/incidents'
+import { incidentSubject } from '@/lib/tools/incidents'
+import { raiseIncident } from '@/lib/tools/monitor'
+import { countEvent } from '@/lib/tools/telemetry'
 import { recordReviewEvent } from '@/lib/tools/review/events'
 
 /**
@@ -39,10 +41,16 @@ export async function POST(req: NextRequest) {
   if (!limit.ok) return NextResponse.json({ error: 'Too many reports.' }, { status: 429 })
 
   const note = kind === 'report' && typeof body?.note === 'string' ? body.note.trim().slice(0, NOTE_MAX) : ''
-  await recordIncident({
+  if (kind === 'navigation' && resolved.installId && resolved.versionId) {
+    countEvent({ installId: resolved.installId, versionId: resolved.versionId, kind: 'navigation' })
+  }
+  // A severe one may tip the listing into a suspension (lib/tools/monitor.ts).
+  await raiseIncident({
     kind,
     severity: KINDS[kind],
+    source: 'viewer',
     ...incidentSubject(resolved, session.userId),
+    listingId: resolved.listingId ?? null,
     ...(note ? { detail: { note } } : {}),
   })
   return NextResponse.json({ ok: true })

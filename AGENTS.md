@@ -1354,6 +1354,17 @@ iframe on a cookie-less origin. `docs/tools.md` is the guide. The invariants:
   from outside the space shows a **provenance line** and asks each member once
   before it first acts as them (`consent_required` →
   `app_tool_consents`, re-asked when an upgrade widens it).
+- **Monitoring can pull a listed Tool back everywhere within a minute.**
+  Telemetry is counts per install, day and server instance
+  (`lib/tools/telemetry.ts` — each instance adds up in memory and writes its
+  OWN row on the request path once a minute, never on a timer); incidents are
+  written at once and name their listing (`lib/tools/monitor.ts#raiseIncident`).
+  Two independent viewers' severe signals, or Visvine's dynamic run, suspend
+  the listing (`shared/monitoring.ts#suspensionDecision`, pure); a report
+  alone never does; the monitor may only suspend. Verified publishers are data
+  (`app_tool_publishers`), and rescans re-read listed versions when the rules
+  or the advisory feed change (`lib/tools/rescan.ts`). Reviewers work on
+  Console → Review.
 - **A Tool travels as a `.vvtool`** (`lib/tools/package/`): sources and the
   manifest, CHECKSUMS, and — for a LISTED version only — an Ed25519 signature
   under the deployment's key ring (`lib/crypto/signing.ts`). An import is a new

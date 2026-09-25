@@ -4,6 +4,7 @@ import { listReviewQueue, perimeterDiffForVersion } from '@/lib/tools/registry'
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
 import { versionReports } from '@/lib/tools/checks/runs'
 import prisma from '@/lib/prisma'
+import { verifiedPublishers } from '@/lib/tools/publishers'
 import type { ReviewQueueItem, ReviewQueueResponse } from '@/lib/tools/api'
 
 /**
@@ -42,9 +43,10 @@ export async function GET(_req: NextRequest) {
     }),
     prisma.appToolVersion.findMany({
       where: { id: { in: ids } },
-      select: { id: true, cosignedBy: true, listing: { select: { id: true, verified: true } } },
+      select: { id: true, cosignedBy: true, listingId: true },
     }),
   ])
+  const verified = await verifiedPublishers(pending.map((version) => version.sourceSpaceId))
   const queue: ReviewQueueItem[] = pending.map((version, at) => {
     const previous = diffs[at]?.previous
     const run = runs.find((row) => row.versionId === version.id)
@@ -63,7 +65,9 @@ export async function GET(_req: NextRequest) {
             error: run.error,
           }
         : null,
-      listing: listed?.listing ? { id: listed.listing.id, verified: listed.listing.verified, cosignedBy: listed.cosignedBy } : null,
+      listing: listed?.listingId
+        ? { id: listed.listingId, verified: verified.has(version.sourceSpaceId), cosignedBy: listed.cosignedBy }
+        : null,
     }
   })
 

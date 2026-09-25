@@ -3,10 +3,9 @@
  * newest listed version), and its About for someone who has not installed it
  * — the facts an admin reads before installing, and the source one click away.
  *
- * Browsing opens to every signed-in person only once monitoring can pull a
- * listing back (docs/tools-system-plan.md § 10); until `TOOLS_DIRECTORY=open`
- * the directory answers Visvine's reviewers alone, and a listing is installed
- * by key as before (`directoryOpenTo`).
+ * Open to every signed-in person, because monitoring can pull a listing back
+ * everywhere within a minute (lib/tools/monitor.ts). `TOOLS_DIRECTORY=reviewers`
+ * closes it to Visvine's reviewers — an operator's lever, not a default.
  */
 import prisma from '@/lib/prisma'
 import { adminSpaceIds } from '@/lib/auth'
@@ -15,11 +14,12 @@ import { describePerimeter } from './perimeter'
 import { manifestOf, type ToolConfig } from './config'
 import { decodeToolConfig, decodeToolPerimeter, pageByCursor } from './registry'
 import { isStaged } from './shared/listing'
+import { verifiedPublishers } from './publishers'
 import type { ToolManifestFacts } from '@visvine/tool-protocol/manifest'
 
 /** Who may browse the directory now. */
 export function directoryOpenTo(email: string | null | undefined, env: Record<string, string | undefined> = process.env): boolean {
-  return env.TOOLS_DIRECTORY?.trim().toLowerCase() === 'open' || isSuperAdmin(email)
+  return env.TOOLS_DIRECTORY?.trim().toLowerCase() !== 'reviewers' || isSuperAdmin(email)
 }
 
 export interface ListingCard {
@@ -98,7 +98,6 @@ type ListingRow = {
   id: string
   key: string
   publisherSpaceId: string
-  verified: boolean
   license: string | null
   listedAt: Date | null
   stagedUntil: Date | null
@@ -109,14 +108,19 @@ const LISTING_SELECT = {
   id: true,
   key: true,
   publisherSpaceId: true,
-  verified: true,
   license: true,
   listedAt: true,
   stagedUntil: true,
   authorUserId: true,
 } as const
 
-function cardOf(listing: ListingRow, version: VersionRow, publisher: string | null, installs: number, now: Date): ListingCard {
+function cardOf(
+  listing: ListingRow,
+  version: VersionRow,
+  publisher: { name: string | null; verified: boolean },
+  installs: number,
+  now: Date,
+): ListingCard {
   const config = decodeToolConfig(version.config, version.name)
   return {
     listingId: listing.id,
@@ -130,8 +134,8 @@ function cardOf(listing: ListingRow, version: VersionRow, publisher: string | nu
     tags: version.tags,
     release: manifestOf(config).release,
     version: version.version,
-    publisher: { spaceId: listing.publisherSpaceId, name: publisher },
-    verified: listing.verified,
+    publisher: { spaceId: listing.publisherSpaceId, name: publisher.name },
+    verified: publisher.verified,
     license: listing.license,
     installs,
     reviewedAt: version.marketplaceReviewedAt?.toISOString() ?? null,
@@ -179,17 +183,20 @@ export async function browseListings(
     select: LISTING_SELECT,
   })
   const ids = listings.map((l) => l.id)
-  const [versions, counts, names] = await Promise.all([
+  const publisherIds = listings.map((l) => l.publisherSpaceId)
+  const [versions, counts, names, verified] = await Promise.all([
     newestListed(ids),
     installCounts(ids),
-    spaceNames(listings.map((l) => l.publisherSpaceId)),
+    spaceNames(publisherIds),
+    verifiedPublishers(publisherIds),
   ])
   const q = opts.q?.trim().toLowerCase() ?? ''
   const cards: ListingCard[] = []
   for (const listing of listings) {
     const version = versions.get(listing.id)
     if (!version) continue
-    const card = cardOf(listing, version, names.get(listing.publisherSpaceId) ?? null, counts.get(listing.id) ?? 0, now)
+    const publisher = { name: names.get(listing.publisherSpaceId) ?? null, verified: verified.has(listing.publisherSpaceId) }
+    const card = cardOf(listing, version, publisher, counts.get(listing.id) ?? 0, now)
     if (q && ![card.title, card.name, card.description ?? '', ...card.tags, card.publisher.name ?? ''].some((text) => text.toLowerCase().includes(q))) continue
     cards.push(card)
   }
@@ -210,10 +217,11 @@ export async function listingAbout(listingId: string, now: Date = new Date()): P
     select: LISTING_SELECT,
   })
   if (!listing) return null
-  const [versions, counts, names] = await Promise.all([
+  const [versions, counts, names, verified] = await Promise.all([
     newestListed([listing.id]),
     installCounts([listing.id]),
     spaceNames([listing.publisherSpaceId]),
+    verifiedPublishers([listing.publisherSpaceId]),
   ])
   const version = versions.get(listing.id)
   if (!version) return null
@@ -229,7 +237,13 @@ export async function listingAbout(listingId: string, now: Date = new Date()): P
     }),
   ])
   return {
-    ...cardOf(listing, version, names.get(listing.publisherSpaceId) ?? null, counts.get(listing.id) ?? 0, now),
+    ...cardOf(
+      listing,
+      version,
+      { name: names.get(listing.publisherSpaceId) ?? null, verified: verified.has(listing.publisherSpaceId) },
+      counts.get(listing.id) ?? 0,
+      now,
+    ),
     releaseNotes: version.releaseNotes,
     author: author?.name ?? null,
     reach: describePerimeter(perimeter),

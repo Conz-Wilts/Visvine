@@ -27,7 +27,8 @@ export interface StoredReport {
 }
 
 export async function recordReport(input: {
-  spaceId: string
+  /** Null for a version whose space is gone — its rows stay with the version. */
+  spaceId: string | null
   name: string
   versionId: string | null
   sourceHash: string
@@ -48,7 +49,7 @@ export async function recordReport(input: {
     durationMs: result.durationMs,
   }))
   await prisma.appToolCheckRun.createMany({ data: rows })
-  if (input.versionId === null) {
+  if (input.versionId === null && input.spaceId) {
     const stale = await prisma.appToolCheckRun.findMany({
       where: { spaceId: input.spaceId, name: input.name, versionId: null },
       orderBy: { createdAt: 'desc' },

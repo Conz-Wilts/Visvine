@@ -11,7 +11,8 @@ import TypesPanel from '@/features/admin/components/TypesPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
 import { useConnectorRequestCount } from '@/features/connectors/hooks/useConnectorRequestCount';
-import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
+import { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
+import ReviewConsole from '@/features/admin/components/ReviewConsole';
 import {
   InstalledToolsPanel,
   ListingOffersPanel,
@@ -20,16 +21,16 @@ import {
 } from '@/features/tools/components/manage/ToolsConsole';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
-import { LoadingText, Alert, SettingsSection } from '@visvine/ui';
+import { LoadingText, Alert } from '@visvine/ui';
 import { Space } from '@/lib/types';
 
 // Each section owns one job, and the job is one noun: General is the space's own
 // record, Tools is a row per tool (whether the space has it, where it sits, who
-// may open it, and which version it runs — plus, for a super admin, the global
-// marketplace review queue at the bottom), Approvals is what a member published
+// may open it, and which version it runs), Approvals is what a member published
 // and is waiting on an admin, Connectors is the space's gateways to the outside world, Types is what kinds of thing the
-// space records, and Members is the people — the invite link, both request
-// queues, the aliases they can hold, and the roll itself.
+// space records, Members is the people — the invite link, both request
+// queues, the aliases they can hold, and the roll itself — and, for a Visvine
+// super admin alone, Review is the tools listed for every space.
 //
 // There is no Tools destination outside this console: a tool is authored by a
 // coding agent over MCP and previewed at /tools/preview/<name>; publishing it
@@ -47,10 +48,10 @@ function AdminConsole({ space, onSaved }: {
     [],
   );
 
-  // Tool review is the one block that is not about this space: the queue is
-  // global and the gate is Visvine super admin, so a space admin never sees it
-  // at the bottom of Tools. The routes behind it are gated the same way —
-  // hiding it is the courtesy, not the security.
+  // Review is the one section that is not about this space: the queue, the
+  // incidents and the listings are global and the gate is Visvine super
+  // admin, so a space admin never sees it. The routes behind it are gated the
+  // same way — hiding it is the courtesy, not the security.
   const { session } = useAuth();
   const isSuperAdmin = session?.user?.isSuperAdmin === true;
   const reviewQueue = useToolReviewQueue(isSuperAdmin);
@@ -64,12 +65,7 @@ function AdminConsole({ space, onSaved }: {
 
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', width: 'form' },
-    {
-      id: 'tools',
-      label: 'Tools',
-      width: 'form',
-      badge: isSuperAdmin ? reviewQueue.items.length : undefined,
-    },
+    { id: 'tools', label: 'Tools', width: 'form' },
     { id: 'approvals', label: 'Approvals', width: 'wide', badge: approvals.count },
     { id: 'types', label: 'Types', width: 'form' },
     // Connectors has no rail row of its own — it is admins-only by nature, so
@@ -80,6 +76,8 @@ function AdminConsole({ space, onSaved }: {
     // Both queues a person can be waiting in — to join, and for context access —
     // are resolved here, so one badge counts them both.
     { id: 'members', label: 'Members', width: 'wide', badge: pending.members + pending.requests },
+    // Visvine's review — not about this space at all, and a super admin's alone.
+    ...(isSuperAdmin ? [{ id: 'review', label: 'Review', width: 'wide' as const, badge: reviewQueue.items.length }] : []),
   ];
 
   return (
@@ -103,19 +101,12 @@ function AdminConsole({ space, onSaved }: {
                   <SpaceToolsPanel key={space.id} space={space} onSaved={onSaved} />
                   <InstalledToolsPanel key={`${space.id}-installs`} />
                   <ListingOffersPanel key={`${space.id}-offers`} />
-                  {/* Not keyed on the space: the queue outlives whichever
-                      space the console happens to be pointed at. */}
-                  {isSuperAdmin && (
-                    <SettingsSection flush large title="Tool review">
-                      {/* pt-1 lines the queue up with the first row under the
-                          other headings, which carries its own top padding. */}
-                      <div className="pt-1">
-                        <ToolReviewPanel queue={reviewQueue} />
-                      </div>
-                    </SettingsSection>
-                  )}
                 </div>
               );
+            // Not keyed on the space: the queue outlives whichever space the
+            // console happens to be pointed at.
+            case 'review':
+              return isSuperAdmin ? <ReviewConsole queue={reviewQueue} /> : null;
             case 'approvals':
               return (
                 <ToolApprovalsPanel

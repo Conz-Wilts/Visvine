@@ -95,7 +95,8 @@ export async function GET(req: NextRequest) {
       const unsubscribeVerdicts = subscribeVerdicts((event) => {
         const mine =
           (event.versionId !== undefined && event.versionId === resolved.versionId) ||
-          (event.key !== undefined && event.key === key)
+          (event.key !== undefined && event.key === key) ||
+          (event.listingId !== undefined && event.listingId === resolved.listingId)
         if (!mine) return
         write('event: verdict\ndata: {}\n\n')
         cleanup()

@@ -85,6 +85,7 @@ import { runStaticChecks, type StaticCheckInput } from './checks/analyze'
 import { parseManifestFacts, type ToolManifestFacts } from '@visvine/tool-protocol/manifest'
 import { blockingFindings, findingLine, reportStatus, type CheckFinding, type CheckReport } from './checks/findings'
 import { recordReport, versionReports } from './checks/runs'
+import { advisoriesFor } from './advisories'
 import { diffManifest } from './manifestDiff'
 
 /**
@@ -511,32 +512,19 @@ export function toolKey(spaceId: string, name: string): string {
 /** Longest `releaseNotes` a publish stores; anything past it is clipped. */
 const RELEASE_NOTES_MAX = 2048
 
-// ── trusted publishers (pure) ────────────────────────────────────────────────
+// ── verified publishers' fast path (pure) ────────────────────────────────────
 
 /** What `reviewedBy` reads on a version nobody looked at — a marker, not a user id. */
 export const AUTO_REVIEWER = 'auto'
-export const AUTO_APPROVE_NOTE = 'auto-approved: trusted publisher, unchanged manifest, clean scan'
-
-/**
- * `TOOLS_TRUSTED_PUBLISHERS` — space ids whose re-publishes may skip the queue,
- * comma-separated. Read at call time, never at module load, so a test (or an
- * operator's restart-free change) is seen. Unset means nobody is trusted.
- */
-export function trustedPublishers(raw: string | undefined = process.env.TOOLS_TRUSTED_PUBLISHERS): Set<string> {
-  return new Set(
-    (raw ?? '')
-      .split(',')
-      .map((id) => id.trim())
-      .filter(Boolean),
-  )
-}
+export const AUTO_APPROVE_NOTE = 'auto-approved: verified publisher, unchanged manifest, clean stages'
 
 /**
  * Whether a version offered for listing may be listed without a Visvine reviewer.
  *
  * Four conditions, all required, and each one is a real half of the review:
- *   • the publishing space is TRUSTED (an operator put its id in the env) —
- *     code from a stranger is always read by a person;
+ *   • the publishing space is VERIFIED — Visvine's word on it, set by a
+ *     reviewer (lib/tools/publishers.ts); code from a stranger is always read
+ *     by a person;
  *   • an EARLIER LISTED version exists — the first version of anything is
  *     read by a person, because there is nothing to diff it against;
  *   • the MANIFEST diff against it is empty — every field that grants reach
@@ -544,19 +532,20 @@ export function trustedPublishers(raw: string | undefined = process.env.TOOLS_TR
  *     tests/tools-diff-coverage.test.ts): what an install can do is bounded by
  *     what it declares and the viewer's own grants, and that bound has not
  *     moved; and
- *   • the SCANS came back clean — no high or medium security finding on this
- *     version. The fast path skips a person, never the automated stages.
+ *   • every STAGE came back clean — no high or medium finding from the
+ *     security scan, the AI review or the dynamic run. The fast path skips a
+ *     person, never the automated stages.
  */
 export function shouldAutoApprove(input: {
-  trustedPublishers: ReadonlySet<string>
+  verifiedPublishers: ReadonlySet<string>
   sourceSpaceId: string
   /** The last listed version's manifest; null for a first listing. */
   previous: ToolConfig | null
   next: ToolConfig
-  /** This version's security findings as published; null when it was never scanned. */
+  /** This version's findings from every stage; null when it was never scanned. */
   securityFindings: readonly CheckFinding[] | null
 }): boolean {
-  if (!input.trustedPublishers.has(input.sourceSpaceId)) return false
+  if (!input.verifiedPublishers.has(input.sourceSpaceId)) return false
   if (!input.previous) return false
   if (!input.securityFindings || input.securityFindings.some((f) => f.severity === 'high' || f.severity === 'medium')) {
     return false
@@ -699,6 +688,7 @@ export async function publishTool(
     modules: unwrapModules(sources.modules),
     config,
     build: { ok: build.ok, errors: build.errors, warnings: build.warnings, configError: build.configError },
+    advisories: await advisoriesFor(Object.keys(manifestOf(config).dependencies)),
   })
   if (reportStatus(report) === 'blocked') {
     await recordReport({ spaceId, name, versionId: null, sourceHash: buildRow.sourceHash, trigger: 'publish', report })

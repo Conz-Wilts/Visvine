@@ -174,7 +174,7 @@ test("a trusted publisher's widened reach or placement is never auto-approved", 
   const base = fullest()
   const trusted = new Set(['space_trusted'])
   const approve = (next: ToolConfig) =>
-    shouldAutoApprove({ trustedPublishers: trusted, sourceSpaceId: 'space_trusted', previous: base, next, securityFindings: [] })
+    shouldAutoApprove({ verifiedPublishers: trusted, sourceSpaceId: 'space_trusted', previous: base, next, securityFindings: [] })
   // The control: nothing granting changed, so the fast path applies.
   assert.equal(approve({ ...base, version: 4, description: 'New copy', title: 'Deal board', tags: ['sales'] }), true)
   for (const [field, widen] of Object.entries(WIDEN) as Array<[ReviewedField, (c: ToolConfig) => ToolConfig]>) {

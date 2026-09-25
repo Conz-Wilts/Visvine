@@ -36,7 +36,7 @@ import { featureAccessForbidden } from '@/lib/auth'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
 import { toBuildSummary, rebuildTool, toolDiagnosticLine, type BuildSummary } from '@/lib/tools/builds'
-import { TOOL_MODULE_RE, type ToolConfig } from '@/lib/tools/config'
+import { manifestOf, TOOL_MODULE_RE, type ToolConfig } from '@/lib/tools/config'
 import { appOrigin as liveAppOrigin } from '@/lib/tools/origin'
 import { describePerimeter } from '@/lib/tools/perimeter'
 import { runStaticChecks, type StaticCheckInput } from '@/lib/tools/checks/analyze'
@@ -48,6 +48,7 @@ import {
   type CheckReport,
 } from '@/lib/tools/checks/findings'
 import { recordReport } from '@/lib/tools/checks/runs'
+import { advisoriesFor } from '@/lib/tools/advisories'
 import { BRIDGE_METHODS } from '@/lib/tools/protocol'
 import { TOOL_PHONE_REFUSAL } from '@/lib/tools/clientClass'
 import { describeRequirements, isDegraded, sourceRequirements } from '@/lib/tools/requirements'
@@ -98,6 +99,11 @@ import {
 } from '@/lib/tools/installs'
 
 type Actor = { userId: string; email: string }
+
+/** What is known against the curated dependencies a config declares. */
+async function advisoriesOf(config: ToolConfig | null) {
+  return config ? advisoriesFor(Object.keys(manifestOf(config).dependencies)) : []
+}
 
 /**
  * The filenames an author addresses, in the order they matter.
@@ -217,7 +223,7 @@ const liveDeps: AppToolDeps = {
   listInstalls: listInstallsService,
   configureTool: configureToolService,
   checkWorkingCopy: async (spaceId, name, sourceHash, input) => {
-    const report = await runStaticChecks(input)
+    const report = await runStaticChecks({ ...input, advisories: await advisoriesOf(input.config) })
     await recordReport({ spaceId, name, versionId: null, sourceHash, trigger: 'check', report })
     return report
   },

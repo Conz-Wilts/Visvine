@@ -199,6 +199,8 @@ export interface ResolvedTarget {
   review?: { runId: string }
   /** The install's listing is still staged: its per-viewer bridge rate is halved. */
   staged?: boolean
+  /** The listing an install follows, when it came from one. */
+  listingId?: string | null
   /** Who published it, for a Tool from outside the space — what its first-use notice names. */
   publisher?: string | null
   config: ToolConfig
@@ -447,6 +449,7 @@ async function resolveInstall(
     settings,
     foreign: sourceSpaceId !== install.spaceId && !install.sharedFromSpaceId,
     staged: !install.sharedFromSpaceId && isStaged(listing ? { stagedUntil: listing.stagedUntil ?? null } : null, new Date()),
+    listingId: install.listingId ?? null,
     publisher: listing?.publisher ?? null,
     config,
     dataBundle: install.version.dataBundle,

@@ -2,7 +2,9 @@ import type { NextRequest } from 'next/server'
 import prisma from '@/lib/prisma'
 import { takeToken } from '@/lib/rateLimit'
 import { verifyFrameToken } from '@/lib/tools/frameToken'
-import { originOnly, recordIncident } from '@/lib/tools/incidents'
+import { originOnly } from '@/lib/tools/incidents'
+import { raiseIncident } from '@/lib/tools/monitor'
+import { countEvent } from '@/lib/tools/telemetry'
 import { recordReviewEvent } from '@/lib/tools/review/events'
 
 /**
@@ -91,21 +93,24 @@ export async function POST(req: NextRequest): Promise<Response> {
   const limit = await takeToken(`tools:csp:${scope}:${payload.viewerId}`, { capacity: 10, refillPerSec: 0.05 })
   if (!limit.ok) return noContent()
 
-  let subject: { key: string; versionId: string | null; installId: string | null }
+  let subject: { key: string; versionId: string | null; installId: string | null; listingId: string | null }
   if (payload.kind === 'install') {
     const install = await prisma.appToolInstall.findUnique({
       where: { id: payload.installId },
-      select: { key: true, versionId: true },
+      select: { key: true, versionId: true, listingId: true },
     })
     if (!install) return noContent()
-    subject = { key: install.key, versionId: install.versionId, installId: payload.installId }
+    subject = { key: install.key, versionId: install.versionId, installId: payload.installId, listingId: install.listingId }
+    countEvent({ installId: payload.installId, versionId: install.versionId, kind: 'csp' })
   } else {
-    subject = { key: `${payload.spaceId}/${payload.name}`, versionId: null, installId: null }
+    subject = { key: `${payload.spaceId}/${payload.name}`, versionId: null, installId: null, listingId: null }
   }
 
-  await recordIncident({
+  // A flag from one viewer; the same from a second holds the listing (lib/tools/monitor.ts).
+  await raiseIncident({
     kind: 'csp',
     severity: 'flag',
+    source: 'viewer',
     ...subject,
     spaceId: payload.spaceId,
     viewerId: payload.viewerId,

@@ -5,6 +5,7 @@ import { parseBody } from '@/lib/api/route'
 import { bad, requireToolsAccess } from '@/lib/tools/route'
 import { answerTransfer, offerTransfer } from '@/lib/tools/listings'
 import { decodeToolConfig } from '@/lib/tools/registry'
+import { verifiedPublishers } from '@/lib/tools/publishers'
 import type { SpaceListingsResponse } from '@/lib/tools/api'
 
 /**
@@ -21,10 +22,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
   const here = ctx.resolved.spaceId
   const rows = await prisma.appToolListing.findMany({
     where: { OR: [{ publisherSpaceId: here, listedAt: { not: null } }, { transferTo: here }] },
-    select: { id: true, key: true, publisherSpaceId: true, verified: true, transferTo: true },
+    select: { id: true, key: true, publisherSpaceId: true, transferTo: true },
   })
   const ids = rows.map((row) => row.id)
-  const [titles, counts, spaces] = await Promise.all([
+  const [titles, counts, spaces, verified] = await Promise.all([
     prisma.appToolVersion.findMany({
       where: { listingId: { in: ids }, marketplaceStatus: 'approved' },
       orderBy: { createdAt: 'desc' },
@@ -35,6 +36,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
       where: { id: { in: [...new Set(rows.flatMap((row) => [row.publisherSpaceId, row.transferTo ?? '']).filter(Boolean))] } },
       select: { id: true, name: true },
     }),
+    verifiedPublishers([here]),
   ])
   const titleOf = (id: string, key: string) => {
     const row = titles.find((t) => t.listingId === id)
@@ -48,7 +50,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
         listingId: row.id,
         key: row.key,
         title: titleOf(row.id, row.key),
-        verified: row.verified,
+        verified: verified.has(row.publisherSpaceId),
         installs: counts.find((c) => c.listingId === row.id)?._count._all ?? 0,
         transferTo: row.transferTo ? { id: row.transferTo, name: nameOf(row.transferTo) } : null,
       })),
