@@ -155,6 +155,7 @@ function ctx(f: Fakes, over: Partial<AgentToolContext> = {}): AgentToolContext {
     context: { spaceId: SPACE, ownerKey: 'shared' },
     spaceId: SPACE,
     agentName: 'weekly-digest',
+    agentFolder: 'agents/weekly-digest',
     brief: brief(),
     runId: 'run-root',
     deps: f.deps,

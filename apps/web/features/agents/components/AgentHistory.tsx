@@ -23,14 +23,15 @@ function Heading({ children, action }: { children: React.ReactNode; action?: Rea
  * person corrects it.
  */
 export default function AgentHistory({
-  agentName,
+  folder,
   runs,
   memory,
   shownRunId,
   whoOf,
   onSelect,
 }: {
-  agentName: string;
+  /** The agent's folder — `agents/<name>` unless the space filed it elsewhere. */
+  folder: string;
   runs: SerializedRun[];
   memory: string | null;
   shownRunId: string | null;
@@ -76,7 +77,7 @@ export default function AgentHistory({
         <section>
           <Heading
             action={
-              <Link href={hrefForNotePath(memoryPath(agentName), null)} className="text-[12px] text-fg-muted hover:text-fg">
+              <Link href={hrefForNotePath(memoryPath(folder), null)} className="text-[12px] text-fg-muted hover:text-fg">
                 Open note
               </Link>
             }

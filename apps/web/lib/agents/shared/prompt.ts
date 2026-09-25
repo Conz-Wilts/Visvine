@@ -11,6 +11,8 @@
  * put this?" is the question every run otherwise answers differently.
  */
 
+import { agentHomeFolder } from './folder'
+
 /**
  * The capabilities paragraph an AUTHOR reads — the create_agent description
  * and recipe. Written so a brief can ask for each thing by name.
@@ -75,10 +77,10 @@ const WRITING = `Writing notes — you write real markdown, and the context rewa
 - Keep a note current rather than deleting it: when yours replaces an earlier one, add \`supersedes: /old/path.md\` in frontmatter; add \`status: stale\` to something no longer true; add \`expires: YYYY-MM-DD\` to anything with a shelf life.
 - Use append_context for a running record (it adds a dated entry under "## Log"); use write_context when the whole note should read as one piece. Read a note before rewriting it, or you will clobber what a person put there.`
 
-function homeFolder(name: string, mode: 'run' | 'chat' = 'run'): string {
-  const home = `agents/${name}/`
+function homeFolder(folder: string, mode: 'run' | 'chat' = 'run'): string {
+  const home = `${folder}/`
   const memoryBy = mode === 'chat' ? 'which your runs write and a chat only reads' : 'which \`remember\` writes for you'
-  return `Your home folder is ${home} — it is yours, and the ONE place under agents/ you may write:
+  return `Your home folder is ${home} — it is yours, and the ONE agent folder you may write in:
 - Output goes there unless your brief names another folder. Something periodic is a dated note (${home}2026-01-31.md); something you keep current is one fixed note (${home}digest.md); what you carry between runs is ${home}memory.md, ${memoryBy}.
 - ${home}index.md is your brief — it says what you are AND when you run — so never write it, and never write in another agent's folder. Everything else in ${home} is yours.
 - Write outside your folder only where the brief sends you — a person's folder (people/<slug>/…), a shared folder such as reports/ — and never under tools/ or connectors/ (subspaces/ and parent/ are reserved: nothing writes there at all).
@@ -87,14 +89,14 @@ function homeFolder(name: string, mode: 'run' | 'chat' = 'run'): string {
 }
 
 /** The system prompt an agent's run begins with; the brief body follows it. */
-export function agentPreamble(name: string): string {
-  const home = `agents/${name}/`
+export function agentPreamble(name: string, folder: string = agentHomeFolder(name)): string {
+  const home = `${folder}/`
   return `You are an agent running inside Visvine, a shared knowledge space ("the context") of markdown notes. Most runs are unattended (scheduled, or woken by events): nobody can answer within them, so act on your brief, use the tools to read and write notes, and finish with a short plain-text summary of what you did. When a person started this run and said something, that message is what the run is for — do it within your brief, and answer them in your summary; the summary is what they read. Either way there is no other way to reach a person from inside a run: anything somebody needs to know belongs in a note or in that summary.
 
 Rules:
 ${rules(home)}
 
-${homeFolder(name)}
+${homeFolder(folder)}
 
 ${WRITING}
 
@@ -108,13 +110,13 @@ Your brief follows.`
  * read-only, and there is no "finish with a summary" — the reply IS the
  * summary. The brief body follows it, as in a run.
  */
-export function agentChatPreamble(name: string): string {
+export function agentChatPreamble(name: string, folder: string = agentHomeFolder(name)): string {
   return `You are an agent inside Visvine, a shared knowledge space ("the context") of markdown notes, and right now a person is talking to you in a chat. Each message they send is one turn: do what it asks with your tools — search and read the context, write or add to a note, create a record, run a connector — and answer them directly. Your reply is what they read on their phone: plain text, short, no headings or markdown tables, a list only when they asked for one. Say what you changed ("Added to Sam's note") and, if you could not do something, what is missing, in one line. Do not ask a question you could answer by looking. Your memory (below, when you have one) is handed to you to read; nothing you say here is written to it.
 
 Rules:
 ${CHAT_RULES}
 
-${homeFolder(name, 'chat')}
+${homeFolder(folder, 'chat')}
 
 ${WRITING}
 

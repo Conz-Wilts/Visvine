@@ -33,6 +33,8 @@ export interface TraceStep {
 
 export interface Demonstration {
   agent: string
+  /** The agent's folder — `agents/<name>` unless the space filed it elsewhere. */
+  folder: string
   by: string
   heldMs: number
   steps: readonly TraceStep[]
@@ -149,8 +151,8 @@ export function renderSkill(demo: Demonstration, draft: DraftJson, status: Skill
   return {
     slug,
     title: draft.title,
-    indexPath: skillIndexPath(demo.agent, slug),
-    stepsPath: skillStepsPath(demo.agent, slug),
+    indexPath: skillIndexPath(demo.folder, slug),
+    stepsPath: skillStepsPath(demo.folder, slug),
     index,
     steps,
   }

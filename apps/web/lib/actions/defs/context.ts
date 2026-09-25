@@ -102,6 +102,7 @@ import { dispatchWithin, type DispatchResult } from '@/lib/agents/dispatch'
 import { summonAgent } from '@/lib/agents/summon'
 import { intakeSummary } from '@/lib/actions/shared/intake'
 import { agentPreamble, AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
+import { agentFolderOfBrief } from '@/lib/agents/shared/folder'
 import { rehearsalPlan } from '@/lib/agents/shared/rehearsal'
 import { agentNeedsFor } from '@/lib/agents/needs'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
@@ -2018,7 +2019,7 @@ export const CONTEXT_ACTIONS = [
               instruction: plan.instruction,
               rules: plan.rules,
               report: plan.report,
-              preamble: agentPreamble(agent.name),
+              preamble: agentPreamble(agent.name, agentFolderOfBrief(agent.path, agent.name)),
               brief: splitFrontmatter(agent.brief).body,
             },
             next: 'Carry out the round yourself now, following `stand_in`. Add a model under Settings → Models to have it run on its own.',
@@ -2242,7 +2243,7 @@ export const CONTEXT_ACTIONS = [
             rules: plan.rules,
             report: plan.report,
             // Exactly what a run is given, in the order it gets it.
-            preamble: agentPreamble(agent.name),
+            preamble: agentPreamble(agent.name, agentFolderOfBrief(agent.path, agent.name)),
             brief: splitFrontmatter(agent.brief).body,
           },
           then: agent.activation.active

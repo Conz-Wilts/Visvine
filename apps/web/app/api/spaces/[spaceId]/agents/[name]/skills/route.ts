@@ -9,6 +9,8 @@ import { writeGated } from '@/lib/notes/contextService';
 import { principalOf, resolveContext } from '@/lib/notes/resolve';
 import { skillIndexPath, unmetReach } from '@/lib/agents/shared/skills';
 import { agentMachinePolicy } from '@/lib/agents/machineReach';
+import { agentFolderIn } from '@/lib/agents/location';
+import { agentHomeFolder } from '@/lib/agents/shared/folder';
 import { allActions } from '@/lib/actions/registry';
 
 const SHARED = 'shared';
@@ -78,7 +80,7 @@ export async function PATCH(
   if (!parsed.success) return NextResponse.json({ error: 'slug and status are required' }, { status: 400 });
   const { slug, status } = parsed.data;
 
-  const path = skillIndexPath(name, slug);
+  const path = skillIndexPath((await agentFolderIn(spaceId, name)) ?? agentHomeFolder(name), slug);
   const note = await prisma.contextNote.findUnique({
     where: { note_identity: { spaceId, ownerKey: SHARED, path } },
     select: { content: true },

@@ -35,6 +35,7 @@ import type { TreeNode } from '@/lib/notes/shared/types'
 import { rewriteLinks } from '@/lib/notes/shared/linkRewrite'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { connectorHomeDenial, declaredConfigKind } from '@/lib/notes/shared/configKinds'
+import { agentFolderDenial } from '@/lib/agents/shared/folder'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 
 /**
@@ -163,9 +164,10 @@ export function shareTargets(frontmatter: Record<string, unknown> | null | undef
 
 /**
  * Whether a note's frontmatter shares it down into `roomId`. Only what a room
- * borrows from the house can be shared — a note in `agents/` or `tools/`, or
- * a connector, which is the note declaring `type: connector` wherever the
- * house filed it (lib/notes/shared/configKinds.ts) — and only the note
+ * borrows from the house can be shared — a note in `agents/` or `tools/`, an
+ * agent's brief filed in a folder of the house's own, or a connector, which is
+ * the note declaring `type: connector` wherever the house filed it
+ * (lib/notes/shared/configKinds.ts) — and only the note
  * carrying the flag, never a subtree. Without a room id: whether it is
  * shared with anyone at all.
  */
@@ -173,10 +175,17 @@ export function isSharedDown(path: string, frontmatter: Record<string, unknown> 
   const slash = path.indexOf('/')
   const seg = slash === -1 ? path : path.slice(0, slash)
   const connector = declaredConfigKind(frontmatter as NoteFrontmatter | null | undefined) === 'connector' && connectorHomeDenial(path) === null
-  if (seg !== 'connectors' && seg !== 'agents' && seg !== 'tools' && !connector) return false
+  if (seg !== 'connectors' && seg !== 'agents' && seg !== 'tools' && !connector && !isFiledBrief(path, frontmatter)) return false
   const targets = shareTargets(frontmatter)
   if (targets === 'none') return false
   return roomId === undefined ? true : reachesRoom(targets, roomId)
+}
+
+/** An agent's brief outside `agents/`: a folder index declaring `type: agent` (lib/agents/shared/folder.ts). */
+function isFiledBrief(path: string, frontmatter: Record<string, unknown> | null | undefined): boolean {
+  const type = typeof frontmatter?.type === 'string' ? frontmatter.type.trim().toLowerCase() : ''
+  if (type !== 'agent' || !path.endsWith('/index.md')) return false
+  return agentFolderDenial(path.slice(0, -'/index.md'.length)) === null
 }
 
 /** Whether a path is the `parent/` folder or anything under it. */

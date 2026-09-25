@@ -10,6 +10,8 @@ import { isLocalRuntimeId, localAgentPreamble, localModelRef, localRuntimeOf, lo
 import { readVisible } from '@/lib/notes/contextService'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { parseBody } from '@/lib/api/route'
+import { agentFolderOfBrief } from '@/lib/agents/shared/folder'
+import { memoryPath } from '@/lib/agents/shared/memory'
 
 /**
  * A run on a member's own plan, from the desktop app (lib/agents/local.ts).
@@ -46,11 +48,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
   const name = decodeURIComponent(raw)
   const got = await localBrief(spaceId, name, await requireAgentsAccess(spaceId))
   if (got instanceof Response) return got
-  const memory = await readVisible(got.ctx.principal, got.ctx.resolved, `agents/${name}/memory.md`)
+  const folder = agentFolderOfBrief(got.row.path, name)
+  const memory = await readVisible(got.ctx.principal, got.ctx.resolved, memoryPath(folder))
   const prompt = [
-    localAgentPreamble(name, { hasVisvineTool: true }),
+    localAgentPreamble(name, { hasVisvineTool: true, folder }),
     got.body.trim(),
-    ...(memory ? ['', '# Your memory (agents/' + name + '/memory.md)', splitFrontmatter(memory).body.trim()] : []),
+    ...(memory ? ['', `# Your memory (${memoryPath(folder)})`, splitFrontmatter(memory).body.trim()] : []),
   ].join('\n')
   return NextResponse.json({
     runtime: got.runtime,

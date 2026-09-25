@@ -18,7 +18,8 @@ import {
   noteHref,
 } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
-import { connectorHomeDenial, declaredConfigKind } from '@/lib/notes/shared/configKinds'
+import { configHomeDenial, connectorHomeDenial, declaredConfigKind } from '@/lib/notes/shared/configKinds'
+import { agentFolderDenial } from '@/lib/agents/shared/folder'
 import { drawnParentOf, placementDenial } from '@/lib/notes/shared/placedFolders'
 import {
   SUBSPACE_FOLDER,
@@ -64,7 +65,7 @@ export function moveDenial(
   kind: 'note' | 'folder',
   rawDest: string,
   /** What the note declares (`TreeNode.declares`): a connector moves where a connector may. */
-  declares?: 'connector' | 'model' | null,
+  declares?: TreeNode['declares'] | null,
 ): string | null {
   // parent/ is what the parent shares here, read-only: nothing moves in or
   // out. A sub-space's context (subspaces/<id>/…) moves WITHIN that sub-space
@@ -90,6 +91,15 @@ export function moveDenial(
     const home = connectorHomeDenial(`${destFolder ? `${destFolder}/` : ''}${from.split('/').pop()}`)
     if (home) return home
     return null
+  }
+  if (kind === 'note' && (declares === 'model' || entityKindOfPath(from) === 'model')) {
+    return configHomeDenial('model', `${destFolder ? `${destFolder}/` : ''}${from.split('/').pop()}`)
+  }
+  // An agent is its folder, wherever it is filed (lib/agents/shared/folder.ts):
+  // it moves between agents/ and the space's own folders, keeping its name.
+  if (kind === 'folder' && declares === 'agent') {
+    if (destFolder === from || destFolder.startsWith(`${from}/`)) return 'A folder can’t be moved inside itself.'
+    return agentFolderDenial(`${destFolder ? `${destFolder}/` : ''}${from.split('/').pop()}`)
   }
   // Into an entity's OWN folder (people/<slug>) is fine — that files the note
   // under the entity (and converts its note to the folder if needed). Into the
@@ -148,7 +158,7 @@ export function canMoveInto(
   from: string,
   kind: 'note' | 'folder',
   destFolder: string,
-  declares?: 'connector' | 'model' | null,
+  declares?: TreeNode['declares'] | null,
 ): boolean {
   return moveDenial(from, kind, destFolder, declares) === null && destFolder !== parentFolderOf(from)
 }

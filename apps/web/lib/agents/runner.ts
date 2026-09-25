@@ -42,6 +42,7 @@ import { modelFor } from './shared/runsFor'
 import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, meterModelUsage, recordRunInput, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
 import { memoryForPrompt, memoryPath, setLastRun } from './shared/memory'
 import { agentPreamble } from './shared/prompt'
+import { agentFolderOfBrief, agentHomeFolder } from './shared/folder'
 import { skillsForRun, skillsMessage } from './skills'
 import { agentTools } from './tools'
 
@@ -239,6 +240,9 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const parsed = agent.brief
     if (!parsed.ok) return fail('config', `The brief is invalid: ${parsed.error}`, { deactivate: { reason: 'config', detail: parsed.error } })
     const brief: AgentBrief = parsed.brief
+    // Where the agent's own notes go: its folder, wherever the space filed it.
+    // A run-in copy's brief is the house's; its notes are this room's own.
+    const folder = briefRow.spaceId === spaceId ? agentFolderOfBrief(briefRow.path, name) : agentHomeFolder(name)
     dryRun = brief.dryRun
     briefBody = brief.body
 
@@ -315,7 +319,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
 
     // 5. The loop.
     const tz = await effectiveTimezone(spaceId, null)
-    const system = `${agentPreamble(name)}\n\n---\n\n${brief.body}`
+    const system = `${agentPreamble(name, folder)}\n\n---\n\n${brief.body}`
     const user =
       `It is ${nowIso(now, tz)}. This is a ${run.trigger} run of the agent "${brief.title || name}".` +
       (run.trigger === 'manual'
@@ -324,9 +328,9 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       (dryRun ? ' This is a DRY RUN: writes are recorded in the transcript instead of applied — act exactly as you normally would.' : '')
     // What it carried from its last run — handed over rather than spending a
     // turn on read_context, and `remember` (lib/agents/tools.ts) is how it adds.
-    const memoryNote = await readVisible(principal, context, memoryPath(name)).catch(() => null)
+    const memoryNote = await readVisible(principal, context, memoryPath(folder)).catch(() => null)
     const memoryText = memoryForPrompt(memoryNote)
-    const memoryMessage = memoryText ? `Your memory (${memoryPath(name)}):\n\n${memoryText}` : null
+    const memoryMessage = memoryText ? `Your memory (${memoryPath(folder)}):\n\n${memoryText}` : null
     if (dryRun) events.push({ at: Date.now(), type: 'system', text: 'Dry run: writes are captured, not applied.' })
     if (chainDepth > 0) events.push({ at: Date.now(), type: 'system', text: `Started by run_agent from run ${runInput?.chain?.parent ?? '?'} (chain depth ${chainDepth}).` })
     // The mail this run was claimed with (schedule.ts stamped consumed_by).
@@ -380,6 +384,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       context,
       spaceId,
       agentName: name,
+      agentFolder: folder,
       brief,
       connectorActions: reach.actions,
       machineAllow: reach.hosts,
@@ -521,12 +526,12 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         if (!dryRun) {
           const forName = run.runAsUserId && run.runAsUserId !== state.runAsUserId ? principal.name : null
           // Read again: `remember` may have added lines since the run began.
-          const current = await readVisible(principal, context, memoryPath(name)).catch(() => null)
+          const current = await readVisible(principal, context, memoryPath(folder)).catch(() => null)
           // A summary the trace did not back never gets here: that run failed
           // `incomplete` above, and tomorrow's run reads this line as fact.
           const summary = result.finalText
           const next = setLastRun(current, name, { date: now.toISOString().slice(0, 10), trigger: run.trigger, summary, forName })
-          await writeGated(principal, context, memoryPath(name), next, 'agent', `agent:${name}`).catch(() => undefined)
+          await writeGated(principal, context, memoryPath(folder), next, 'agent', `agent:${name}`).catch(() => undefined)
         }
         const deactivated = await release(state.id, runId, spaceId, name, { failed: false, countsAsFailure: false, deactivate: null })
         return { status: 'succeeded', reason: result.reason, deactivated }

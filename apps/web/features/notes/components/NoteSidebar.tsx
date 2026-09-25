@@ -176,7 +176,7 @@ function readOnlyHere(path: string, writable: ReadonlySet<string>): boolean {
 /** Whether a row can be dragged at all: moving it to the folder it already sits
  *  in is a no-op, so a denial there is purely about the item itself (entity
  *  note, folder index, managed namespace). */
-function isMovable(path: string, kind: 'note' | 'folder', declares?: 'connector' | 'model'): boolean {
+function isMovable(path: string, kind: 'note' | 'folder', declares?: TreeNode['declares']): boolean {
   return moveDenial(path, kind, parentFolderOf(path), declares) === null
 }
 
@@ -995,14 +995,14 @@ function FolderRow(props: {
   // are read here; a built-in folder inside a room is placed in the room, so
   // only someone who stands in it drags that one.
   const placeable = placeableOf(props.node.path)
-  const item: MovableItem = { path: props.node.path, kind: placeable ? 'placed' : 'folder', label: folderLabel }
+  const item: MovableItem = { path: props.node.path, kind: placeable ? 'placed' : 'folder', label: folderLabel, ...(props.node.declares ? { declares: props.node.declares } : {}) }
   const draggable =
     !!drag &&
     !!props.node.path &&
     !drawnOnly &&
     (placeable
       ? drag.canPlace && (placeable.space === null || !readOnly)
-      : !readOnly && isMovable(props.node.path, 'folder'))
+      : !readOnly && isMovable(props.node.path, 'folder', props.node.declares))
   const isDragged = drag?.dragging?.path === props.node.path
   // `Main` stands for the context root, so a drop on it files to the top.
   const dropPath = drawnOnly ? '' : props.node.path
@@ -1294,7 +1294,7 @@ function NoteRow({
 }: {
   title: string
   path: string
-  declares?: 'connector' | 'model'
+  declares?: TreeNode['declares']
   /** Which place among its folder's rows this is (Tree). */
   place?: TreeSlot
   /** Tree guide for a nested row. */

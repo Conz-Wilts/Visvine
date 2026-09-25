@@ -13,7 +13,7 @@ import { fetchJson } from '@/lib/fetchJson';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { SharePanel } from '@/features/notes/components/SharePanel';
 import { cachedFetch } from '@/features/shared/lib/requestCache';
-import { agentBriefPath } from '@/lib/agents/config';
+import { agentFolderOfBrief } from '@/lib/agents/shared/folder';
 import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
 import AgentConfig from '@/features/agents/components/AgentConfig';
@@ -322,7 +322,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
       {view === 'history' && (
         <main className="min-w-0 border-t border-line-subtle pt-5">
           <AgentHistory
-            agentName={name}
+            folder={agentFolderOfBrief(agent.path, name)}
             runs={runs}
             memory={agent.memory}
             shownRunId={shownRun?.id ?? null}
@@ -371,7 +371,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
       {sharing && spaceId && (
         <SharePanel
           spaceId={spaceId}
-          path={agentBriefPath(name)}
+          path={agent.path}
           kind="note"
           title={agent.title || agent.name}
           onClose={() => setSharing(false)}

@@ -11,18 +11,21 @@
 import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { pickByMeaning, ROUTE_CONFIDENCE } from '@/lib/judge/route'
-import { parseSkill, selectSkills, skillStepsPath, type SkillDoc } from '@/lib/agents/shared/skills'
+import { parseSkill, selectSkills, type SkillDoc } from '@/lib/agents/shared/skills'
+import { agentFolderIn } from './location'
+import { agentHomeFolder } from './shared/folder'
 
 const SHARED = 'shared'
 
 /** Every skill note this agent has, in any status. */
 export async function loadSkills(spaceId: string, agent: string): Promise<SkillDoc[]> {
+  const folder = (await agentFolderIn(spaceId, agent)) ?? agentHomeFolder(agent)
   const rows = await prisma.contextNote.findMany({
     where: {
       spaceId,
       ownerKey: SHARED,
       deletedAt: null,
-      path: { startsWith: `agents/${agent}/skills/`, endsWith: '/index.md' },
+      path: { startsWith: `${folder}/skills/`, endsWith: '/index.md' },
     },
     select: { path: true, content: true },
     orderBy: { path: 'asc' },
@@ -31,6 +34,9 @@ export async function loadSkills(spaceId: string, agent: string): Promise<SkillD
     .map((row) => parseSkill(row.path, parseFrontmatter(row.content)))
     .filter((skill): skill is SkillDoc => Boolean(skill))
 }
+
+/** A skill's steps note sits beside its index. */
+const stepsOf = (skill: SkillDoc) => skill.path.replace(/index\.md$/, 'steps.md')
 
 export interface ChosenSkill {
   slug: string
@@ -70,7 +76,7 @@ export async function skillsForRun(
       spaceId,
       ownerKey: SHARED,
       deletedAt: null,
-      path: { in: chosen.map((skill) => skillStepsPath(agent, skill.slug)) },
+      path: { in: chosen.map(stepsOf) },
     },
     select: { path: true, content: true },
   })
@@ -78,7 +84,7 @@ export async function skillsForRun(
   return chosen.map((skill) => ({
     slug: skill.slug,
     title: skill.title,
-    steps: byPath.get(skillStepsPath(agent, skill.slug))?.trim() ?? '',
+    steps: byPath.get(stepsOf(skill))?.trim() ?? '',
   }))
 }
 

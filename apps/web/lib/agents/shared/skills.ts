@@ -51,22 +51,22 @@ export interface SkillDoc {
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
-/** `agents/<agent>/skills/<slug>/` — the folder a skill IS. */
-function skillFolder(agent: string, slug: string): string {
-  return `agents/${agent}/${SKILLS_FOLDER}/${slug}`
+/** `<agent folder>/skills/<slug>/` — the folder a skill IS. The agent's folder is `agents/<name>` unless the space filed it elsewhere. */
+function skillFolder(agentFolder: string, slug: string): string {
+  return `${agentFolder}/${SKILLS_FOLDER}/${slug}`
 }
 
-export function skillIndexPath(agent: string, slug: string): string {
-  return `${skillFolder(agent, slug)}/index.md`
+export function skillIndexPath(agentFolder: string, slug: string): string {
+  return `${skillFolder(agentFolder, slug)}/index.md`
 }
 
-export function skillStepsPath(agent: string, slug: string): string {
-  return `${skillFolder(agent, slug)}/steps.md`
+export function skillStepsPath(agentFolder: string, slug: string): string {
+  return `${skillFolder(agentFolder, slug)}/steps.md`
 }
 
 /** The (agent, slug) a skill path names, or null when the path is not one. */
 export function parseSkillPath(path: string): { agent: string; slug: string } | null {
-  const match = /^agents\/([^/]+)\/skills\/([^/]+)\/index\.md$/.exec(path)
+  const match = /^(?:.+\/)?([^/]+)\/skills\/([^/]+)\/index\.md$/.exec(path)
   if (!match) return null
   const [, agent, slug] = match
   return SLUG.test(slug) ? { agent, slug } : null

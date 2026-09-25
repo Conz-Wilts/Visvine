@@ -22,7 +22,8 @@ export type MemorySection = (typeof MEMORY_SECTIONS)[number]
 /** The sections a `remember` call may write; "Last run" is the runner's. */
 export const REMEMBER_SECTIONS: readonly MemorySection[] = ['What I know', 'Decisions', 'Open threads']
 
-export const memoryPath = (name: string) => `agents/${name}/memory.md`
+/** `<folder>/memory.md` — the agent's folder is `agents/<name>` unless the space filed it elsewhere. */
+export const memoryPath = (folder: string) => `${folder}/memory.md`
 
 /** How much of the note a run is handed. */
 const MEMORY_PROMPT_CAP_CHARS = 12_000

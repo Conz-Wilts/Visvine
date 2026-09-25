@@ -1,8 +1,7 @@
 /**
- * Where an agent's brief lives: `agents/<name>/index.md`, the index of the
- * agent's own folder (lib/agents/config.ts). The name is the folder segment,
- * so it is unique in the space by construction and every read-by-name is one
- * path lookup. The flat form `agents/<name>.md` is an alias a note written
+ * Where an agent's brief lives: the index of the agent's own folder —
+ * `agents/<name>/index.md`, or a folder of the space's own named `<name>`
+ * (lib/agents/location.ts). The name is the folder's last segment. The flat form `agents/<name>.md` is an alias a note written
  * before the folder era may still sit at until `db:agents:folders` moves it;
  * it is read here so such an agent keeps running, never written.
  */
@@ -12,13 +11,14 @@ import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import {
   agentActivationPath,
   agentBriefAliasPath,
-  agentBriefPath,
   hasActivationFrontmatter,
   parseAgentActivation,
   parseAgentBrief,
   type ParseActivationResult,
   type ParseBriefResult,
 } from './config'
+import { agentFolderIn } from './location'
+import { ACTIVATION_BASENAME, agentHomeFolder, agentNameOfFolder, briefFolderOf } from './shared/folder'
 import { configFromColumns, effectiveFrontmatter, type AgentConfig } from './shared/agentConfig'
 
 const SHARED_OWNER_KEY = 'shared'
@@ -34,9 +34,14 @@ export interface AgentBriefRow {
   createdBy: string | null
 }
 
-/** The brief note at `name` in `spaceId` itself, or null. */
+/**
+ * The brief note at `name` in `spaceId` itself, or null: the index of the
+ * agent's folder wherever the space filed it (lib/agents/location.ts), or the
+ * flat alias `agents/<name>.md`.
+ */
 export async function findOwnAgentBrief(spaceId: string, name: string): Promise<AgentBriefRow | null> {
-  const index = agentBriefPath(name)
+  const folder = (await agentFolderIn(spaceId, name)) ?? agentHomeFolder(name)
+  const index = `${folder}/index.md`
   const rows = await prisma.contextNote.findMany({
     where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { in: [index, agentBriefAliasPath(name)] } },
     select: { id: true, path: true, content: true, createdBy: true },
@@ -141,12 +146,13 @@ export async function findAgentActivation(spaceId: string, name: string): Promis
       return { parsed: parseAgentActivation(fm), path: brief.path, content: brief.content, legacy: false }
     }
   }
+  const activationPath = brief?.path.endsWith('/index.md') ? `${brief.path.slice(0, -'index.md'.length)}${ACTIVATION_BASENAME}` : agentActivationPath(name)
   const legacy = await prisma.contextNote.findFirst({
-    where: { spaceId, ownerKey: SHARED_OWNER_KEY, path: agentActivationPath(name), deletedAt: null },
+    where: { spaceId, ownerKey: SHARED_OWNER_KEY, path: activationPath, deletedAt: null },
     select: { content: true },
   })
   if (legacy) {
-    return { parsed: parseAgentActivation(parseFrontmatter(legacy.content)), path: agentActivationPath(name), content: legacy.content, legacy: true }
+    return { parsed: parseAgentActivation(parseFrontmatter(legacy.content)), path: activationPath, content: legacy.content, legacy: true }
   }
   return { parsed: brief ? parseAgentActivation({}) : null, path: brief?.path ?? null, content: brief?.content ?? null, legacy: false }
 }
@@ -165,7 +171,9 @@ export async function withAgentShares(spaceId: string): Promise<(path: string, f
   const byName = new Map(rows.map((r) => [r.name, r]))
   return (path, fm) => {
     const m = /^agents\/([^/]+)(?:\/index)?\.md$/.exec(path)
-    const row = m ? byName.get(m[1]) : undefined
+    // A brief filed in a folder of the space's own is named by its folder.
+    const filed = !m && typeof fm.type === 'string' && fm.type.trim().toLowerCase() === 'agent' ? briefFolderOf(path, 'type: agent') : null
+    const row = m ? byName.get(m[1]) : filed ? byName.get(agentNameOfFolder(filed)) : undefined
     if (!row) return fm
     const out: NoteFrontmatter = { ...fm }
     delete out.share

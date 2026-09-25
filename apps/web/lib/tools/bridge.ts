@@ -62,6 +62,7 @@ import { targetKey, type ResolvedTarget } from './target'
 import { logger } from '@/lib/logger'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
 import { configKindOfContent } from '@/lib/notes/shared/configKinds'
+import { briefFolderOf } from '@/lib/agents/shared/folder'
 
 /**
  * Everything the handlers touch that isn't pure. Injectable as one object so a
@@ -477,16 +478,16 @@ async function checkWrite(
       }
     }
   } else {
-    // A connector or a model is what a note DECLARES, wherever it is filed
-    // (lib/notes/shared/configKinds.ts), so the seal follows the declaration
-    // too: a Tool neither mints one in a folder of the space's own nor edits
-    // one already there.
+    // A connector, a model or an agent is what a note DECLARES, wherever it is
+    // filed (lib/notes/shared/configKinds.ts, lib/agents/shared/folder.ts), so
+    // the seal follows the declaration too: a Tool neither mints one in a
+    // folder of the space's own nor edits one already there.
     const current = await deps.readVisible(t.principal, t.context, path)
-    const kind = configKindOfContent(body) ?? configKindOfContent(current)
+    const kind = configKindOfContent(body) ?? configKindOfContent(current) ?? (briefFolderOf(path, body) || briefFolderOf(path, current) ? 'agent brief' : null)
     if (kind) {
       return {
         ok: false,
-        response: err('forbidden', `a ${kind} is configuration that runs — no tool may write one, whatever its perimeter declares.`),
+        response: err('forbidden', `${kind === 'agent brief' ? 'an' : 'a'} ${kind} is configuration that runs — no tool may write one, whatever its perimeter declares.`),
       }
     }
   }

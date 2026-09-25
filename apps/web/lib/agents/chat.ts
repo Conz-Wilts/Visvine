@@ -62,6 +62,7 @@ import {
 } from './shared/chat'
 import { memoryForPrompt, memoryPath } from './shared/memory'
 import { agentChatPreamble } from './shared/prompt'
+import { agentFolderOfBrief, agentHomeFolder } from './shared/folder'
 import { agentTools } from './tools'
 
 /** A person sends a message every few seconds at most; a loop does not. */
@@ -221,6 +222,7 @@ export async function sendChatMessage(
   const parsed = composeAgent(content, await agentConfigOf(spaceId, agentName)).brief
   if (!parsed.ok) return { ok: false, status: 422, reason: 'invalid_brief', message: `This agent's brief is not valid: ${parsed.error}` }
   const brief: AgentBrief = parsed.brief
+  const folder = row.spaceId === spaceId ? agentFolderOfBrief(row.path, agentName) : agentHomeFolder(agentName)
 
   const resolved = await resolveAgentChatConfig(spaceId, brief.model)
   if (!resolved.ok) return { ok: false, status: 409, reason: 'no_model', message: resolved.message }
@@ -291,7 +293,7 @@ export async function sendChatMessage(
   // The prompt: preamble + brief, the memory read-only, the history, the words.
   const [tz, memoryNote, history, reach, actionCatalogue] = await Promise.all([
     effectiveTimezone(spaceId, null),
-    readVisible(p, context, memoryPath(agentName)).catch(() => null),
+    readVisible(p, context, memoryPath(folder)).catch(() => null),
     prisma.agentChatMessage.findMany({
       where: { threadId: claimed.threadId, id: { notIn: [claimed.pendingId, claimed.user.id] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -310,6 +312,7 @@ export async function sendChatMessage(
   const tools = chatToolFilter(
     agentTools({
       principal: p,
+      agentFolder: folder,
       context,
       spaceId,
       agentName,
@@ -332,8 +335,8 @@ export async function sendChatMessage(
   let turns = 0
   try {
     const result = await runChatTurn({
-      system: `${agentChatPreamble(agentName)}\n\n---\n\n${brief.body}`,
-      memoryMessage: memoryText ? `Your memory (${memoryPath(agentName)}), to read:\n\n${memoryText}` : null,
+      system: `${agentChatPreamble(agentName, folder)}\n\n---\n\n${brief.body}`,
+      memoryMessage: memoryText ? `Your memory (${memoryPath(folder)}), to read:\n\n${memoryText}` : null,
       history: historyMessages(history.reverse().map((r) => ({ role: r.role as ChatRole, text: r.text, status: r.status as ChatStatus }))),
       userTurn: chatUserTurn({ now: nowIso(startedAt, tz), personName: p.name, text }),
       tools,

@@ -40,6 +40,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from '@visvine/tokens'
+import type { TreeNode } from '@/lib/notes/shared/types'
 
 /** A row the tree can move: a note, a folder (with everything under it), or a
  *  structural folder that is PLACED rather than moved — a built-in folder or
@@ -47,7 +48,7 @@ import { motion } from '@visvine/tokens'
  *  (lib/notes/shared/placedFolders.ts). */
 export interface TreeDragItem {
   /** What a note declares (`TreeNode.declares`) — a connector moves where a connector may. */
-  declares?: 'connector' | 'model'
+  declares?: TreeNode['declares']
   path: string
   kind: 'note' | 'folder' | 'placed'
   label: string

@@ -39,12 +39,12 @@ import {
   entityNotePaths,
   entityOwnerPathOf,
   isAdoptableEntityType,
-  isAgentBriefPath,
   linkedNotePaths,
 } from './entities'
 import { slugify } from '@/lib/eventUtils'
 import { Prisma } from '@prisma/client'
 import { toolFileKindOfPath, toolNameOfPath } from '@/lib/tools/config'
+import { agentNameOfFolder, briefFolderOf } from '@/lib/agents/shared/folder'
 
 // Matches store.ts's SHARED_OWNER_KEY — redeclared here (not imported) so the
 // store can call into this module without a circular import.
@@ -460,11 +460,15 @@ async function syncNoteNode(
   // A connector is such a declaration as well (lib/notes/shared/configKinds.ts):
   // `teams/growth/hubspot.md` with `type: connector` is the connector, and
   // its node points at that path. Gone, the node bound to the path goes too.
+  // An agent filed in a folder of the space's own is the same: its brief is
+  // the folder's index declaring `type: agent` (lib/agents/shared/folder.ts).
   if (!kind) {
     if (content === null) {
       const connectorGone = await removeEntityNode(spaceId, 'connector', path)
-      return (await syncAdoptedNode(spaceId, path, null)) || connectorGone
+      const agentGone = isIndexPath(path) ? await removeEntityNode(spaceId, 'agent', path) : false
+      return (await syncAdoptedNode(spaceId, path, null)) || connectorGone || agentGone
     }
+    if (briefFolderOf(path, content)) return syncAgentNode(spaceId, path, content)
     if (isConnectorNoteAt(path, content)) return syncConnectorNode(spaceId, path, content)
     return syncAdoptedNode(spaceId, path, content)
   }
@@ -486,8 +490,9 @@ async function syncNoteNode(
  * already exists. Throws when the id is claimed by another space.
  */
 export async function ensureAgentNode(spaceId: string, path: string, content: string): Promise<boolean> {
-  if (!isAgentBriefPath(path)) return false
-  const name = agentNameOfPath(path)
+  const folder = briefFolderOf(path, content)
+  if (!folder) return false
+  const name = agentNameOfFolder(folder)
   if (!name || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(name)) return false
   const declared = declaredFolderOnlyEntity(parseFrontmatter(content), 'agent', name)
   if (!declared) return false
@@ -574,7 +579,8 @@ export async function ensureToolNode(spaceId: string, path: string, content: str
 async function syncAgentNode(spaceId: string, path: string, content: string | null): Promise<boolean> {
   if (content === null) return removeEntityNode(spaceId, 'agent', path)
 
-  const name = agentNameOfPath(path) ?? path.replace(/\.md$/i, '').split('/').pop() ?? path
+  const folder = briefFolderOf(path, content)
+  const name = folder ? agentNameOfFolder(folder) : (agentNameOfPath(path) ?? path.replace(/\.md$/i, '').split('/').pop() ?? path)
   const fm = parseFrontmatter(content)
   const description = typeof fm.description === 'string' ? fm.description.trim() : ''
   // The brief's tags are the node's: that is how the roster groups agents and

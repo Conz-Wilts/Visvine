@@ -219,11 +219,11 @@ test('how it runs is the record: whoever can edit the brief turns it on, runs_as
     assert.equal(row.runAsUserId, ADMIN)
     assert.ok((await prisma!.agentConfigChange.count({ where: { spaceId: SPACE, name: 'digest' } })) >= 3, 'each change is kept')
 
-    // The folder IS the agent, and like every entity folder its path is the
-    // entity's identity: it cannot be renamed, only deleted — and deleting it
+    // The folder IS the agent, and its name is the agent's identity: it moves
+    // between folders but is never renamed, and deleting it
     // takes the brief and the node, and retires the row (the run history
     // hangs off it, so it stays).
-    await assert.rejects(store.renameFolder(CONTEXT, 'agents/digest', 'agents/summary', ACTOR), /entity's identity/)
+    await assert.rejects(store.renameFolder(CONTEXT, 'agents/digest', 'agents/summary', ACTOR), /keep the name/)
     await store.deleteFolder(CONTEXT, 'agents/digest')
     assert.equal(await store.readNoteOrNull(CONTEXT, 'agents/digest/index.md'), null)
     assert.equal(await prisma!.node.findUnique({ where: { id: 'agent:digest' } }), null, 'the node went with the brief')
@@ -266,6 +266,58 @@ test('a brief in the older shape is adopted: its keys and a pre-merge activation
     const row = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
     assert.equal(row.active, true)
     assert.ok(row.configuredAt)
+  } finally {
+    await teardown()
+  }
+})
+
+test('an agent filed in a folder of the space’s own is the same agent, found where it is', async (t) => {
+  const reason = await probe()
+  if (reason) return t.skip(reason)
+  const store = await import('@/lib/notes/store')
+  const { findAgentBrief } = await import('@/lib/agents/briefs')
+  const { agentFolderIn, agentContaining } = await import('@/lib/agents/location')
+  const { writeGated } = await import('@/lib/notes/contextService')
+  const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
+  await setup()
+  try {
+    await store.createNote(CONTEXT, 'agents/digest/index.md', BRIEF, ACTOR)
+    await store.createNote(CONTEXT, 'agents/digest/memory.md', '# Memory\n', ACTOR)
+    const before = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
+
+    // Out of agents/ into a team's folder: same note, same row, same node.
+    await store.renameFolder(CONTEXT, 'agents/digest', 'teams/growth/digest', ACTOR)
+    assert.equal(await agentFolderIn(SPACE, 'digest'), 'teams/growth/digest')
+    assert.equal((await findAgentBrief(SPACE, 'digest'))?.path, 'teams/growth/digest/index.md')
+    const after = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
+    assert.equal(after.id, before.id, 'the state row carried over')
+    assert.equal(after.briefNoteId, before.briefNoteId)
+    const node = await prisma!.node.findUnique({ where: { id: 'agent:digest' } })
+    assert.equal((node?.metadata as { notePath?: string }).notePath, 'teams/growth/digest/index.md')
+    assert.equal(parseFrontmatter((await store.readNoteOrNull(CONTEXT, 'teams/growth/digest/index.md')) ?? '').type, 'agent')
+    assert.deepEqual(await agentContaining(SPACE, 'teams/growth/digest/memory.md'), { name: 'digest', folder: 'teams/growth/digest', file: 'own' })
+    assert.equal(await agentContaining(SPACE, 'teams/growth/plan.md'), null)
+
+    // Renamed, it would be another agent — refused; into a built-in folder, refused.
+    await assert.rejects(store.renameFolder(CONTEXT, 'teams/growth/digest', 'teams/growth/summary', ACTOR), /keep the name/)
+    await assert.rejects(store.renameFolder(CONTEXT, 'teams/growth/digest', 'people/digest', ACTOR), /built-in folders/)
+
+    // The gate keeps agents/'s rules there: AI writes only its own notes, and a
+    // second agent may not take the name.
+    const author = principal(AUTHOR, false)
+    const own = await writeGated(author, CONTEXT, 'teams/growth/digest/report.md', '# Report\n', 'agent', 'agent:digest')
+    assert.equal(own.status, 'applied')
+    const other = await writeGated(author, CONTEXT, 'teams/growth/digest/report.md', '# Report\n', 'agent', 'agent:someone-else')
+    assert.equal(other.status, 'denied')
+    const brief = await writeGated(author, CONTEXT, 'teams/growth/digest/index.md', BRIEF.replace('Digest', 'Changed'), 'agent', 'agent:digest')
+    assert.equal(brief.status, 'denied')
+    const clash = await writeGated(author, CONTEXT, 'teams/sales/digest/index.md', '---\ntype: agent\ntitle: Twin\n---\nAnother.\n')
+    assert.equal(clash.status, 'denied')
+    assert.match(clash.status === 'denied' ? clash.reason : '', /already exists/)
+
+    // And back home.
+    await store.renameFolder(CONTEXT, 'teams/growth/digest', 'agents/digest', ACTOR)
+    assert.equal(await agentFolderIn(SPACE, 'digest'), 'agents/digest')
   } finally {
     await teardown()
   }

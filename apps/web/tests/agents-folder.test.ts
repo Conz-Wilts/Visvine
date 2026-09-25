@@ -101,3 +101,23 @@ test('a new brief names its own folder as the default place to write', () => {
   assert.match(note, /agents\/digest\//)
   assert.match(note, /## Write to/)
 })
+
+test('an agent sits in agents/<name> or a folder of the space’s own, named by its folder', async () => {
+  const { agentFolderDenial, briefFolderOf, agentFileIn, agentFolderOfBrief, ancestorFolders } = await import('../lib/agents/shared/folder')
+  assert.equal(agentFolderDenial('agents/digest'), null)
+  assert.equal(agentFolderDenial('teams/growth/digest'), null)
+  assert.match(agentFolderDenial('agents/team/digest') ?? '', /agents\/<name>/)
+  assert.match(agentFolderDenial('people/ana/digest') ?? '', /built-in folders/)
+  assert.match(agentFolderDenial('subspaces/x/digest') ?? '', /space that owns it/)
+  assert.match(agentFolderDenial('teams/Digest Bot') ?? '', /folder name is its name/)
+  const brief = '---\ntype: agent\ntitle: Digest\n---\nBody.\n'
+  assert.equal(briefFolderOf('teams/growth/digest/index.md', brief), 'teams/growth/digest')
+  assert.equal(briefFolderOf('teams/growth/digest/index.md', '---\ntitle: Digest\n---\n'), null, 'a folder of the space’s own is an agent only by declaring it')
+  assert.equal(briefFolderOf('agents/digest/index.md', '---\ntitle: Digest\n---\n'), 'agents/digest', 'under agents/ the path is enough')
+  assert.equal(briefFolderOf('teams/growth/digest/notes.md', brief), null)
+  assert.equal(agentFileIn('teams/growth/digest', 'teams/growth/digest/index.md'), 'brief')
+  assert.equal(agentFileIn('teams/growth/digest', 'teams/growth/digest/memory.md'), 'own')
+  assert.equal(agentFileIn('teams/growth/digest', 'teams/growth/digest/skills/a/index.md'), null)
+  assert.equal(agentFolderOfBrief('agents/digest.md', 'digest'), 'agents/digest')
+  assert.deepEqual(ancestorFolders('a/b/c.md'), ['a/b', 'a'])
+})

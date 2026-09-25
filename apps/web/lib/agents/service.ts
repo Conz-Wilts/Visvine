@@ -10,7 +10,6 @@ import { agentNeeds, hardNeeds, type AgentNeeds } from './shared/needs'
 import { needsCatalog } from './needs'
 import { logAudit } from '@/lib/notes/audit'
 import { readVisible, visibleVault, writeDenial, writeDenialFull, writeGated } from '@/lib/notes/contextService'
-import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
 
 /** The name an unmigrated flat brief (`agents/<name>.md`) carries, or null. */
 function agentNameOfAliasPath(path: string): string | null {
@@ -46,6 +45,8 @@ import { isLightModel, recommendModel, type ModelAdvice } from './shared/advice'
 import { jobShapeOf } from './diagnose'
 import { currentStepOf, latestRun, type RunListItem } from './runs'
 import { memoryPath } from './shared/memory'
+import { agentFolderIn } from './location'
+import { agentFolderOfBrief, agentHomeFolder, agentNameOfFolder, briefFolderOf } from './shared/folder'
 import { lastHeartbeat } from './schedule'
 
 export type AgentRowState =
@@ -317,8 +318,8 @@ export interface AgentRoster {
 }
 
 /**
- * Every agent brief the principal can see — valid or broken. One folder is
- * one agent, so there is nothing to dedupe; a flat `agents/<name>.md` left
+ * Every agent brief the principal can see — valid or broken, in `agents/`
+ * or a folder of the space's own. One folder is one agent, so there is nothing to dedupe; a flat `agents/<name>.md` left
  * from before the folder era lists too, under its name, until it is moved.
  */
 export async function listAgents(
@@ -337,8 +338,12 @@ export async function listAgents(
   const briefs: { name: string; path: string; content: string }[] = []
   const seen = new Set<string>()
   // Folder briefs first, so a leftover alias never shadows the real one.
-  for (const raw of raws) {
-    const name = isAgentBriefPath(raw.path) ? agentNameOfPath(raw.path) : null
+  // An agent under agents/ wins its name over one filed elsewhere — two such
+  // briefs is a state the write gate refuses, so this is only the tie rule.
+  const ordered = [...raws].sort((a, b) => Number(!a.path.startsWith('agents/')) - Number(!b.path.startsWith('agents/')))
+  for (const raw of ordered) {
+    const folder = briefFolderOf(raw.path, raw.content)
+    const name = folder ? agentNameOfFolder(folder) : null
     if (!name || seen.has(name)) continue
     seen.add(name)
     briefs.push({ name, path: raw.path, content: raw.content })
@@ -439,7 +444,7 @@ export async function describeAgent(
   const runAs =
     runAsUserId && runAsUserId !== p.userId ? await connectorReadiness(p, context, summary.connectors, runAsUserId) : null
 
-  const memory = await readVisible(p, context, memoryPath(name))
+  const memory = await readVisible(p, context, memoryPath(agentFolderOfBrief(summary.path, name)))
   const held = await listConnectors(p, context)
   const needs = agentNeeds({
     declared: viewer,
@@ -528,7 +533,7 @@ export async function unsubscribeFromAgent(
   userId: string,
 ): Promise<ActivateResult> {
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
-  if (userId !== p.userId && agentManageDenial(p, context, name)) {
+  if (userId !== p.userId && (await agentManageDenial(p, context, name))) {
     return { ok: false, status: 403, error: 'Only someone who can edit the agent can remove someone else.' }
   }
   await dropRunsFor(context.spaceId, name, userId, p.userId)
@@ -566,12 +571,13 @@ export type ActivateResult =
 /**
  * May this principal turn the agent on or off, change its schedule or run it
  * now? Anyone who can EDIT its brief — a space admin, or a member whose grant
- * reaches agents/<name>/ — so the people who can write what an agent does are
+ * reaches the agent's folder — so the people who can write what an agent does are
  * the people who decide whether it runs. Money (setBudget) stays admin-only.
  */
-function agentManageDenial(p: ContextPrincipal, context: Context, name: string): string | null {
+async function agentManageDenial(p: ContextPrincipal, context: Context, name: string): Promise<string | null> {
   if (principalIsSuperAdmin(p)) return null
-  return writeDenial(p, context, agentBriefPath(name))
+  const folder = (await agentFolderIn(context.spaceId, name)) ?? agentHomeFolder(name)
+  return writeDenial(p, context, `${folder}/index.md`)
 }
 
 /**
@@ -592,7 +598,7 @@ export async function configureAgent(
 ): Promise<ActivateResult & { config?: AgentConfig }> {
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
   if (context.ownerKey !== SHARED_OWNER_KEY) return { ok: false, status: 400, error: 'Agents live in a space.' }
-  const manage = agentManageDenial(p, context, name)
+  const manage = await agentManageDenial(p, context, name)
   if (manage) return { ok: false, status: 403, error: manage }
   return withAgentRecord(context.spaceId, name, () => configureLocked(p, context, name, patch))
 }
@@ -648,7 +654,7 @@ export async function activateAgent(
     return { ok: false, status: 400, error: 'A scheduled agent must name the timezone it runs in.' }
   }
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
-  const manage = agentManageDenial(p, context, name)
+  const manage = await agentManageDenial(p, context, name)
   if (manage) return { ok: false, status: 403, error: manage }
   const row = await findAgentBrief(context.spaceId, name)
   const content = row ? await readVisible(p, context, row.path) : null
@@ -716,7 +722,7 @@ export async function activateAgent(
 /** Turn an agent off — the same people who may turn it on. */
 export async function switchOffAgent(p: ContextPrincipal, context: Context, name: string): Promise<ActivateResult> {
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
-  const manage = agentManageDenial(p, context, name)
+  const manage = await agentManageDenial(p, context, name)
   if (manage) return { ok: false, status: 403, error: manage }
   await deactivateAgent(context.spaceId, name, 'admin', null, { userId: p.userId, name: p.name })
   return { ok: true, warning: null }

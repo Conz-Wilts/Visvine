@@ -456,7 +456,16 @@ has.
 
 `docs/agents.md` is the full reference. The invariants:
 
-- **The note is what an agent IS; the row is how it RUNS.** `agents/<name>/index.md`
+- **An agent is a folder, and it may be filed anywhere.** `agents/<name>/`
+  is where a new one lands; a folder of the space's own whose index declares
+  `type: agent` (`teams/growth/digest/`) is the same agent. The folder's name
+  is the agent's name and its identity, so it moves between folders and is
+  never renamed; one name per space. Nothing builds an agent's path:
+  `lib/agents/location.ts` finds it (home, then the state row's
+  `brief_note_id`, then the declaration), `lib/agents/shared/folder.ts` holds
+  the pure rules, and the gate keeps `agents/`'s AI freeze and own-folder
+  opening for a filed agent (`contextService#agentPlaceDenial`).
+- **The note is what an agent IS; the row is how it RUNS.** The folder's `index.md`
   holds `type`, `title`, `description`, `tags` and the brief. Model, connectors,
   tools, `agents`, share, dry run, turn cap, `runs_as`, who it runs for and the
   activation (`active`, the clock, `on` triggers, `debounce`, `timezone`) are

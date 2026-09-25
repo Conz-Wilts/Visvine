@@ -44,6 +44,8 @@ import { globalSelfRecordDenial } from '@/lib/global/gate'
 import { configHomeDenial, configKindOfContent, configKindWriteDenial, configNameOfPath, type ConfigKind } from './shared/configKinds'
 import { connectorNotePathIn } from '@/lib/connectors/locate'
 import { modelNotePathIn } from '@/lib/models/locate'
+import { agentContaining, agentFolderIn } from '@/lib/agents/location'
+import { agentNameOfFolder, briefFolderOf } from '@/lib/agents/shared/folder'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { ContextPrincipal, WriteResult } from './shared/contextTypes'
 import type { NoteMeta, NoteRevisionOrigin, RawNote, References } from './shared/types'
@@ -397,6 +399,50 @@ export function lockedDenial(
 }
 
 /**
+ * The agent rules `lockedDenial` keeps for `agents/`, kept for an agent filed
+ * in a folder of the space's own (lib/agents/location.ts): an AI origin may
+ * write only its OWN notes there, never a brief, never another agent's
+ * folder, and never mint a brief by writing one. And an agent's name is its
+ * identity, so a brief may not take a name another agent holds. `next` is the
+ * content being written (null for a delete or a move's source).
+ */
+async function agentPlaceDenial(
+  p: ContextPrincipal,
+  context: Context,
+  path: string,
+  next: string | null,
+  origin: NoteRevisionOrigin,
+  model?: string,
+  opts: { movingFrom?: string } = {},
+): Promise<string | null> {
+  if (!isShared(context)) return null
+  const clean = path.replace(/^\/+/, '')
+  if (clean === 'agents' || clean.startsWith('agents/')) {
+    // Under agents/ the path rules already answer; only the name clash with an
+    // agent filed elsewhere is left to ask.
+    const folder = briefFolderOf(clean, next ?? '')
+    return folder ? agentNameClash(context, folder, opts.movingFrom) : null
+  }
+  const at = await agentContaining(context.spaceId, clean)
+  const mints = briefFolderOf(clean, next) ?? (opts.movingFrom && next === null ? briefFolderOf(clean, await store.readNoteOrNull(context, opts.movingFrom)) : null)
+  if (AI_ORIGINS.has(origin) && (at || mints)) {
+    const own = agentOfRevisionStamp(origin, model)
+    if (!mints && at && own === at.name && at.file === 'own') return null
+    return 'Agent briefs are frozen for AI — a human must make this change.'
+  }
+  return mints ? agentNameClash(context, mints, opts.movingFrom) : null
+}
+
+/** Why a brief at `folder` would clash with an agent of the same name elsewhere, or null. */
+async function agentNameClash(context: Context, folder: string, movingFrom?: string): Promise<string | null> {
+  const name = agentNameOfFolder(folder)
+  const held = await agentFolderIn(context.spaceId, name)
+  if (!held || held === folder) return null
+  if (movingFrom && (movingFrom === `${held}/index.md` || movingFrom.startsWith(`${held}/`))) return null
+  return `An agent named "${name}" already exists at ${held}/ — an agent's name is its folder's name, and one space holds one of each.`
+}
+
+/**
  * A namespace belongs to a tool, and a tool that is off does not get one.
  *
  * `channels/` and `sections/` are the case today — both owned by `channels`,
@@ -549,6 +595,7 @@ export async function writeGated(
   const denial =
     (await writeDenialFull(p, context, path)) ??
     lockedDenial(p, context, path, origin, model) ??
+    (await agentPlaceDenial(p, context, path, content, origin, model)) ??
     (await configKindDenial(p, context, path, content)) ??
     (await resourceHomeDenial(context, path, content))
   if (denial) return { status: 'denied', reason: denial }
@@ -567,7 +614,8 @@ export async function writeGated(
  * until the store hook folds them in. The system writes the older shape freely.
  */
 async function briefRunKeyDenial(p: ContextPrincipal, context: Context, path: string, content: string): Promise<string | null> {
-  if (!isShared(context) || !(isAgentBriefPath(path) || isAgentActivationPath(path)) || p.system) return null
+  if (!isShared(context) || p.system) return null
+  if (!(isAgentBriefPath(path) || isAgentActivationPath(path) || briefFolderOf(path, content))) return null
   const after = parseFrontmatter(content)
   const keys = runKeysOf(after)
   if (keys.length === 0) return null
@@ -591,7 +639,10 @@ export async function appendLogGated(
   origin: NoteRevisionOrigin = 'edit',
   model?: string,
 ): Promise<WriteResult> {
-  const denial = (await writeDenialFull(p, context, path)) ?? lockedDenial(p, context, path, origin, model)
+  const denial =
+    (await writeDenialFull(p, context, path)) ??
+    lockedDenial(p, context, path, origin, model) ??
+    (await agentPlaceDenial(p, context, path, null, origin, model))
   if (denial) return { status: 'denied', reason: denial }
   const current = await store.readNote(context, path)
   const declared = await configKindDenial(p, context, path, null, { current })
@@ -636,7 +687,10 @@ export async function moveGated(
   model?: string,
 ): Promise<WriteResult> {
   for (const end of [from, to]) {
-    const denial = writeDenial(p, context, end) ?? lockedDenial(p, context, end, origin)
+    const denial =
+      writeDenial(p, context, end) ??
+      lockedDenial(p, context, end, origin) ??
+      (await agentPlaceDenial(p, context, end, null, origin, model, end === to ? { movingFrom: from } : {}))
     if (denial) return { status: 'denied', reason: denial }
   }
   // The destination only: a note may always be moved OUT of a namespace whose
@@ -652,8 +706,8 @@ export async function moveGated(
   // A note arriving at an agent's brief is held to what a write there is: it
   // may not bring run keys with it, or a move would set how an agent runs —
   // who it runs as, its reach — without the record's gates.
-  if (isShared(context) && !p.system && (isAgentBriefPath(to) || isAgentActivationPath(to))) {
-    const incoming = await store.readNoteOrNull(context, from)
+  const incoming = isShared(context) && !p.system ? await store.readNoteOrNull(context, from) : null
+  if (incoming !== null && (isAgentBriefPath(to) || isAgentActivationPath(to) || briefFolderOf(to, incoming))) {
     const keys = incoming ? runKeysOf(parseFrontmatter(incoming)) : []
     if (keys.length) {
       return { status: 'denied', reason: `A note that says how an agent runs (${keys.map((k) => `\`${k}\``).join(', ')}) cannot become its brief — take those out, then set them with configure_agent.` }

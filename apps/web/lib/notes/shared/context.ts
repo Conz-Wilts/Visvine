@@ -6,6 +6,7 @@
 import { declaredConfigKind } from './configKinds'
 import { compareByOrder, orderOf } from './folderOrder'
 import { folderOfIndexPath, isIndexPath } from './indexNote'
+import { briefFolderOfMeta } from '../../agents/shared/folder'
 import {
   parseFrontmatter,
   splitFrontmatter,
@@ -124,6 +125,8 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
     if (order.length) orders.set(folderOfIndexPath(meta.path), order)
   }
   if (orders.has('')) root.order = orders.get('')
+  // A folder that is an agent says so, wherever it is filed.
+  const agentFolders = new Set(metas.map((m) => briefFolderOfMeta(m.path, m.frontmatter)).filter((f): f is string => f !== null))
 
   const ensureFolder = (folderPath: string): TreeNode => {
     const existing = folders.get(folderPath)
@@ -137,6 +140,7 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
       path: folderPath,
       kind: 'folder',
       ...(title ? { title } : {}),
+      ...(agentFolders.has(folderPath) ? { declares: 'agent' as const } : {}),
       ...(orders.has(folderPath) ? { order: orders.get(folderPath) } : {}),
       children: []
     }

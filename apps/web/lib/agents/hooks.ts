@@ -39,7 +39,6 @@ import type { Actor, Context } from '@/lib/notes/store'
 // this module, and a value import back would make an eval-time cycle.
 const SHARED_OWNER_KEY = 'shared'
 import {
-  agentActivationPath,
   agentBriefPath,
   withActiveFalse,
   type AgentActivation,
@@ -53,6 +52,8 @@ import { storeAgentConfig, withAgentRecord } from './record'
 import { nextFire } from './shared/fanout'
 
 import { fireNoteTriggers, hasPendingEvents } from './events'
+import { agentContaining, type AgentAt } from './location'
+import { agentFileIn, agentNameOfFolder } from './shared/folder'
 
 /** The actor for machine writes into the activation boundary. */
 const SYSTEM_ACTOR: Actor = { id: 'system', name: 'Visvine' }
@@ -370,10 +371,12 @@ const agentOfStamp = agentOfRevisionStamp
  * differs; `origin` / `model` are the revision stamps (an agent's own writes
  * are `agent` / `agent:<name>`).
  *
- * Two jobs: (1) every CHANGED shared-context write outside agents/ may be an
- * EVENT for agents whose `on.context` globs match it — except the agent whose
- * own run made the write (no self-loops); (2) writes under agents/ re-derive
- * the state row / auto-deactivate.
+ * Two jobs: (1) every CHANGED shared-context write that is not an agent's
+ * brief may be an EVENT for agents whose `on.context` globs match it — except
+ * the agent whose own run made the write (no self-loops), and nothing inside
+ * an agent's folder ever fires (events.ts); (2) a brief or a pre-merge
+ * activation — in `agents/` or a folder of the space's own
+ * (lib/agents/location.ts) — re-derives the state row.
  */
 export async function agentNoteWritten(
   context: Context,
@@ -382,32 +385,52 @@ export async function agentNoteWritten(
   opts: { changed: boolean; origin?: string; model?: string },
 ): Promise<void> {
   if (!isSharedContext(context)) return
-  const name = agentNameOfPath(path)
+  const spaceId = context.spaceId
+  const at = await agentContaining(spaceId, path)
+  const name = at && (at.file === 'brief' || at.file === 'activation') ? at.name : null
   if (!name) {
     if (opts.changed) {
-      await fireNoteTriggers(context.spaceId, path, actor, opts.origin ?? 'edit', {
+      await fireNoteTriggers(spaceId, path, actor, opts.origin ?? 'edit', {
         exceptAgent: agentOfStamp(opts.origin, opts.model),
         action: 'saved',
       })
     }
     return
   }
-  const spaceId = context.spaceId
 
   // A brief write adopts any run keys it still carries, then re-derives the
   // row; a pre-merge activation.md re-derives it for an agent with no record.
-  if (isAgentBriefPath(path)) await adoptNoteConfig(spaceId, name)
-  if (isAgentBriefPath(path) || isAgentActivationPath(path)) await syncAgentState(spaceId, name)
+  if (at?.file === 'brief') await adoptNoteConfig(spaceId, name)
+  await syncAgentState(spaceId, name)
 }
 
 /**
- * After a note rename. A brief renamed to another agent's path is that agent
- * under a new name: deactivated, its state row (and run history) carried
- * over. The activation rides the brief, so a folder rename carries it. A
- * rename INTO a listened-on path is a `note_written` event for the `to` path
- * (a note arriving under people/ is news whether typed or moved). `stamp` is
- * how the rename arose (origin / model, as for a write): an agent run's own
- * move (`agent` / `agent:<name>`) never wakes that agent.
+ * The agent whose brief a moved note WAS, from where it was: `agents/<name>/`
+ * by its path, anywhere else by the state row that names the note — its id
+ * survives the move, its old folder does not.
+ */
+async function briefNameBefore(spaceId: string, from: string, to: string): Promise<string | null> {
+  if (isAgentBriefPath(from)) return agentNameOfPath(from)
+  if (!from.endsWith('/index.md')) return null
+  const note = await prisma.contextNote.findFirst({
+    where: { spaceId, ownerKey: SHARED_OWNER_KEY, path: to, deletedAt: null },
+    select: { id: true },
+  })
+  if (!note) return null
+  const row = await prisma.agentState.findFirst({ where: { spaceId, briefNoteId: note.id, sharedFrom: null }, select: { name: true } })
+  return row?.name ?? null
+}
+
+/**
+ * After a note rename. A brief moved to another folder under the SAME name is
+ * the same agent, filed elsewhere: nothing changes but where it is. A brief
+ * renamed to another name is that agent under a new name: deactivated, its
+ * state row (and run history) carried over. The activation rides the brief,
+ * so a folder rename carries it. A rename INTO a listened-on path is a
+ * `note_written` event for the `to` path (a note arriving under people/ is
+ * news whether typed or moved). `stamp` is how the rename arose (origin /
+ * model, as for a write): an agent run's own move (`agent` / `agent:<name>`)
+ * never wakes that agent.
  */
 export async function agentNoteRenamed(
   context: Context,
@@ -418,8 +441,8 @@ export async function agentNoteRenamed(
 ): Promise<void> {
   if (!isSharedContext(context) || from === to) return
   const spaceId = context.spaceId
-  const fromName = agentNameOfPath(from)
-  const toName = agentNameOfPath(to)
+  const toAt = await agentContaining(spaceId, to)
+  const toName = toAt?.file === 'brief' || toAt?.file === 'activation' ? toAt.name : null
   if (!toName) {
     await fireNoteTriggers(spaceId, to, actor ?? { id: 'unknown', name: 'someone' }, stamp?.origin ?? 'edit', {
       exceptAgent: agentOfStamp(stamp?.origin, stamp?.model),
@@ -427,21 +450,22 @@ export async function agentNoteRenamed(
     })
   }
 
-  if (fromName && isAgentBriefPath(from)) {
+  const fromName = await briefNameBefore(spaceId, from, to)
+  if (fromName) {
     if (toName === fromName) return
     // Deactivate under the old name, then carry the row to the new one. The
     // copies under the old name are retired; the sync under the new name
     // makes new ones.
     await deactivateAgent(spaceId, fromName, 'renamed', toName ? `now ${to}` : `moved to ${to}`)
     await syncSharedCopies(spaceId, fromName, null)
-    if (toName && isAgentBriefPath(to)) {
+    if (toName && toAt?.file === 'brief') {
       await prisma.agentState.deleteMany({ where: { spaceId, name: toName } })
       await prisma.agentState.updateMany({ where: { spaceId, name: fromName }, data: { name: toName } })
       await syncAgentState(spaceId, toName)
     } else {
-      // Moved out of agents/ — it is no longer an agent. An activation left
-      // behind in the old folder is retired with the row.
-      const stale = agentActivationPath(fromName)
+      // Moved where no agent can be — it is no longer an agent. An activation
+      // left behind in the old folder is retired with the row.
+      const stale = `${from.slice(0, -'index.md'.length)}activation.md`
       if (await readSharedNote(spaceId, stale)) {
         const store = await import('@/lib/notes/store')
         await store.deleteNote(context, stale)
@@ -450,29 +474,31 @@ export async function agentNoteRenamed(
     }
     return
   }
-  if (fromName && isAgentActivationPath(from)) {
+  if (isAgentActivationPath(from)) {
     // The activation moved — with its folder, or by hand. Either way the old
     // name has none any more, and the new one re-derives from what arrived.
-    if (toName !== fromName) await syncAgentState(spaceId, fromName)
-    if (toName && isAgentActivationPath(to)) await syncAgentState(spaceId, toName)
+    const was = agentNameOfPath(from)
+    if (was && toName !== was) await syncAgentState(spaceId, was)
+    if (toName && toAt?.file === 'activation') await syncAgentState(spaceId, toName)
     return
   }
-  if (toName && isAgentBriefPath(to)) await syncAgentState(spaceId, toName)
+  if (toName) await syncAgentState(spaceId, toName)
 }
 
 /** After a note is trashed. */
 export async function agentNoteDeleted(context: Context, path: string): Promise<void> {
   if (!isSharedContext(context)) return
-  const name = agentNameOfPath(path)
-  if (!name) return
   const spaceId = context.spaceId
-  if (isAgentBriefPath(path)) {
+  const at = await agentDeletedAt(spaceId, path)
+  if (!at) return
+  const name = at.name
+  if (at.file === 'brief') {
     await deactivateAgent(spaceId, name, 'deleted', 'brief deleted')
     // Its run-in copies go with it.
     await syncSharedCopies(spaceId, name, null)
     // The folder delete that removed the brief removes the activation with it;
     // a brief deleted on its own leaves one behind, and it is retired here.
-    const live = agentActivationPath(name)
+    const live = `${at.folder}/activation.md`
     if (await readSharedNote(spaceId, live)) {
       const store = await import('@/lib/notes/store')
       await store.deleteNote(context, live)
@@ -481,7 +507,7 @@ export async function agentNoteDeleted(context: Context, path: string): Promise<
     await prisma.agentState.updateMany({ where: { spaceId, name }, data: { active: false, nextRunAt: null } })
     return
   }
-  if (isAgentActivationPath(path)) {
+  if (at.file === 'activation') {
     // An admin took the activation away — unless the whole agent is going, in
     // which case the brief's own delete is the reason and this is one of the
     // notes going with it. A folder delete trashes its notes in no particular
@@ -492,4 +518,29 @@ export async function agentNoteDeleted(context: Context, path: string): Promise<
       data: { active: false, nextRunAt: null, deactivatedReason: 'admin', deactivatedDetail: 'activation removed' },
     })
   }
+}
+
+/**
+ * The agent a just-trashed note belonged to. Under `agents/` the path says;
+ * anywhere else the note is already gone from where the store looks, so the
+ * trashed row's id is matched against the state row that names it.
+ */
+async function agentDeletedAt(spaceId: string, path: string): Promise<AgentAt | null> {
+  const home = await agentContaining(spaceId, path)
+  if (home) return home
+  const cut = path.lastIndexOf('/')
+  if (cut <= 0) return null
+  const folder = path.slice(0, cut)
+  const file = agentFileIn(folder, path)
+  if (file === 'brief') {
+    const trashed = await prisma.contextNote.findFirst({
+      where: { spaceId, ownerKey: SHARED_OWNER_KEY, path, deletedAt: { not: null } },
+      select: { id: true },
+      orderBy: { deletedAt: 'desc' },
+    })
+    if (!trashed) return null
+    const row = await prisma.agentState.findFirst({ where: { spaceId, briefNoteId: trashed.id, sharedFrom: null }, select: { name: true } })
+    return row && row.name === agentNameOfFolder(folder) ? { name: row.name, folder, file } : null
+  }
+  return null
 }

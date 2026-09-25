@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger'
 import { agentBriefPath, matchesAnyGlob, type AgentTriggers } from './config'
 import { findAgentBrief } from './briefs'
 import { flowsContext, rebasePath } from '@/lib/spaces/subspaces'
+import { agentContaining } from './location'
 
 type AgentEventKind = 'note_written' | 'webhook' | 'reply'
 
@@ -252,6 +253,10 @@ function activeTriggerRows(spaceId: string) {
 export async function matchNoteTriggers(spaceId: string, path: string): Promise<string[]> {
   if (path === 'agents' || path.startsWith('agents/')) return []
   const rows = await activeTriggerRows(spaceId)
+  if (rows.length === 0) return []
+  // An agent filed in a folder of the space's own is as far out of reach as
+  // one under agents/: nothing inside an agent's folder is a trigger.
+  if (await agentContaining(spaceId, path)) return []
   const out: string[] = []
   for (const row of rows) {
     const t = triggersOf(row)
@@ -336,6 +341,7 @@ async function fireParentTriggers(
   chain: EventChain,
 ): Promise<string[]> {
   if (path === 'agents' || path.startsWith('agents/')) return []
+  if (await agentContaining(childSpaceId, path)) return []
   const child = await prisma.space.findUnique({
     where: { id: childSpaceId },
     select: { parentId: true, visibility: true, listing: true, flowContext: true },

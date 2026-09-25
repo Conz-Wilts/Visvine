@@ -18,7 +18,8 @@ import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled } from '@/lib/connectors/config'
 import { connectorNoteRows } from '@/lib/connectors/locate'
 import { accountNotesIn } from '@/lib/connectors/accounts'
-import { isAgentBriefPath, agentNameOfPath } from '@/lib/notes/entities'
+import { agentFolders } from './location'
+import { agentNameOfFolder } from './shared/folder'
 import { AGENT_TOOL_OPTIONS } from './config'
 import { defaultModelOf, noModelReason, spaceModels } from './spaceModels'
 import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
@@ -69,11 +70,7 @@ export async function agentOptions(spaceId: string, viewerId: string): Promise<A
     spaceModels(spaceId),
     // Wherever the space filed them (lib/connectors/locate.ts).
     connectorNoteRows({ spaceId, ownerKey: SHARED_OWNER_KEY }),
-    prisma.contextNote.findMany({
-      where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: 'agents/', endsWith: '.md' } },
-      select: { path: true },
-      orderBy: { path: 'asc' },
-    }),
+    agentFolders(spaceId),
     sharedParentAgents(spaceId),
   ])
 
@@ -87,13 +84,8 @@ export async function agentOptions(spaceId: string, viewerId: string): Promise<A
   for (const mine of await accountNotesIn(viewerId, spaceId)) {
     if (!connectors.some((c) => c.name === mine.name)) connectors.push({ name: mine.name, enabled: true })
   }
-  const agents: string[] = []
-  for (const row of notes) {
-    if (isAgentBriefPath(row.path)) {
-      const name = agentNameOfPath(row.path)
-      if (name && !agents.includes(name)) agents.push(name)
-    }
-  }
+  // Wherever the space filed them (lib/agents/location.ts).
+  const agents = [...notes.keys()]
 
   const fallback = defaultModelOf(models)
   return {
@@ -120,8 +112,9 @@ export async function agentOptions(spaceId: string, viewerId: string): Promise<A
 async function sharedParentAgents(spaceId: string): Promise<AgentOptions['sharedAgents']> {
   const parent = await parentOfSubspace(spaceId)
   if (!parent) return []
+  const folders = await agentFolders(parent.id)
   const rows = await prisma.contextNote.findMany({
-    where: { spaceId: parent.id, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: 'agents/', endsWith: '.md' } },
+    where: { spaceId: parent.id, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { in: [...folders.values()].map((f) => `${f}/index.md`) } },
     select: { path: true, content: true },
     orderBy: { path: 'asc' },
   })
@@ -130,8 +123,8 @@ async function sharedParentAgents(spaceId: string): Promise<AgentOptions['shared
   for (const row of rows) {
     const fm = fmOf(row.path, parseFrontmatter(row.content))
     // Per room: a brief shared with other rooms is not offered here.
-    if (!isAgentBriefPath(row.path) || !isSharedDown(row.path, fm, spaceId)) continue
-    const name = agentNameOfPath(row.path)
+    if (!isSharedDown(row.path, fm, spaceId)) continue
+    const name = agentNameOfFolder(row.path.slice(0, -'/index.md'.length))
     const mode = typeof fm.share_as === 'string' && /^run[-_]?in$/i.test(fm.share_as.trim()) ? 'run-in' : 'use'
     if (name && !out.some((a) => a.name === name)) out.push({ name, from: parent.name, mode })
   }

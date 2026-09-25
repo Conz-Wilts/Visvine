@@ -46,7 +46,7 @@ import type { ResolvedContext } from '@/lib/notes/resolve'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ToolHandler } from '@/lib/notes/toolLoop'
-import { agentFolderPath, type AgentBrief } from './config'
+import type { AgentBrief } from './config'
 import { readAgent } from './briefs'
 import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
 import { isSharedDown, isSubspacePath } from '@/lib/spaces/subspaces'
@@ -160,6 +160,8 @@ export interface AgentToolContext {
   context: Context
   spaceId: string
   agentName: string
+  /** The agent's folder — `agents/<name>` unless the space filed it elsewhere. */
+  agentFolder: string
   brief: AgentBrief
   /**
    * The named `actions:` each runnable connector declares (connectorActionsFor),
@@ -268,7 +270,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
   const deps: AgentToolDeps = { ...defaultDeps(), ...(ctx.deps ?? {}) }
   const stamp = agentModelStamp(ctx.agentName)
   /** The agent's own folder, with its trailing slash — the default home for everything it writes. */
-  const home = `${agentFolderPath(ctx.agentName)}/`
+  const home = `${ctx.agentFolder}/`
   const dry = brief.dryRun
   const noteWritten = (path: string) => ctx.onWrite?.(path)
   const bytes = (s: string) => Buffer.byteLength(s, 'utf8')
@@ -419,7 +421,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
     spec: {
       name: 'remember',
       description:
-        `Keep one thing for your next run — a line under one section of ${memoryPath(ctx.agentName)}, which every run is handed at the start. Sections: ${REMEMBER_SECTIONS.map((s) => `"${s}"`).join(', ')}. Record what you could NOT have inferred from the notes or your brief: a fact you found, a decision you made and why, a thread left open. Not what you did (the run keeps that itself), not what a note already says. One sentence, subject named.` +
+        `Keep one thing for your next run — a line under one section of ${memoryPath(ctx.agentFolder)}, which every run is handed at the start. Sections: ${REMEMBER_SECTIONS.map((s) => `"${s}"`).join(', ')}. Record what you could NOT have inferred from the notes or your brief: a fact you found, a decision you made and why, a thread left open. Not what you did (the run keeps that itself), not what a note already says. One sentence, subject named.` +
         (dry ? ' THIS IS A DRY RUN: the line is recorded, not applied.' : ''),
       parameters: {
         type: 'object',
@@ -436,7 +438,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       const text = str(a.text).trim()
       if (!section || section === 'Last run') return `error: section must be one of ${REMEMBER_SECTIONS.join(', ')}`
       if (!text) return 'error: text is required'
-      const path = memoryPath(ctx.agentName)
+      const path = memoryPath(ctx.agentFolder)
       if (dry) return `DRY RUN — would remember under ${section}: ${text}`
       const current = await readFederated(principal, context, path)
       const next = rememberInto(current, ctx.agentName, section, text, new Date().toISOString().slice(0, 10))

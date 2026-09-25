@@ -12,6 +12,7 @@ import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 const SECRET = 'hunter2-the-actual-password'
 
 const demo: Demonstration = {
+  folder: 'agents/digest',
   agent: 'digest',
   by: 'Connor',
   heldMs: 42_000,

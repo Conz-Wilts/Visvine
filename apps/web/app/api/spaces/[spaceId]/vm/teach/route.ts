@@ -6,6 +6,7 @@ import { resolveAgentChatConfig } from '@/lib/agents/providers';
 import { costMicros } from '@/lib/agents/budget';
 import { meterModelUsage } from '@/lib/agents/runs';
 import { findAgentBrief } from '@/lib/agents/briefs';
+import { agentFolderOfBrief } from '@/lib/agents/shared/folder';
 import { draftSkill, type Demonstration, type TraceStep } from '@/lib/agents/teach';
 import { statusOnPublish } from '@/lib/agents/shared/skills';
 import { parseFrontmatter } from '@/lib/notes/shared/markdown';
@@ -75,6 +76,7 @@ export async function POST(
 
   const demo: Demonstration = {
     agent,
+    folder: agentFolderOfBrief(brief.path, agent),
     by: typeof payload.by === 'string' ? payload.by : 'a person',
     heldMs: typeof payload.heldMs === 'number' ? payload.heldMs : 0,
     steps,

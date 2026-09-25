@@ -56,6 +56,8 @@ import { revalidateTag } from 'next/cache'
 // only call each other inside function bodies, never at module init.
 import { invalidateVault } from './vaultCache'
 import { syncPublicationsOnDelete, syncPublicationsOnRename } from './publications'
+import { agentFolderDenial, agentNameOfFolder, briefFolderOf } from '@/lib/agents/shared/folder'
+import { agentFolders } from '@/lib/agents/location'
 import {
   INDEX_BASENAME,
   ancestorFolders,
@@ -1279,6 +1281,20 @@ async function enforceIndexContract(context: Context, p: string, content: string
   // before the frontmatter is decided, for the same reason a Tool's is — so it
   // gains its node and its `node:` back-pointer on the very first save rather
   // than on the second.
+  // An agent filed in a folder of the space's own: its brief is held to the
+  // agent's node exactly as one under agents/ is (lib/agents/shared/folder.ts).
+  const filedAgent = !isEntityFolderIndex(p) && context.ownerKey === SHARED_OWNER_KEY ? briefFolderOf(p, content) : null
+  if (filedAgent) {
+    await ensureAgentNode(context.spaceId, p, content)
+    const node = await prisma.node.findFirst({
+      where: { id: `agent:${agentNameOfFolder(filedAgent)}`, spaceId: context.spaceId },
+      select: { id: true, type: true, name: true, subtitle: true, location: true, metadata: true },
+    })
+    if (node) {
+      const held = { ...node, metadata: (node.metadata as Record<string, unknown> | null) ?? null }
+      return normalizeIndexNote(content, folder, children, await entityContractOf(held, context.spaceId))
+    }
+  }
   if (!isEntityFolderIndex(p) && context.ownerKey === SHARED_OWNER_KEY) {
     await syncAdoptedNode(context.spaceId, p, content)
     const adopted = await adoptedNodeForIndex(context.spaceId, p)
@@ -1349,6 +1365,11 @@ async function resourceNotesUnder(context: Context, folder: string): Promise<str
     .map((r) => r.path)
 }
 
+/** The agent folders at or under `folder`. */
+function agentFoldersUnder(folders: Map<string, string>, folder: string): string[] {
+  return [...folders.values()].filter((f) => f === folder || f.startsWith(`${folder}/`))
+}
+
 /** True when `folder` is some entity's context folder (people/<slug>). */
 function isEntityFolder(folder: string): boolean {
   return entityOwnerPathOf(`${folder}/x.md`) !== null && parseEntityHref(`${folder}/index.md`) !== null
@@ -1378,7 +1399,23 @@ export async function renameFolder(
     const denial = resourceMoveDenial(f, t)
     if (denial) throw new Error(denial)
   }
+  // An agent is a folder whose name is its identity (lib/agents/shared/folder.ts):
+  // it moves between folders — out of agents/ into a team's, and back — but
+  // keeps its name, and every agent a folder carries must land where an agent
+  // may sit.
+  const agentsMoving = context.ownerKey === SHARED_OWNER_KEY ? agentFoldersUnder(await agentFolders(context.spaceId), f) : []
+  for (const folder of agentsMoving) {
+    const landed = t + folder.slice(f.length)
+    if (folder === f && agentNameOfFolder(landed) !== agentNameOfFolder(f)) {
+      throw new Error(`An agent's name is its folder's name, and its runs, subscribers and page key on it — move "${f}" between folders, but keep the name.`)
+    }
+    const denial = agentFolderDenial(landed)
+    if (denial) throw new Error(denial)
+  }
+  const movesAgent = agentsMoving.includes(f)
   if (withinResources) {
+    if (await findLive(context, indexPathOf(t))) throw new Error(`"${t}" already exists`)
+  } else if (movesAgent) {
     if (await findLive(context, indexPathOf(t))) throw new Error(`"${t}" already exists`)
   } else if (isEntityFolder(f)) {
     throw new Error(`"${f}" is a directory entity's folder — its path is the entity's identity and can't change`)
@@ -1395,7 +1432,9 @@ export async function renameFolder(
     throw new Error(`"${t}" is one of the space's built-in folders — a folder can't be renamed into it`)
   }
   // Moving a folder INTO an entity's folder converts the entity note first.
-  if (actor) await ensureParentFolderNote(context, `${t}/x.md`, actor)
+  // A moving agent brings its own index — making one at the destination first
+  // (an entity folder's, under agents/) would stand where the brief lands.
+  if (actor) await ensureParentFolderNote(context, movesAgent ? t : `${t}/x.md`, actor)
   const notes = await prisma.contextNote.findMany({
     where: {
       spaceId: context.spaceId,

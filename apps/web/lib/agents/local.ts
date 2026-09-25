@@ -26,6 +26,7 @@
  * Pure: no prisma, no fetch, importable from the client.
  */
 import type { ProviderEntry } from './registry'
+import { agentHomeFolder } from './shared/folder'
 
 export type LocalRuntimeId = 'claude' | 'codex'
 
@@ -108,8 +109,8 @@ export function localRuntimeRefusal(id: LocalRuntimeId): string {
  * through the `visvine` MCP tool when the desktop hands one in. A run writes
  * nothing to the member's disk; its answer is what gets recorded.
  */
-export function localAgentPreamble(name: string, opts: { hasVisvineTool: boolean }): string {
-  const home = `agents/${name}/`
+export function localAgentPreamble(name: string, opts: { hasVisvineTool: boolean; folder?: string }): string {
+  const home = `${opts.folder ?? agentHomeFolder(name)}/`
   return [
     `You are an agent named "${name}" running on a member's own plan, from their machine, for the Visvine space they are in — a shared knowledge space ("the context") of markdown notes. A person pressed Run and is watching; finish with a plain-text summary of what you did and found, because that summary is what is recorded on the agent's page.`,
     '',
