@@ -46,6 +46,9 @@ import type { ToolAt } from './location'
 // eval-time cycle.
 const SHARED_OWNER_KEY = 'shared'
 
+/** The notes that make a Tool, by basename — what a filed Tool's folder may hold. */
+const TOOL_FILE_RE = /\/(index|ui|data|icon)\.md$/
+
 function isSharedContext(context: Context): boolean {
   return context.ownerKey === SHARED_OWNER_KEY
 }
@@ -56,7 +59,7 @@ function isSharedContext(context: Context): boolean {
  */
 async function toolOf(context: Context, path: string, opts: { deleted?: boolean } = {}): Promise<ToolAt | null> {
   if (!isSharedContext(context)) return null
-  if (!isToolPath(path) && !/\/(index|ui|data|icon)\.md$/.test(path)) return null
+  if (!isToolPath(path) && !TOOL_FILE_RE.test(path)) return null
   const { toolContaining } = await import('./location')
   return toolContaining(context.spaceId, path, opts)
 }
@@ -134,7 +137,7 @@ export async function toolNoteRenamed(context: Context, from: string, to: string
   // Where it came from is no longer there to read, so the old name is the
   // path's own (`tools/<name>/…`) or the folder's: settleRenamedFrom asks the
   // Tool's sources, wherever they now are, before it drops anything.
-  const fromName = isToolPath(from) ? toolNameOfPath(from) : /\/(index|ui|data|icon)\.md$/.test(from) ? toolNameOfFolder(from.slice(0, from.lastIndexOf('/'))) : null
+  const fromName = isToolPath(from) ? toolNameOfPath(from) : TOOL_FILE_RE.test(from) ? toolNameOfFolder(from.slice(0, from.lastIndexOf('/'))) : null
   if (fromName && fromName !== toName) await settleRenamedFrom(context.spaceId, fromName)
   if (toName) await rebuild(context.spaceId, toName)
   if (fromName && fromName !== toName) await syncShare(context.spaceId, fromName)

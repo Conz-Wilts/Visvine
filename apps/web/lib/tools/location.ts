@@ -9,6 +9,7 @@
 
 import prisma from '@/lib/prisma'
 import { landingFolderOf } from '@/lib/notes/landing'
+import { ancestorFolders } from '@/lib/agents/shared/folder'
 import {
   declaresTool,
   TOOLS_DIR,
@@ -54,17 +55,6 @@ export async function toolFolderIn(spaceId: string, name: string, ownerKey: stri
   return `${await landingFolderOf({ spaceId, ownerKey }, TOOLS_DIR)}/${name}`
 }
 
-/** Every folder above `path`, nearest first. */
-function ancestors(path: string): string[] {
-  const out: string[] = []
-  let cut = path.lastIndexOf('/')
-  while (cut > 0) {
-    out.push(path.slice(0, cut))
-    cut = path.lastIndexOf('/', cut - 1)
-  }
-  return out
-}
-
 /**
  * The Tool whose folder `path` is inside, or null. Under `tools/` the path
  * decides; elsewhere the nearest folder whose index declares `type: tool`.
@@ -83,7 +73,7 @@ export async function toolContaining(
     return { name: home[1], folder, kind: toolFileKindIn(folder, clean) ?? 'other' }
   }
   if (clean === TOOLS_DIR || clean.startsWith(`${TOOLS_DIR}/`)) return null
-  const folders = ancestors(clean).filter((f) => !toolFolderDenial(f))
+  const folders = ancestorFolders(clean).filter((f) => !toolFolderDenial(f))
   if (folders.length === 0) return null
   // A trashed note keeps its old path in `deletedPath` (its own is a trash key).
   const indexes = folders.map((f) => `${f}/${INDEX}`)

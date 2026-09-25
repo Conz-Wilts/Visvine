@@ -1377,8 +1377,8 @@ async function resourceNotesUnder(context: Context, folder: string): Promise<str
     .map((r) => r.path)
 }
 
-/** The agent (or Tool) folders at or under `folder`. */
-function agentFoldersUnder(folders: Map<string, string>, folder: string): string[] {
+/** The agent or Tool folders at or under `folder`. */
+function foldersUnder(folders: Map<string, string>, folder: string): string[] {
   return [...folders.values()].filter((f) => f === folder || f.startsWith(`${folder}/`))
 }
 
@@ -1416,8 +1416,8 @@ export async function renameFolder(
   // folders — out of agents/ or tools/ into a team's, and back — but keeps its
   // name, and every one a folder carries must land where it may sit.
   const shared = context.ownerKey === SHARED_OWNER_KEY
-  const agentsMoving = shared ? agentFoldersUnder(await agentFolders(context.spaceId), f) : []
-  const toolsMoving = shared ? agentFoldersUnder(await toolFolders(context.spaceId), f) : []
+  const agentsMoving = shared ? foldersUnder(await agentFolders(context.spaceId), f) : []
+  const toolsMoving = shared ? foldersUnder(await toolFolders(context.spaceId), f) : []
   for (const [folders, noun, denialOf] of [
     [agentsMoving, 'agent', agentFolderDenial],
     [toolsMoving, 'tool', toolFolderDenial],

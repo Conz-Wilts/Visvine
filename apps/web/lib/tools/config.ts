@@ -177,13 +177,7 @@ export function toolFileKindOfPath(path: string): 'index' | 'ui' | 'data' | 'ico
   const raw = normalizePath(path)
   if (raw !== TOOLS_DIR && !raw.startsWith(`${TOOLS_DIR}/`)) return null
   const name = toolNameOfPath(raw)
-  if (!name) return 'other'
-  const basename = raw.slice(toolFolderPath(name).length + 1)
-  if (basename === INDEX_BASENAME) return 'index'
-  if (basename === TOOL_SOURCE_FILES.ui.path) return 'ui'
-  if (basename === TOOL_SOURCE_FILES.data.path) return 'data'
-  if (basename === TOOL_SOURCE_FILES.icon.path) return 'icon'
-  return 'other'
+  return name ? (toolFileKindIn(toolFolderPath(name), raw) ?? 'other') : 'other'
 }
 
 /** True for anything in the `tools/` namespace, whatever its role. */
