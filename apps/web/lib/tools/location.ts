@@ -27,7 +27,7 @@ const INDEX = 'index.md'
 export interface ToolAt {
   name: string
   folder: string
-  kind: 'index' | 'ui' | 'data' | 'icon' | 'other'
+  kind: 'index' | 'ui' | 'data' | 'icon' | 'module' | 'other'
 }
 
 /**

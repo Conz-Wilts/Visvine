@@ -5,7 +5,7 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import Link from '@/features/shared/components/SpaceLink';
 import { clsx } from 'clsx';
 import { RefreshCwIcon } from '@/features/shared/icons';
-import { Button, Skeleton } from '@visvine/ui';
+import { Button, ConfirmDialog, Skeleton, ToastHost, useToasts } from '@visvine/ui';
 import { FetchJsonError, fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
 import { desktopToolFrames } from '@/features/desktop/lib/desktop';
@@ -20,6 +20,7 @@ import {
   type HostInit,
 } from '../lib/hostBridge';
 import { collectThemeTokens } from '../lib/theme';
+import { hostServiceCall } from '../lib/hostServices';
 import DegradedBanner from './DegradedBanner';
 import ToolErrorCard from './ToolErrorCard';
 
@@ -138,6 +139,33 @@ export default function ToolFrame({
   const onSectionRef = useRef(onSection);
   onSectionRef.current = onSection;
 
+  // ── the host's own services (ui.*) ──
+  // Drawn here, in the app's chrome, so the viewer sees the app asking — one
+  // question at a time.
+  const { toasts, push, dismiss } = useToasts();
+  const [question, setQuestion] = useState<{
+    title: string;
+    body?: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+    answer: (yes: boolean) => void;
+  } | null>(null);
+  const questionOpenRef = useRef(false);
+  const ask = useCallback((q: { title: string; body?: string; confirmLabel?: string; destructive?: boolean }) => {
+    if (questionOpenRef.current) return null;
+    questionOpenRef.current = true;
+    return new Promise<boolean>((resolve) => {
+      setQuestion({
+        ...q,
+        answer: (yes) => {
+          questionOpenRef.current = false;
+          setQuestion(null);
+          resolve(yes);
+        },
+      });
+    });
+  }, []);
+
   const targetKey = useMemo(() => JSON.stringify(target), [target]);
 
   // ── the token ──
@@ -227,6 +255,22 @@ export default function ToolFrame({
       navigate: (path) => router.push(path),
       onRevoked: setStopped,
       onSection: (next) => onSectionRef.current?.(next),
+      onHostCall: (method, params) =>
+        hostServiceCall(method, params, {
+          mayDownload: mint.ui?.download === true,
+          toast: push,
+          confirm: ask,
+          save: ({ filename, content, mimeType }) => {
+            const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.rel = 'noopener';
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 10_000);
+          },
+          navigate: (path) => router.push(path),
+        }),
     });
     bridgeRef.current = bridge;
     if (actionRef) actionRef.current = (id) => bridge.sendAction(id);
@@ -403,6 +447,16 @@ export default function ToolFrame({
           </>
         )}
       </div>
+      <ToastHost toasts={toasts} onDismiss={dismiss} />
+      <ConfirmDialog
+        open={question !== null}
+        title={question?.title ?? ''}
+        body={question?.body}
+        confirmLabel={question?.confirmLabel ?? 'OK'}
+        destructive={question?.destructive}
+        onConfirm={() => question?.answer(true)}
+        onClose={() => question?.answer(false)}
+      />
     </div>
   );
 }

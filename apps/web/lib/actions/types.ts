@@ -39,8 +39,8 @@ export interface ActionCaller {
    * the records that say who used what (lib/resources/accessLog.ts). Absent
    * reads as `api`.
    */
-  via?: 'mcp' | 'agent' | 'api'
-  /** The agent whose run is acting, and that run, when `via` is `agent`. */
+  via?: 'mcp' | 'agent' | 'api' | 'tool'
+  /** The agent whose run is acting, and that run, when `via` is `agent`; the Tool, when `via` is `tool`. */
   agentName?: string | null
   runId?: string | null
   /**

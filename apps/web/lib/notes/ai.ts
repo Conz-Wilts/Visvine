@@ -162,6 +162,8 @@ export interface ChatWithToolsOptions {
   /** Endpoint to use; defaults to the server's environment config. */
   config?: ChatConfig
   signal?: AbortSignal
+  /** The longest answer to ask for, in tokens; absent, the endpoint's own default. */
+  maxTokens?: number
 }
 
 export interface ChatWithToolsResult {
@@ -218,10 +220,16 @@ async function chatWithToolsOnce(
       body: JSON.stringify({
         model: config.model,
         messages,
-        tools: tools.map((t) => ({
-          type: 'function',
-          function: { name: t.name, description: t.description, parameters: t.parameters },
-        })),
+        // No tools is no `tools` key: some endpoints refuse an empty list.
+        ...(tools.length
+          ? {
+              tools: tools.map((t) => ({
+                type: 'function',
+                function: { name: t.name, description: t.description, parameters: t.parameters },
+              })),
+            }
+          : {}),
+        ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
       }),
       signal: opts.signal,
       cache: 'no-store',

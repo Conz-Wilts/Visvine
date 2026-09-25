@@ -35,9 +35,8 @@ import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { canRemove, type ResolvedContext } from '@/lib/notes/resolve'
 import * as store from '@/lib/notes/store'
 import { SHARED_OWNER_KEY, type Actor, type Context } from '@/lib/notes/store'
-import { computeRequirements, type ToolRequirements } from './requirements'
+import { sourceRequirements, type ToolRequirements } from './requirements'
 import { removeInstallForTool, spaceFacts } from './installs'
-import type { ToolPerimeter } from './perimeter'
 import { latestPublications, toolKey, type ToolPublicationSummary } from './registry'
 import { toolFolderIn } from './location'
 import {
@@ -62,12 +61,28 @@ import {
   toolUiPath,
   unwrapSource,
   wrapSource,
+  MAX_TOOL_MODULES,
+  TOOL_MODULE_DIR,
+  TOOL_MODULE_RE,
+  toolModuleFileOf,
+  toolModuleNotePath,
   type ToolConfig,
 } from './config'
 import { draftAuthorship, type DraftAuthorship } from './draftAuthors'
+import { composeToolIndex, splitToolIndex, TOOL_FACT_KEYS } from './indexFacts'
+import { factsFromV1 } from '@visvine/tool-protocol/manifest'
+import { dropToolFacts, readAllToolFacts, readToolFacts, writeToolFacts } from './toolFacts'
 
 /** The files an author addresses, whatever the notes behind them are called. */
-export type ToolFileName = 'index.md' | 'ui.tsx' | 'data.js' | 'icon.svg'
+/** The four fixed files. */
+type FixedToolFile = 'index.md' | 'ui.tsx' | 'data.js' | 'icon.svg'
+
+/** An author-facing file: one of the four, or a module under `src/` (config.ts#TOOL_MODULE_RE). */
+export type ToolFileName = FixedToolFile | `src/${string}`
+
+function isModuleFile(file: string): file is `src/${string}` {
+  return TOOL_MODULE_RE.test(file)
+}
 
 const INDEX_FILE: ToolFileName = 'index.md'
 
@@ -111,7 +126,9 @@ export interface AuthoredToolDetail extends AuthoredToolSummary {
    * HTML.** Anything that draws a Tool's icon must read the build's `iconSvg`
    * (sanitized by lib/tools/iconSvg.ts), the way features/tools/components/toolIcons.tsx does.
    */
-  sources: Record<ToolFileName, string | null>
+  sources: Record<FixedToolFile, string | null>
+  /** The Tool's own modules under `src/`, by file name (`src/chart.tsx`), unwrapped like the sources. */
+  modules: Record<string, string>
   /**
    * Who wrote this working copy since it was last approved (lib/tools/draftAuthors.ts).
    * A preview runs with the reach they all share, and starts by itself only for
@@ -145,6 +162,7 @@ function badName(name: string): ToolServiceError {
 
 /** The note behind an author-facing filename. */
 function notePathOf(name: string, file: ToolFileName, folder: string): string {
+  if (isModuleFile(file)) return toolModuleNotePath(folder, file) ?? toolIndexPath(name, folder)
   if (file === TOOL_SOURCE_FILES.ui.authorName) return toolUiPath(name, folder)
   if (file === TOOL_SOURCE_FILES.data.authorName) return toolDataPath(name, folder)
   if (file === TOOL_SOURCE_FILES.icon.authorName) return toolIconPath(name, folder)
@@ -153,6 +171,7 @@ function notePathOf(name: string, file: ToolFileName, folder: string): string {
 
 /** What actually goes in the note: the two sources ride inside a fenced block. */
 function noteContentOf(file: ToolFileName, content: string): string {
+  if (isModuleFile(file)) return wrapSource(content, file.endsWith('.tsx') ? 'tsx' : 'ts')
   if (file === TOOL_SOURCE_FILES.ui.authorName) return wrapSource(content, TOOL_SOURCE_FILES.ui.lang)
   if (file === TOOL_SOURCE_FILES.data.authorName) {
     return wrapSource(content, TOOL_SOURCE_FILES.data.lang)
@@ -227,13 +246,14 @@ export async function listAuthoredTools(
       return [{ ...raw, name }]
     })
   const names = indexes.map((raw) => raw.name)
-  const [authors, builds, publications] = await Promise.all([
+  const [authors, builds, publications, facts] = await Promise.all([
     authorsOf(
       context.spaceId,
       indexes.map((raw) => raw.path),
     ),
     listBuilds(context.spaceId),
     latestPublications(names.map((name) => toolKey(context.spaceId, name))),
+    readAllToolFacts(context.spaceId),
   ])
   const out: AuthoredToolSummary[] = []
   for (const raw of indexes) {
@@ -243,7 +263,7 @@ export async function listAuthoredTools(
       summarise(
         name,
         raw.path,
-        raw.content,
+        composeToolIndex(raw.content, facts.get(name) ?? null),
         authors.get(raw.path) ?? null,
         build ? toBuildSummary(build) : null,
         publications.get(toolKey(context.spaceId, name)) ?? null,
@@ -261,8 +281,10 @@ export async function describeAuthoredTool(
 ): Promise<AuthoredToolDetail | null> {
   if (!isShared(context) || !TOOL_NAME_RE.test(name)) return null
   const folder = await toolFolderIn(context.spaceId, name)
-  const indexContent = await readVisible(p, context, toolIndexPath(name, folder))
-  if (indexContent === null) return null
+  const indexNote = await readVisible(p, context, toolIndexPath(name, folder))
+  if (indexNote === null) return null
+  // The author reads (and edits) one index.md: the note with its facts row in it.
+  const indexContent = composeToolIndex(indexNote, await readToolFacts(context.spaceId, name))
 
   const key = toolKey(context.spaceId, name)
   const [uiNote, dataNote, iconNote, authors, build, publications, draft] = await Promise.all([
@@ -286,6 +308,7 @@ export async function describeAuthoredTool(
   return {
     ...summary,
     config: parsed.ok ? parsed.config : null,
+    modules: await readModules(p, context, folder),
     sources: {
       'index.md': indexContent,
       'ui.tsx': uiNote === null ? null : (unwrapSource(uiNote)?.code ?? uiNote),
@@ -311,10 +334,10 @@ export async function describeAuthoredTool(
 export async function toolRequirementsInSpace(
   p: ContextPrincipal,
   context: Context,
-  perimeter: ToolPerimeter,
+  config: ToolConfig,
 ): Promise<ToolRequirements> {
   const facts = await spaceFacts(p, context)
-  return computeRequirements(perimeter, facts.available)
+  return sourceRequirements(config, facts.available)
 }
 
 // ── creating ──────────────────────────────────────────────────────────────────
@@ -421,12 +444,11 @@ export async function createTool(
     // createIndexFolder rather than a plain write: the Tool IS its folder, and
     // this is the one call that makes the folder row, the index and the parent
     // listing all appear together.
-    await store.createIndexFolder(
-      context,
-      folder,
-      newToolIndexNote({ name, title, description, railLabel: input.railLabel }),
-      actorOf(p),
-    )
+    // The scaffold's facts (surfaces, reach) go to the row first, so the build
+    // the index write triggers already reads them.
+    const scaffold = splitToolIndex(newToolIndexNote({ name, title, description, railLabel: input.railLabel }))
+    await writeToolFacts(context.spaceId, name, scaffold.facts ?? {}, p.name)
+    await store.createIndexFolder(context, folder, scaffold.note, actorOf(p))
   } catch (err) {
     return { ok: false, status: 400, error: err instanceof Error ? err.message : 'Could not create the tool.' }
   }
@@ -469,10 +491,33 @@ export async function writeToolFile(
     return { ok: false, status: 404, error: `No tool named "${name}" — create it first.` }
   }
 
+  if (file.startsWith(`${TOOL_MODULE_DIR}/`) && !isModuleFile(file)) {
+    return { ok: false, status: 400, error: `${file} is not a module name — src/<name>.tsx or .ts, lower-case letters, digits and hyphens.` }
+  }
   const path = notePathOf(name, file, folder)
+  if (isModuleFile(file)) {
+    // An empty module is no module: writing nothing removes it.
+    if (!content.trim()) return removeModule(p, context, name, path)
+    const existing = await moduleNotePaths(context, folder)
+    if (!existing.includes(path) && existing.length >= MAX_TOOL_MODULES) {
+      return { ok: false, status: 400, error: `A tool has at most ${MAX_TOOL_MODULES} modules in src/.` }
+    }
+  }
+  let noteContent = noteContentOf(file, content)
+  if (file === INDEX_FILE) {
+    // One index.md is written; its facts go to the row, its prose to the note.
+    // The gate is asked first, so a refused writer changes neither. The file
+    // is the whole truth: facts it leaves out are gone, as they were when they
+    // lived in the note.
+    const denial = await writeDenialFull(p, context, path)
+    if (denial) return { ok: false, status: 403, error: denial }
+    const split = splitToolIndex(content)
+    await writeToolFacts(context.spaceId, name, split.facts ?? {}, p.name)
+    noteContent = split.note
+  }
   let written
   try {
-    written = await writeGated(p, context, path, noteContentOf(file, content))
+    written = await writeGated(p, context, path, noteContent)
   } catch (err) {
     // The store refuses some writes by throwing (an index that can't convert, a
     // sub-note with no entity behind it). Those are the author's problem to
@@ -482,6 +527,48 @@ export async function writeToolFile(
   if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
 
   // The store hook has already rebuilt; this reads that row back.
+  return { ok: true, path, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
+}
+
+/** The module notes directly under a Tool's `src/`, by their full path. */
+async function moduleNotePaths(context: Context, folder: string): Promise<string[]> {
+  const prefix = `${folder}/${TOOL_MODULE_DIR}/`
+  const rows = await prisma.contextNote.findMany({
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: null, path: { startsWith: prefix, endsWith: '.md' } },
+    select: { path: true },
+    orderBy: { path: 'asc' },
+    take: MAX_TOOL_MODULES + 8,
+  })
+  return rows.map((row) => row.path).filter((path) => !path.slice(prefix.length).includes('/') && !path.endsWith('/index.md'))
+}
+
+/** A Tool's modules as the reader may see them, by file name. */
+async function readModules(p: ContextPrincipal, context: Context, folder: string): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  for (const path of await moduleNotePaths(context, folder)) {
+    const note = await readVisible(p, context, path)
+    if (note === null) continue
+    const unwrapped = unwrapSource(note)
+    const relative = path.slice(folder.length + 1)
+    const file = (unwrapped && toolModuleFileOf(relative, unwrapped.lang)) ?? relative.replace(/\.md$/, '.tsx')
+    out[file] = unwrapped?.code ?? note
+  }
+  return out
+}
+
+/**
+ * Remove one of a Tool's modules. Deleting is a different power from writing
+ * (admin, the note's author, or a full-access grant), as for any note.
+ */
+async function removeModule(p: ContextPrincipal, context: Context, name: string, path: string): Promise<WriteToolFileResult> {
+  const denial = await writeDenialFull(p, context, path)
+  if (denial) return { ok: false, status: 403, error: denial }
+  if ((await store.readNoteOrNull(context, path)) === null) return { ok: false, status: 404, error: 'No such module.' }
+  const createdBy = await store.getNoteCreatedBy(context, path)
+  if (!canRemove(context as ResolvedContext, createdBy, { principal: p, path })) {
+    return { ok: false, status: 403, error: 'Only an admin, the author, or a full-access member can remove this module.' }
+  }
+  await store.deleteNote(context, path)
   return { ok: true, path, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
 }
 
@@ -596,6 +683,9 @@ export async function deleteTool(
   // Then the folder: trashes every note (which drops the build via the store's
   // delete hook), removes the folder rows, and drops grants into the subtree.
   await store.deleteFolder(context, folder)
+  // The facts row is the working copy's too; a trashed index note restored
+  // later keeps its row, but deleting the Tool deletes it.
+  await dropToolFacts(context.spaceId, name)
   return { ok: true }
 }
 
@@ -614,4 +704,57 @@ export function writeErrorsToPlain(build: BuildSummary): string {
   for (const d of build.errors) lines.push(toolDiagnosticLine(d))
   for (const d of build.warnings) lines.push(`warning: ${toolDiagnosticLine(d)}`)
   return lines.join('\n')
+}
+
+export type ConfigureToolResult =
+  | { ok: true; facts: Record<string, unknown>; changed: string[]; build: BuildSummary }
+  | ToolServiceError
+
+/**
+ * Change a Tool's facts — its surfaces, reach, bindings, settings and the rest
+ * of its manifest — without rewriting its index note: the `configure_tool`
+ * action and the Workbench's rows. Merged over what the row holds, one key at
+ * a time. Unlike a written index.md, a malformed value is refused here, with
+ * the parser's own sentence, rather than stored for a build to report.
+ *
+ * Setting any manifest-2 key on a v1 Tool moves its `perimeter` into
+ * `permissions`, since reach is declared once.
+ */
+export async function configureTool(
+  p: ContextPrincipal,
+  context: Context,
+  name: string,
+  patch: Record<string, unknown>,
+): Promise<ConfigureToolResult> {
+  if (!TOOL_NAME_RE.test(name)) return badName(name)
+  if (!isShared(context)) return { ok: false, status: 400, error: 'Tools are authored in a space, not in personal context.' }
+  const folder = await toolFolderIn(context.spaceId, name)
+  const indexPath = toolIndexPath(name, folder)
+  const note = await store.readNoteOrNull(context, indexPath)
+  if (note === null) return { ok: false, status: 404, error: `No tool named "${name}" — create it first.` }
+  const denial = await writeDenialFull(p, context, indexPath)
+  if (denial) return { ok: false, status: 403, error: denial }
+  const stray = Object.keys(patch).find((key) => !TOOL_FACT_KEYS.includes(key))
+  if (stray) {
+    return { ok: false, status: 400, error: `"${stray}" is not one of a tool's facts (${TOOL_FACT_KEYS.join(', ')}) — title, description and tags are the index note's` }
+  }
+
+  const current = { ...((await readToolFacts(context.spaceId, name)) ?? splitToolIndex(note).facts ?? {}) }
+  const next: Record<string, unknown> = { ...current, ...patch }
+  const toV2 = Object.keys(patch).some((key) => key !== 'surfaces' && key !== 'perimeter') && next.perimeter !== undefined
+  if (toV2) {
+    if (patch.permissions === undefined) {
+      const v1 = factsFromV1(next.perimeter)
+      if (!v1.ok) return { ok: false, status: 400, error: v1.error }
+      next.permissions = v1.value.permissions
+    }
+    delete next.perimeter
+  }
+  for (const [key, value] of Object.entries(next)) if (value === null) delete next[key]
+  const parsed = parseToolConfig(parseFrontmatter(composeToolIndex(splitToolIndex(note).note, next)), name)
+  if (!parsed.ok) return { ok: false, status: 400, error: parsed.error }
+
+  const changed = await writeToolFacts(context.spaceId, name, next, p.name)
+  // A row write fires no note hook, so the rebuild is this call's to make.
+  return { ok: true, facts: next, changed, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
 }

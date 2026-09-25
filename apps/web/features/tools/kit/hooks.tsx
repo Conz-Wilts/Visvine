@@ -14,11 +14,18 @@ import type { ReactNode } from 'react';
 import type {
   ContextEntry,
   ContextHit,
+  ContextLink,
   ContextNote,
   ContextPage,
+  DecideAnswer,
+  DecideQuestion,
+  RecordWhere,
+  StateScope,
   ToolDegraded,
   ToolInitMessage,
   ToolInstallInfo,
+  ToolRecord,
+  ToolResource,
   ToolSubject,
   ToolViewer,
 } from '@/lib/tools/protocol';
@@ -37,6 +44,40 @@ export interface VisvineApi {
     searchPage(query: string, opts?: { k?: number; cursor?: string | null }): Promise<ContextPage<ContextHit>>;
     write(path: string, content: string): Promise<{ path: string }>;
     append(path: string, text: string): Promise<{ path: string }>;
+    /** The notes this one links to, and the notes linking to it — only ones the Tool may read. */
+    links(path: string): Promise<{ outgoing: ContextLink[]; incoming: ContextLink[] }>;
+  };
+  records: {
+    /** Records of one type (`permissions.records.read`), filtered, ordered, a page at a time. */
+    query(
+      type: string,
+      opts?: { where?: RecordWhere[]; order?: { key: string; direction: 'asc' | 'desc' }; limit?: number; cursor?: string | null },
+    ): Promise<{ type: string; rows: ToolRecord[]; nextCursor: string | null; total: number }>;
+    /** One record by its note's path or its node's id. */
+    get(ref: { path: string } | { nodeId: string }): Promise<ToolRecord>;
+    /** Set fields the Tool may edit (`permissions.records.write`); blank clears one. */
+    update(ref: { path: string } | { nodeId: string }, fields: Record<string, unknown>): Promise<{ record: string; fields: Record<string, unknown> }>;
+  };
+  resources: {
+    /** Files and links under `permissions.resources.read`, newest first, a page at a time. */
+    list(opts?: { folder?: string; kind?: string; q?: string; cursor?: string | null }): Promise<{ items: ToolResource[]; nextCursor: string | null }>;
+    get(id: string): Promise<ToolResource>;
+    /** The text extracted from a file, a page at a time. */
+    read(id: string, offset?: number): Promise<{ text: string; offset: number; totalChars: number; nextOffset: number | null }>;
+    /** Its bytes — or an image made from it — as a data URL an `<img>` can draw. */
+    blob(id: string, rendition?: 'original' | 'thumb' | 'preview'): Promise<{ mimeType: string; dataUrl: string }>;
+  };
+  actions: {
+    /** One of the space's actions a Tool may run, in this space (`permissions.actions`). */
+    run<T = unknown>(name: string, input?: Record<string, unknown>): Promise<T>;
+  };
+  ai: {
+    /** One answer from the space's model (`permissions.ai.complete`). */
+    complete(
+      prompt: string | { system?: string; messages: Array<{ role: 'user' | 'assistant'; content: string }>; maxTokens?: number },
+    ): Promise<string>;
+    /** The same questions about many texts, answered with numbers (`permissions.ai.decide`). */
+    decide(items: string[], questions: DecideQuestion[]): Promise<Array<DecideAnswer | null>>;
   };
   connectors: {
     /**
@@ -53,9 +94,13 @@ export interface VisvineApi {
     call<T = unknown>(fn: string, args?: unknown): Promise<T>;
   };
   state: {
-    /** Per-install key/value store. There is no `localStorage` in the sandbox. */
-    get<T = unknown>(key: string): Promise<T | null>;
-    set(key: string, value: unknown): Promise<null>;
+    /**
+     * A small key/value store — there is no `localStorage` in the sandbox. The
+     * viewer's own by default (a Tool written for kit 1 shares one value with
+     * everyone); `{ scope: 'install' }` is the value every viewer shares.
+     */
+    get<T = unknown>(key: string, opts?: { scope?: StateScope }): Promise<T | null>;
+    set(key: string, value: unknown, opts?: { scope?: StateScope }): Promise<null>;
   };
   /** What this Tool is being shown about, or null on its own page. */
   subject: ToolSubject | null;
@@ -73,6 +118,16 @@ export interface VisvineApi {
   ui: {
     /** Switch to one of this Tool's declared sections. */
     navigate(to: { section: string }): void;
+    /** A toast in the app's own corner. */
+    toast(message: string, tone?: 'info' | 'success' | 'warning' | 'error'): Promise<void>;
+    /** Ask the viewer, in the app's own dialog; true when they confirm. */
+    confirm(question: { title: string; body?: string; confirmLabel?: string; destructive?: boolean }): Promise<boolean>;
+    /** Hand the viewer a file to save — the app names it and asks (`permissions.ui.download`). */
+    download(file: { filename: string; content: string; mimeType?: string }): Promise<boolean>;
+    /** Open a record's page in the app. */
+    openRecord(ref: { path: string } | { nodeId: string }): Promise<void>;
+    /** Open a file in the app's viewer. */
+    openResource(id: string): Promise<void>;
   };
 }
 
@@ -108,6 +163,9 @@ export function VisvineProvider({
   const [subject, setSubject] = useState<ToolSubject | null>(init.subject);
   const [theme, setTheme] = useState<Record<string, string>>(init.theme);
   const [section, setSection] = useState<string | null>(init.section ?? null);
+  // A Tool written for kit 2 keeps state per viewer unless it says otherwise;
+  // one written for kit 1 keeps the one shared value it always had.
+  const defaultScope: StateScope = (init.install.sdk ?? 1) >= 2 ? 'user' : 'install';
 
   useEffect(() => {
     const offSubject = client.onSubject(setSubject);
@@ -142,6 +200,51 @@ export function VisvineProvider({
           }) as Promise<ContextPage<ContextHit>>,
         write: (path, content) => client.call('context.write', { path, content }),
         append: (path, text) => client.call('context.append', { path, text }),
+        links: (path) => client.call('context.links', { path }),
+      },
+      records: {
+        query: (type, opts) =>
+          client.call('records.query', {
+            type,
+            ...(opts?.where ? { where: opts.where } : {}),
+            ...(opts?.order ? { order: opts.order } : {}),
+            ...(opts?.limit === undefined ? {} : { limit: opts.limit }),
+            ...(opts?.cursor ? { cursor: opts.cursor } : {}),
+          }),
+        get: (ref) => client.call('records.get', ref),
+        update: (ref, fields) => client.call('records.update', { ...ref, fields }),
+      },
+      resources: {
+        list: (opts) =>
+          client.call('resources.list', {
+            ...(opts?.folder ? { folder: opts.folder } : {}),
+            ...(opts?.kind ? { kind: opts.kind } : {}),
+            ...(opts?.q ? { q: opts.q } : {}),
+            ...(opts?.cursor ? { cursor: opts.cursor } : {}),
+          }),
+        get: (id) => client.call('resources.get', { id }),
+        read: (id, offset) => client.call('resources.read', offset === undefined ? { id } : { id, offset }),
+        blob: (id, rendition) => client.call('resources.blob', rendition ? { id, rendition } : { id }),
+      },
+      actions: {
+        run: <T,>(name: string, input?: Record<string, unknown>) =>
+          client.call('actions.run', input ? { name, input } : { name }) as Promise<T>,
+      },
+      ai: {
+        complete: async (prompt) =>
+          (
+            await client.call(
+              'ai.complete',
+              typeof prompt === 'string'
+                ? { prompt }
+                : {
+                    messages: prompt.messages,
+                    ...(prompt.system ? { system: prompt.system } : {}),
+                    ...(prompt.maxTokens ? { maxTokens: prompt.maxTokens } : {}),
+                  },
+            )
+          ).text,
+        decide: (items, questions) => client.call('ai.decide', { items, questions }),
       },
       connectors: {
         call: <T,>(name: string, codeOrOpts: string | { action: string; args?: unknown } | { code: string }) =>
@@ -157,8 +260,9 @@ export function VisvineProvider({
         call: <T,>(fn: string, args?: unknown) => client.call('data.call', { fn, args: args ?? null }) as Promise<T>,
       },
       state: {
-        get: <T,>(key: string) => client.call('state.get', { key }) as Promise<T | null>,
-        set: (key, value) => client.call('state.set', { key, value }),
+        get: <T,>(key: string, opts?: { scope?: StateScope }) =>
+          client.call('state.get', { key, scope: opts?.scope ?? defaultScope }) as Promise<T | null>,
+        set: (key, value, opts) => client.call('state.set', { key, value, scope: opts?.scope ?? defaultScope }),
       },
       subject,
       viewer: init.viewer,
@@ -168,9 +272,20 @@ export function VisvineProvider({
       section,
       ui: {
         navigate: (to) => client.section(to.section),
+        toast: async (message, tone) => {
+          await client.call('ui.toast', tone ? { message, tone } : { message });
+        },
+        confirm: async (question) => (await client.call('ui.confirm', question)).confirmed,
+        download: async (file) => (await client.call('ui.download', file)).saved,
+        openRecord: async (ref) => {
+          await client.call('ui.openRecord', ref);
+        },
+        openResource: async (id) => {
+          await client.call('ui.openResource', { id });
+        },
       },
     }),
-    [client, subject, section, init.viewer, init.install, init.degraded],
+    [client, subject, section, init.viewer, init.install, init.degraded, defaultScope],
   );
 
   const value = useMemo(() => ({ api, theme, client }), [api, theme, client]);

@@ -24,9 +24,8 @@ import { createRoot } from 'react-dom/client';
 import type { ToolInitMessage } from '@/lib/tools/protocol';
 import { createBridgeClient } from './client';
 import type { BridgeClient } from './client';
-import { Banner } from './components/Banner';
 import { VisvineProvider } from './hooks';
-import { KIT_CSS } from './styles';
+import { BASE_CSS } from './styles';
 
 /**
  * The frame document sets `window[PARENT_ORIGIN_GLOBAL]` to the app origin it
@@ -48,6 +47,8 @@ export interface BootOptions {
   win?: Window;
   /** Defaults to `#root`, created if the document does not have one. */
   mount?: HTMLElement;
+  /** The stylesheet to inject: the frame's base for kit 2, kit 1's whole sheet for kit 1. */
+  css?: string;
 }
 
 function readParentOrigin(win: Window): string {
@@ -56,11 +57,11 @@ function readParentOrigin(win: Window): string {
   throw new Error(`Tool frame is missing window.${PARENT_ORIGIN_GLOBAL} — it cannot talk to Visvine.`);
 }
 
-function injectStylesheet(doc: Document): void {
+function injectStylesheet(doc: Document, css: string): void {
   if (doc.getElementById(STYLE_ELEMENT_ID)) return;
   const style = doc.createElement('style');
   style.id = STYLE_ELEMENT_ID;
-  style.textContent = KIT_CSS;
+  style.textContent = css;
   doc.head.appendChild(style);
 }
 
@@ -171,8 +172,21 @@ class ToolErrorBoundary extends Component<BoundaryProps, BoundaryState> {
   }
 }
 
+/**
+ * The runtime's own failure card: a rule in the danger colour, the title, the
+ * message. Styled inline from the `--vv-*` layer, so it reads the same under
+ * either kit, and before any Tool code has run.
+ */
 function errorCard(title: string, message: string): ReactNode {
-  return createElement(Banner, { tone: 'danger', title }, message);
+  return createElement(
+    'div',
+    {
+      role: 'alert',
+      style: { borderLeft: '2px solid var(--vv-danger)', padding: '4px 0 4px 16px', fontSize: 14, color: 'var(--vv-danger)' },
+    },
+    createElement('div', { style: { fontWeight: 600 } }, title),
+    message,
+  );
 }
 
 /**
@@ -189,7 +203,7 @@ export async function bootTool(
   const client = createBridgeClient(win, options.parentOrigin ?? readParentOrigin(win));
   reportUncaught(win, client);
 
-  injectStylesheet(doc);
+  injectStylesheet(doc, options.css ?? BASE_CSS);
   const root = createRoot(mountPoint(doc, options.mount));
 
   let init: ToolInitMessage;

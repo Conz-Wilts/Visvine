@@ -71,6 +71,7 @@ import {
 import { parseToolConfig, TOOL_NAME_RE, type ToolTypeSurface } from '@/lib/tools/config'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { EMPTY_PERIMETER } from '@/lib/tools/perimeter'
+import { factsFromPerimeter } from '@visvine/tool-protocol/manifest'
 
 // ── version numbering ──
 
@@ -418,6 +419,7 @@ test('the published shapes are what the routes and the space DTO carry', () => {
     author: { userId: 'u1', name: 'Ana' },
     perimeter: EMPTY_PERIMETER,
     surfaces: { rail: { label: 'Deals', icon: 'kanban' }, types: [] },
+    manifest: factsFromPerimeter(EMPTY_PERIMETER),
     iconSvg: null,
     releaseNotes: 'Adds the archive column',
     tags: ['crm', 'kanban'],
@@ -425,7 +427,7 @@ test('the published shapes are what the routes and the space DTO carry', () => {
     revokedAt: null,
     revokeReason: null,
   }
-  const detail: ToolVersionDetail = { ...summary, config: decodeToolConfig({}, 'deal-pipeline'), indexSource: '', uiSource: '', dataSource: '' }
+  const detail: ToolVersionDetail = { ...summary, config: decodeToolConfig({}, 'deal-pipeline'), indexSource: '', uiSource: '', dataSource: '', modules: {} }
   const entry: BrowseEntry = { ...summary, installs: 2 }
   const page: BrowsePage = { items: [entry], nextCursor: null }
   const refusal: RegistryError = { ok: false, status: 403, error: 'nope' }
@@ -468,6 +470,10 @@ test('the install shapes carry what the rail, the page and the banner need', () 
     rail: { label: 'Deals', icon: 'kanban' },
     types: [{ type: 'deal', mode: 'page' }],
     pendingVersion: null,
+    slots: {},
+    bindings: {},
+    settingSpecs: {},
+    settings: {},
   }
   const dto: InstalledToolDto = {
     id: install.id,

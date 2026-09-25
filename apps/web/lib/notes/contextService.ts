@@ -48,6 +48,7 @@ import { modelNotePathIn } from '@/lib/models/locate'
 import { agentContaining, agentFolderIn } from '@/lib/agents/location'
 import { agentNameOfFolder, briefFolderOf } from '@/lib/agents/shared/folder'
 import { declaresTool, toolFolderOfIndex, toolNameOfFolder } from '@/lib/tools/config'
+import { TOOL_FACT_KEYS } from '@/lib/tools/indexFacts'
 import { toolContaining, toolFolderIn } from '@/lib/tools/location'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { ContextPrincipal, WriteResult } from './shared/contextTypes'
@@ -656,10 +657,32 @@ export async function writeGated(
     (await configKindDenial(p, context, path, content)) ??
     (await resourceHomeDenial(context, path, content))
   if (denial) return { status: 'denied', reason: denial }
-  const runKeys = await briefRunKeyDenial(p, context, path, content)
+  const runKeys = (await briefRunKeyDenial(p, context, path, content)) ?? (await toolFactKeyDenial(p, context, path, content))
   if (runKeys) return { status: 'denied', reason: runKeys }
   await store.writeNote(context, path, content, actorOf(p), origin, model)
   return { status: 'applied', path }
+}
+
+/**
+ * A Tool's manifest facts — its surfaces, reach, bindings, settings, kit and
+ * dependencies — are its ROW (lib/tools/toolFacts.ts), changed through
+ * `configure_tool` or by writing its index.md with `write_tool` / on the
+ * Workbench, which files each key where it belongs and records who moved it.
+ * So a plain note write may not ADD or CHANGE one in a Tool's index; taking
+ * one out is fine, and a note written before the row keeps what it has until
+ * the Tool hook folds it in. The system writes the older shape freely.
+ */
+async function toolFactKeyDenial(p: ContextPrincipal, context: Context, path: string, content: string): Promise<string | null> {
+  if (!isShared(context) || p.system) return null
+  if (!toolFolderOfIndex(path, declaresTool(content))) return null
+  const after = parseFrontmatter(content)
+  const keys = TOOL_FACT_KEYS.filter((k) => k in after)
+  if (keys.length === 0) return null
+  const current = await store.readNoteOrNull(context, path)
+  const before = current ? parseFrontmatter(current) : {}
+  const changed = keys.filter((k) => JSON.stringify(after[k]) !== JSON.stringify(before[k]))
+  if (changed.length === 0) return null
+  return `A tool's ${changed.map((k) => `\`${k}\``).join(', ')} ${changed.length === 1 ? 'is' : 'are'} not written in its note — set ${changed.length === 1 ? 'it' : 'them'} with configure_tool, or write the index.md with write_tool (or on the Workbench), which files each part where it belongs.`
 }
 
 /**

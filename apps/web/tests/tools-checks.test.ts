@@ -31,6 +31,7 @@ import { compatibilityFindings } from '@/lib/tools/checks/compatibility'
 import { runStaticChecks } from '@/lib/tools/checks/analyze'
 import { EMPTY_PERIMETER } from '@/lib/tools/perimeter'
 import { decodeToolConfig } from '@/lib/tools/registry'
+import { parseToolConfig } from '@/lib/tools/config'
 
 const f = (severity: CheckFinding['severity'], rule = 'r'): CheckFinding => ({ rule, severity, message: rule })
 
@@ -321,4 +322,59 @@ test('both stages run in well under a second on a real tool', async () => {
   })
   assert.ok(performance.now() - started < 1000)
   assert.equal(report.security.analyzer, 'static-1')
+})
+
+// ── manifest 2 ──
+
+function v2(permissions: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+  const parsed = parseToolConfig({ type: 'tool', title: 'X', description: 'x', permissions, ...extra }, 'x')
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
+  return parsed.config
+}
+
+test('using a family the manifest never declared is said before anyone installs it', async () => {
+  const report = await runStaticChecks({
+    index: '---\ntype: tool\n---\n',
+    ui: `import { useVisvine } from '@visvine/tool-kit'
+export default function App() {
+  const v = useVisvine()
+  void v.records.query('Deal'); void v.resources.list(); void v.ai.complete('x'); void v.actions.run('read_context'); void v.ui.download({ filename: 'a', content: '' })
+  return null
+}`,
+    data: null,
+    config: v2({ context: { read: ['deals/**'] } }),
+    build: { ok: true, errors: [], warnings: [], configError: null },
+  })
+  const found = rules(report.security.findings)
+  for (const rule of ['usage.undeclared-records', 'usage.undeclared-resources', 'usage.undeclared-ai', 'usage.unknown-action', 'usage.undeclared-download']) {
+    assert.ok(found.includes(rule), `${rule} in ${found.join(', ')}`)
+  }
+})
+
+test('a module is scanned as ui.tsx is', async () => {
+  const report = await runStaticChecks({
+    index: '---\ntype: tool\n---\n',
+    ui: `import { A } from './src/a'\nexport default function App() { return <A /> }`,
+    data: null,
+    modules: { 'src/a.tsx': `export function A() { window.top!.location.href = 'https://evil.example'; return null }` },
+    config: v2({}),
+    build: { ok: true, errors: [], warnings: [], configError: null },
+  })
+  assert.ok(report.security.findings.some((x) => x.file === 'src/a.tsx' && x.severity === 'high'), JSON.stringify(report.security.findings))
+})
+
+test('an action no tool may run, or a package the server does not serve, blocks the publish', () => {
+  const config = v2({ actions: ['read_context', 'list_events'] }, { dependencies: { lodash: '^4', zod: '^4' } })
+  const found = compatibilityFindings({ build: { ok: true, errors: [], warnings: [], configError: null }, config, hasUi: true })
+  const blocking = found.filter((x) => x.severity === 'high').map((x) => x.rule)
+  assert.deepEqual(blocking.sort(), ['compat.action', 'compat.dependency'])
+  assert.ok(!rules(found).includes('compat.empty-perimeter'), 'actions are reach')
+})
+
+test('manifest 2 reach raises the risk the way the v1 lists do', () => {
+  const config = v2({ context: { read: ['**'], write: ['deals/**'] }, records: { write: [{ type: 'Deal', fields: ['stage'] }] }, ai: { complete: true }, ui: { download: true } })
+  const risk = riskScore(config)
+  assert.equal(risk.level, 'high')
+  assert.ok(risk.factors.some((line) => line.includes('writes what the space’s AI answers')))
+  assert.ok(risk.factors.some((line) => line.includes('as files')))
 })

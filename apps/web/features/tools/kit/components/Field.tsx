@@ -8,15 +8,19 @@ export interface FieldProps {
   children: ReactNode;
 }
 
-/** Label + control + one line of help. `error` replaces `hint` when set. */
+/**
+ * The app's labelled field (@visvine/ui's Field, with `htmlFor` for the
+ * control it names): label, control, one line under it. `error` replaces
+ * `hint`.
+ */
 export function Field({ label, htmlFor, hint, error, children }: FieldProps) {
   return (
-    <div className="vv-field">
-      <label className="vv-field__label" htmlFor={htmlFor}>
+    <div className="w-full">
+      <label htmlFor={htmlFor} className="mb-1.5 block text-base font-medium text-fg">
         {label}
       </label>
       {children}
-      {error ? <span className="vv-field__error">{error}</span> : hint ? <span className="vv-field__hint">{hint}</span> : null}
+      {error ? <p className="mt-1 text-sm text-danger-bright">{error}</p> : hint ? <p className="mt-1 text-sm text-fg-muted">{hint}</p> : null}
     </div>
   );
 }

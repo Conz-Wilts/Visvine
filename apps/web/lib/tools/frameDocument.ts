@@ -23,6 +23,7 @@
  *     target the frame is allowed to talk to — and is never fetched.
  */
 import type { VendorFileName } from './vendorBundle'
+import { CURATED_DEPENDENCIES } from '@visvine/tool-protocol/dependencies'
 
 /**
  * Restated from features/tools/kit/runtime.ts#PARENT_ORIGIN_GLOBAL, which
@@ -35,8 +36,12 @@ const PARENT_ORIGIN_GLOBAL = '__VISVINE_PARENT_ORIGIN'
 const IMPORT_MAP_ENTRIES: ReadonlyArray<readonly [string, VendorFileName]> = [
   ['react', 'react.js'],
   ['react/jsx-runtime', 'react-jsx-runtime.js'],
+  ['react-dom', 'react-dom.js'],
   ['react-dom/client', 'react-dom-client.js'],
+  // Kit 2; a Tool written for kit 1 is mapped to 'tool-kit-1.js' below.
   ['@visvine/tool-kit', 'tool-kit.js'],
+  // Every curated dependency is mapped; the compiler decides which a Tool may import.
+  ...Object.entries(CURATED_DEPENDENCIES).map(([name, dep]) => [name, dep.file as VendorFileName] as const),
 ]
 
 /**
@@ -114,6 +119,12 @@ export interface FrameDocumentOptions {
   vendorVersions?: Partial<Record<VendorFileName, string>>
   /** The CSP nonce. Required in practice — see the module comment. */
   nonce?: string
+  /**
+   * The kit major the Tool was written for (`sdk:` in its manifest). Kit 1 is
+   * served its own frozen kit and no compiled stylesheet, so it renders
+   * exactly as it did; absent reads as 2.
+   */
+  kit?: 1 | 2
 }
 
 function vendorUrl(opts: FrameDocumentOptions, file: VendorFileName): string {
@@ -131,11 +142,18 @@ function vendorUrl(opts: FrameDocumentOptions, file: VendorFileName): string {
  * than dying at import time with a blank frame.
  */
 export function renderFrameDocument(opts: FrameDocumentOptions): string {
+  const kit1 = opts.kit === 1
   const imports = Object.fromEntries(
-    IMPORT_MAP_ENTRIES.map(([specifier, file]) => [specifier, vendorUrl(opts, file)]),
+    IMPORT_MAP_ENTRIES.map(([specifier, file]) => [
+      specifier,
+      vendorUrl(opts, kit1 && file === 'tool-kit.js' ? 'tool-kit-1.js' : file),
+    ]),
   )
   const nonce = nonceAttr(opts.nonce)
-  const head = `
+  // Kit 2's stylesheet — the app's own tokens and utilities — before any Tool
+  // markup paints. Kit 1 brings its own, inside its runtime.
+  const stylesheet = kit1 ? '' : `\n<link rel="stylesheet" href="${escapeHtml(vendorUrl(opts, 'tool-kit.css'))}">`
+  const head = `${stylesheet}
 <script type="importmap"${nonce}>${scriptLiteral({ imports })}</script>`
   const body = `<div id="root"></div>
 <noscript>This Visvine Tool needs JavaScript to run.</noscript>

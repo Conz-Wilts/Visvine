@@ -21,10 +21,11 @@ import {
   type CheckFinding,
   type CheckReport,
   type StageResult,
+  type CheckFile,
 } from './findings'
 import { positionLookup } from './sourceMap'
 import { scanSecrets, scanSourceText, scanStrings } from './textRules'
-import { declaredVsUsed, riskFindings, riskScore } from './usage'
+import { declaredVsUsed, riskFindings, riskScore, sourceReach } from './usage'
 
 /** Bumped whenever a rule is added or changed, so a rescan knows which versions to re-read. */
 const ANALYZER_VERSION = 'static-1'
@@ -34,6 +35,8 @@ export interface StaticCheckInput {
   index: string | null
   ui: string | null
   data: string | null
+  /** The interface's own modules, by file (`src/chart.tsx`) — scanned as ui.tsx is. */
+  modules?: Record<string, string>
   config: ToolConfig | null
   build: CompatibilityInput['build']
   facts?: CompatibilityInput['facts']
@@ -41,16 +44,16 @@ export interface StaticCheckInput {
 
 const EMPTY_SCAN: CodeScan = { findings: [], calls: [], handlers: [], strings: [] }
 
-async function scanUi(code: string): Promise<CodeScan> {
+async function scanUi(code: string, file: CheckFile = 'ui.tsx'): Promise<CodeScan> {
   let out
   try {
     out = await transform(code, {
-      loader: 'tsx',
+      loader: file.endsWith('.ts') ? 'ts' : 'tsx',
       jsx: 'automatic',
       format: 'esm',
       target: 'es2022',
       sourcemap: 'external',
-      sourcefile: 'ui.tsx',
+      sourcefile: file,
       logLevel: 'silent',
     })
   } catch {
@@ -62,7 +65,7 @@ async function scanUi(code: string): Promise<CodeScan> {
   } catch {
     return EMPTY_SCAN
   }
-  return scanCode({ file: 'ui.tsx', program, locate: positionLookup(out.map) })
+  return scanCode({ file, program, locate: positionLookup(out.map) })
 }
 
 function scanData(code: string): CodeScan {
@@ -102,7 +105,13 @@ export async function runStaticChecks(input: StaticCheckInput): Promise<CheckRep
   const securityStarted = performance.now()
   const ui = input.ui ? await scanUi(input.ui) : EMPTY_SCAN
   const data = input.data?.trim() ? scanData(input.data) : EMPTY_SCAN
-  const findings: CheckFinding[] = [...ui.findings, ...data.findings]
+  const moduleScans = await Promise.all(
+    Object.entries(input.modules ?? {}).map(async ([file, code]) => ({ file: file as CheckFile, code, scan: await scanUi(code, file as CheckFile) })),
+  )
+  const findings: CheckFinding[] = [...ui.findings, ...data.findings, ...moduleScans.flatMap((m) => m.scan.findings)]
+  for (const m of moduleScans) {
+    findings.push(...scanSourceText(m.code, m.file), ...scanSecrets(m.code, m.file), ...scanStrings(m.scan.strings, m.file))
+  }
   if (input.ui) findings.push(...scanSourceText(input.ui, 'ui.tsx'), ...scanSecrets(input.ui, 'ui.tsx'))
   if (input.data) findings.push(...scanSourceText(input.data, 'data.js'), ...scanSecrets(input.data, 'data.js'))
   if (input.index) findings.push(...scanSourceText(input.index, 'index.md'), ...scanSecrets(input.index, 'index.md'))
@@ -111,7 +120,8 @@ export async function runStaticChecks(input: StaticCheckInput): Promise<CheckRep
   let risk: StageResult['risk']
   if (input.config) {
     const hasData = !!input.data?.trim()
-    findings.push(...declaredVsUsed(input.config.perimeter, [...ui.calls, ...data.calls], hasData ? data.handlers : []))
+    const calls = [...ui.calls, ...data.calls, ...moduleScans.flatMap((m) => m.scan.calls)]
+    findings.push(...declaredVsUsed(sourceReach(input.config), calls, hasData ? data.handlers : []))
     risk = riskScore(input.config)
     findings.push(...riskFindings(risk))
   }

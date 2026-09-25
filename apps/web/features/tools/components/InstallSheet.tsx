@@ -1,17 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button, Modal, Select } from '@visvine/ui';
+import { defaultBindings, resolveReach, type BindableSpace, type BindingValues } from '@visvine/tool-protocol/bindings';
 import { isBuiltInType } from '@/lib/tools/typePages';
 import type { ToolVersionSummary } from '@/lib/tools/registry';
-import { installToolVersion } from '../lib/client';
+import { fetchBindable, installToolVersion } from '../lib/client';
+import { reachRows } from '../lib/reach';
+import BindingFields from './BindingFields';
 import PerimeterSummary from './PerimeterSummary';
 
 /**
  * Adding a Tool to the space's shape: where its row goes on the rail, which
- * type pages or tabs it takes, then Install. Opened from Approvals right after
- * approving, and from a Tool's own tab. Placement afterwards stays in
- * Console → Tools, which drags, locks and tucks rows.
+ * type pages or tabs it takes, what each binding slot is bound to, its
+ * settings, then Install — pressing it is the consent to the reach shown,
+ * which is the BOUND reach, re-drawn as a slot changes. Opened from Approvals
+ * right after approving, and from a Tool's own tab. Placement afterwards stays
+ * in Console → Tools, which drags, locks and tucks rows.
  */
 export default function InstallSheet({
   spaceId,
@@ -20,7 +25,7 @@ export default function InstallSheet({
   onInstalled,
 }: {
   spaceId: string;
-  version: Pick<ToolVersionSummary, 'id' | 'title' | 'version' | 'surfaces' | 'perimeter'>;
+  version: Pick<ToolVersionSummary, 'id' | 'title' | 'version' | 'surfaces' | 'manifest'>;
   onClose: () => void;
   /** The sentence to show once it is in, naming anything the admin should know. */
   onInstalled: (message: string) => void;
@@ -32,6 +37,26 @@ export default function InstallSheet({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const manifest = version.manifest;
+  const hasSlots = Object.keys(manifest.bindings).length > 0;
+  const [space, setSpace] = useState<BindableSpace | null>(null);
+  const [bindings, setBindings] = useState<BindingValues>({});
+  const [settings, setSettings] = useState<Record<string, unknown>>({});
+
+  useEffect(() => {
+    if (!hasSlots) return;
+    const ctl = new AbortController();
+    fetchBindable(spaceId, ctl.signal)
+      .then((found) => {
+        setSpace(found);
+        // Each slot starts on the Tool's suggestion when this space has it.
+        setBindings((chosen) => ({ ...defaultBindings(manifest, found), ...chosen }));
+      })
+      .catch(() => {});
+    return () => ctl.abort();
+  }, [spaceId, hasSlots, manifest]);
+
+  const reach = useMemo(() => reachRows(resolveReach(manifest, bindings).reach), [manifest, bindings]);
 
   const install = async () => {
     setBusy(true);
@@ -41,6 +66,8 @@ export default function InstallSheet({
         versionId: version.id,
         ...(rail ? { placement } : {}),
         ...(version.surfaces.types.length ? { typeClaims: claims } : {}),
+        ...(hasSlots ? { bindings } : {}),
+        ...(Object.keys(settings).length ? { settings } : {}),
       });
       const notes = [
         ...res.conflicts.map((c) => `${c.type}'s page is ${c.heldBy}'s`),
@@ -71,7 +98,18 @@ export default function InstallSheet({
       }
     >
       <div className="flex flex-col gap-5 px-6 py-4 text-sm">
-        <PerimeterSummary perimeter={version.perimeter} />
+        <PerimeterSummary perimeter={reach.perimeter} extra={reach.extra} />
+
+        <BindingFields
+          slots={manifest.bindings}
+          settingSpecs={manifest.settings}
+          bindings={bindings}
+          settings={settings}
+          space={space}
+          onBindings={setBindings}
+          onSettings={setSettings}
+          disabled={busy}
+        />
 
         {rail && (
           <label className="flex items-center justify-between gap-4">

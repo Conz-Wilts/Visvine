@@ -24,7 +24,10 @@ import {
   refuseWrite,
   type ToolPerimeter,
 } from '../perimeter'
-import type { ToolConfig } from '../config'
+import { manifestOf, type ToolConfig } from '../config'
+import { resolveReach, sourceBindings, type ToolReach } from '@visvine/tool-protocol/bindings'
+import { refuseAction, refuseRecordRead } from '@visvine/tool-protocol/reach'
+import { TOOL_ACTIONS } from '../actionAllowlist'
 import type { BridgeCallSite } from './codeRules'
 import type { CheckFinding, RiskScore } from './findings'
 
@@ -51,11 +54,37 @@ function listReachable(perimeter: ToolPerimeter, glob: string): boolean {
   })
 }
 
+/** A reach with manifest 2's families empty, for a caller holding only the v1 lists. */
+function asReach(perimeter: ToolPerimeter | ToolReach): ToolReach {
+  return 'records' in perimeter
+    ? perimeter
+    : {
+        ...perimeter,
+        records: { read: [], write: [] },
+        resources: { read: [] },
+        connectorActions: {},
+        actions: [],
+        ai: { complete: false, decide: false },
+        ui: { download: false },
+      }
+}
+
+/** A config's reach as the space that wrote it runs it: every slot bound to its suggestion. */
+export function sourceReach(config: Pick<ToolConfig, 'perimeter' | 'manifest'>): ToolReach {
+  const facts = manifestOf(config)
+  return resolveReach(facts, sourceBindings(facts)).reach
+}
+
+const RECORDS = new Set<BridgeCallSite['method']>(['records.query', 'records.get', 'records.update'])
+const RESOURCES = new Set<BridgeCallSite['method']>(['resources.list', 'resources.get', 'resources.read', 'resources.blob'])
+
 export function declaredVsUsed(
-  perimeter: ToolPerimeter,
+  declared: ToolPerimeter | ToolReach,
   calls: readonly BridgeCallSite[],
   handlers: readonly string[] | null,
 ): CheckFinding[] {
+  const reach = asReach(declared)
+  const perimeter: ToolPerimeter = reach
   const findings: CheckFinding[] = []
   const at = (call: BridgeCallSite) => ({ file: call.file, ...(call.line ? { line: call.line } : {}) })
 
@@ -73,8 +102,25 @@ export function declaredVsUsed(
       findings.push({ rule: 'usage.undeclared-agent', severity: 'medium', message: `Runs agent ${call.arg}, which it does not declare`, ...at(call) })
     } else if (call.method === 'data.call' && handlers !== null && !handlers.includes(call.arg)) {
       findings.push({ rule: 'usage.missing-handler', severity: 'medium', message: `Calls data handler ${call.arg}, which data.js does not define`, ...at(call) })
+    } else if (call.method === 'records.query' && refuseRecordRead(reach, call.arg)) {
+      findings.push({ rule: 'usage.undeclared-records', severity: 'medium', message: `Queries ${call.arg} records, which permissions.records does not declare`, ...at(call) })
+    } else if (call.method === 'actions.run' && !Object.hasOwn(TOOL_ACTIONS, call.arg)) {
+      findings.push({ rule: 'usage.unknown-action', severity: 'medium', message: `Runs ${call.arg}, which is not an action a tool may run`, ...at(call) })
+    } else if (call.method === 'actions.run' && refuseAction(reach, call.arg)) {
+      findings.push({ rule: 'usage.undeclared-action', severity: 'medium', message: `Runs ${call.arg}, which permissions.actions does not declare`, ...at(call) })
     }
   }
+
+  // A family used with nothing declared is refused whatever its arguments.
+  const family = (rule: string, methods: Set<BridgeCallSite['method']>, declaredAny: boolean, message: string) => {
+    const call = calls.find((c) => methods.has(c.method))
+    if (call && !declaredAny) findings.push({ rule, severity: 'medium', message, ...at(call) })
+  }
+  family('usage.undeclared-records', RECORDS, reach.records.read.length + reach.records.write.length > 0, 'Uses records, and declares none in permissions.records')
+  family('usage.undeclared-resources', RESOURCES, reach.resources.read.length > 0, 'Uses files, and declares none in permissions.resources')
+  family('usage.undeclared-ai', new Set(['ai.complete']), reach.ai.complete, 'Asks ai.complete, and does not declare permissions.ai.complete')
+  family('usage.undeclared-ai', new Set(['ai.decide']), reach.ai.decide, 'Asks ai.decide, and does not declare permissions.ai.decide')
+  family('usage.undeclared-download', new Set(['ui.download']), reach.ui.download, 'Hands the viewer a download, and does not declare permissions.ui.download')
 
   const uses = (methods: Set<BridgeCallSite['method']>) => calls.some((call) => methods.has(call.method))
   const unused = (rule: string, message: string) => findings.push({ rule, severity: 'low', message, file: 'index.md' })
@@ -88,6 +134,12 @@ export function declaredVsUsed(
     const writesBriefs = calls.some((call) => WRITES.has(call.method) && (call.arg ?? '').startsWith('agents/'))
     if (!writesBriefs) unused('usage.unused-agent', `Declares agents (${perimeter.agents.join(', ')}) it never runs`)
   }
+  if (reach.records.write.length > 0 && !uses(new Set(['records.update']))) unused('usage.unused-records', 'Declares record edits it never makes')
+  if (reach.resources.read.length > 0 && !uses(RESOURCES)) unused('usage.unused-resources', 'Declares files it never reads')
+  if (reach.actions.length > 0 && !uses(new Set(['actions.run']))) unused('usage.unused-action', `Declares actions (${reach.actions.join(', ')}) it never runs`)
+  if (reach.ai.complete && !uses(new Set(['ai.complete']))) unused('usage.unused-ai', 'Declares ai.complete and never asks')
+  if (reach.ai.decide && !uses(new Set(['ai.decide']))) unused('usage.unused-ai', 'Declares ai.decide and never asks')
+  if (reach.ui.download && !uses(new Set(['ui.download']))) unused('usage.unused-download', 'Declares downloads it never offers')
   return findings
 }
 
@@ -99,8 +151,10 @@ function isBroad(glob: string): boolean {
 
 const CONFIG_ROOTS = ['connectors', 'agents', 'tools', 'models', 'settings']
 
-export function riskScore(config: Pick<ToolConfig, 'perimeter' | 'surfaces'>): RiskScore {
-  const { perimeter, surfaces } = config
+export function riskScore(config: Pick<ToolConfig, 'perimeter' | 'surfaces' | 'manifest'>): RiskScore {
+  const { surfaces } = config
+  const reach = sourceReach(config)
+  const perimeter: ToolPerimeter = reach
   const factors: string[] = []
   let score = 0
   const broadRead = perimeter.read.some(isBroad)
@@ -141,6 +195,26 @@ export function riskScore(config: Pick<ToolConfig, 'perimeter' | 'surfaces'>): R
   if (surfaces.types.some((claim) => claim.mode === 'page')) {
     score += 5
     factors.push('takes over a type’s page')
+  }
+  if (reach.records.write.length > 0) {
+    score += 10
+    factors.push(`edits ${reach.records.write.map((w) => w.type).join(', ')} records`)
+  }
+  if (reach.actions.length > 0) {
+    score += 10
+    factors.push(`runs ${reach.actions.join(', ')}`)
+  }
+  if ((reach.ai.complete || reach.ai.decide) && (perimeter.write.length > 0 || reach.records.write.length > 0)) {
+    score += 10
+    factors.push('writes what the space’s AI answers')
+  }
+  if (reach.ui.download && (perimeter.read.length > 0 || reach.records.read.length > 0 || reach.resources.read.length > 0)) {
+    score += 10
+    factors.push('hands space data to the viewer as files')
+  }
+  if (reach.resources.read.some(isBroad) || reach.resources.read.includes('resources/**')) {
+    score += 5
+    factors.push('reads every file its viewer can')
   }
   score = Math.min(100, score)
   const level = score >= 45 ? 'high' : score >= 25 ? 'medium' : 'low'

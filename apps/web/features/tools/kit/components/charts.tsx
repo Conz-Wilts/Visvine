@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 import * as Recharts from 'recharts';
 import { useTheme } from '../hooks';
 import { CHART_COLORS } from '../styles';
-import { cx } from './cx';
+import { clsx as cx } from 'clsx';
 
 export { Recharts };
 

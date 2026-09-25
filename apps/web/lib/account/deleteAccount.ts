@@ -212,6 +212,10 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     // keeps the record of who set one up.
     await tx.connectorConnection.deleteMany({ where: { userId } })
 
+    // What Tools kept for this person alone (`state` scoped `user`). A value an
+    // install shares with everyone is stored under '' and stays.
+    await tx.appToolState.deleteMany({ where: { userId } })
+
     // Agent subscriptions — runs the agents fan out FOR this person. Without
     // this the tick would keep minting runs for a user who no longer exists.
     await tx.agentSubscription.deleteMany({ where: { userId } })

@@ -7,11 +7,15 @@ export interface EmptyStateProps {
   action?: ReactNode;
 }
 
+/**
+ * The app's empty state (@visvine/ui's shape): a line of muted text, centred,
+ * and the one thing to do about it. No tile — an empty surface is the
+ * quietest thing on the page.
+ */
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div className="vv-empty">
-      <span className="vv-empty__title">{title}</span>
-      {description && <span className="vv-empty__description">{description}</span>}
+    <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+      <p className="text-fg-muted">{description ?? title}</p>
       {action}
     </div>
   );

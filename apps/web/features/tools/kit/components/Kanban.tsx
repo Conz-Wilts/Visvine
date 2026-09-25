@@ -17,7 +17,7 @@
  */
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
-import { cx } from './cx';
+import { clsx as cx } from 'clsx';
 
 export interface KanbanMove {
   cardId: string;
@@ -51,6 +51,8 @@ const ColumnContext = createContext<string | null>(null);
 
 const COLUMN_ATTR = 'data-vv-kanban-column';
 const CARD_ATTR = 'data-vv-kanban-card';
+/** On the card left in place while its ghost follows the pointer. */
+const DRAGGING_ATTR = 'data-vv-kanban-dragging';
 /** Pixels of movement before a press becomes a drag (so clicks still work). */
 const DRAG_THRESHOLD = 4;
 
@@ -60,7 +62,7 @@ function targetAt(x: number, y: number, doc: Document): { columnId: string; inde
   if (!columnEl) return null;
   const columnId = columnEl.getAttribute(COLUMN_ATTR) ?? '';
   const cards = Array.from(columnEl.querySelectorAll<HTMLElement>(`[${CARD_ATTR}]`)).filter(
-    (c) => !c.classList.contains('vv-kanban__card--dragging'),
+    (c) => !c.hasAttribute(DRAGGING_ATTR),
   );
   let index = cards.length;
   for (let i = 0; i < cards.length; i++) {
@@ -135,7 +137,9 @@ export function KanbanBoard({ onMove, className, children }: KanbanBoardProps) {
 
   return (
     <BoardContext.Provider value={value}>
-      <div className={cx('vv-kanban', drag && 'vv-kanban--dragging', className)}>{children}</div>
+      <div className={cx('flex items-start gap-3 overflow-x-auto pb-1', drag && 'cursor-grabbing select-none', className)}>
+        {children}
+      </div>
     </BoardContext.Provider>
   );
 }
@@ -160,17 +164,28 @@ export function KanbanColumn({ id, title, count, actions, empty, className, chil
   const attrs = { [COLUMN_ATTR]: id } as Record<string, string>;
   return (
     <ColumnContext.Provider value={id}>
-      <div {...attrs} className={cx('vv-kanban__column', isOver && 'vv-kanban__column--over', className)}>
-        <div className="vv-kanban__column-header">
-          <span className="vv-kanban__column-title">
+      <div
+        {...attrs}
+        className={cx(
+          'flex w-72 shrink-0 flex-col rounded-lg border',
+          isOver ? 'border-accent bg-accent-soft' : 'border-transparent bg-surface-subtle',
+          className,
+        )}
+      >
+        <div className="flex items-center justify-between gap-2 px-3 py-2">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
             {title}
-            {count !== undefined && <span className="vv-kanban__count">{count}</span>}
+            {count !== undefined && (
+              <span className="rounded-full bg-surface-muted px-1.5 text-[11px] font-semibold normal-case tracking-normal">{count}</span>
+            )}
           </span>
           {actions}
         </div>
-        <div className="vv-kanban__cards">
+        <div className="flex min-h-10 flex-col gap-2 px-2 pb-2">
           {children}
-          {!hasCards && empty !== undefined && <div className="vv-kanban__empty">{empty}</div>}
+          {!hasCards && empty !== undefined && (
+            <div className="rounded-lg border border-dashed border-line px-2 py-3 text-center text-xs text-fg-muted">{empty}</div>
+          )}
         </div>
       </div>
     </ColumnContext.Provider>
@@ -189,7 +204,7 @@ export function KanbanCard({ id, onClick, className, children }: KanbanCardProps
   const columnId = useContext(ColumnContext);
   const drag = board?.drag;
   const dragging = drag?.cardId === id;
-  const attrs = { [CARD_ATTR]: id } as Record<string, string>;
+  const attrs = { [CARD_ATTR]: id, ...(dragging ? { [DRAGGING_ATTR]: '' } : {}) } as Record<string, string>;
   const ghostStyle: CSSProperties | undefined =
     dragging && drag
       ? {
@@ -206,7 +221,12 @@ export function KanbanCard({ id, onClick, className, children }: KanbanCardProps
     <>
       <div
         {...attrs}
-        className={cx('vv-kanban__card', dragging && 'vv-kanban__card--dragging', onClick && 'vv-kanban__card--clickable', className)}
+        className={cx(
+          'rounded-lg border border-line-subtle bg-surface p-3 text-sm text-fg',
+          dragging && 'opacity-35',
+          onClick && 'cursor-pointer hover:border-line',
+          className,
+        )}
         onPointerDown={board && columnId !== null ? (e) => board.beginDrag(e, id, columnId) : undefined}
         onClick={onClick}
         // Long-press on touch would otherwise start a text selection instead of a drag.
@@ -215,7 +235,11 @@ export function KanbanCard({ id, onClick, className, children }: KanbanCardProps
         {children}
       </div>
       {dragging && ghostStyle && (
-        <div className="vv-kanban__card vv-kanban__card--ghost" style={ghostStyle} aria-hidden>
+        <div
+          className="rotate-[1.5deg] cursor-grabbing rounded-lg border border-line-subtle bg-surface p-3 text-sm text-fg opacity-95 shadow-lg"
+          style={ghostStyle}
+          aria-hidden
+        >
           {children}
         </div>
       )}

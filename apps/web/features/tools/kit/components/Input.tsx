@@ -1,8 +1,9 @@
 import type { InputHTMLAttributes } from 'react';
-import { cx } from './cx';
+import { Input as UIInput } from '@visvine/ui';
 
 export type InputProps = InputHTMLAttributes<HTMLInputElement>;
 
-export function Input({ className, ...rest }: InputProps) {
-  return <input {...rest} className={cx('vv-input', className)} />;
+/** The app's own text input (@visvine/ui). */
+export function Input(props: InputProps) {
+  return <UIInput {...props} />;
 }

@@ -108,6 +108,8 @@ model Space {
   appToolBuilds      AppToolBuild[]
   appToolCheckRuns   AppToolCheckRun[]
   contextRecords     ContextRecord[]
+  appToolConfigs     AppToolConfig[]
+  appToolConfigChanges AppToolConfigChange[]
   contextRecordFields ContextRecordField[]
   appToolInstalls    AppToolInstall[]
   sharedToolInstalls AppToolInstall[]      @relation("SharedToolInstalls")
@@ -933,6 +935,9 @@ model AppToolVersion {
   indexSource            String           @map("index_source") // index.md body (docs) at publish time
   uiSource               String           @map("ui_source") // ui.tsx source at publish time
   dataSource             String           @map("data_source") // data.js source at publish time
+  /// The interface's own modules at publish time, by file (`src/chart.tsx`) —
+  /// read by review and export beside ui.tsx; bundled into `uiBundle`.
+  modules                Json             @default("{}")
   /// The Tool's own rail glyph, sanitized at build time (lib/tools/iconSvg.ts)
   /// and snapshotted here so an install carries it. Null = uses a built-in.
   iconSvg                String?          @map("icon_svg")
@@ -996,6 +1001,11 @@ model AppToolInstall {
   installedBy       String         @map("installed_by")
   requirements      Json           @default("{}") // { connectors: string[]; types: string[]; agents: string[] } — MISSING items at last check
   typeClaims        Json           @default("{}") @map("type_claims") // { [typeName]: 'page' | 'tab' }
+  /// What each of the version's binding slots is bound to here — a folder,
+  /// type, connector or agent of this space (@visvine/tool-protocol bindings).
+  bindings          Json           @default("{}")
+  /// The values of the version's install-time settings, as an admin set them.
+  settings          Json           @default("{}")
   pendingVersionId  String?        @map("pending_version_id")
   /// Set when this install is the HOUSE's Tool shared down into this room
   /// (lib/tools/share.ts): the room runs it, the house owns it.
@@ -1019,12 +1029,16 @@ model AppToolInstall {
 model AppToolState {
   id        String         @id @default(dbgenerated("(gen_random_uuid())::text"))
   installId String         @map("install_id")
+  /// '' for a value every viewer of the install shares (scope `install`); the
+  /// viewer's id for their own (scope `user`), cleared with their account.
+  userId    String         @default("") @map("user_id")
   key       String
   value     Json
   updatedAt DateTime       @updatedAt @map("updated_at")
   install   AppToolInstall @relation(fields: [installId], references: [id], onDelete: Cascade)
 
-  @@unique([installId, key], name: "app_tool_state_identity")
+  @@unique([installId, userId, key], name: "app_tool_state_identity")
+  @@index([userId])
   @@map("app_tool_state")
 }
 
@@ -1050,6 +1064,43 @@ model AppToolListing {
 /// navigated itself, a CSP violation, a report. Counts and facts only, never
 /// the viewer's content. `viewerId` is redacted when that person deletes their
 /// account; the incident stays.
+/// A Tool's structured facts — its surfaces and its manifest's reach,
+/// bindings, settings, platforms, kit range, dependencies and collections —
+/// one row per Tool per space. The index note keeps the prose (title,
+/// description, tags, docs); this is what a machine enforces or places. Both
+/// are read as one index note (lib/tools/toolFacts.ts#composeToolIndex), and
+/// written through `writeToolFacts`, which keeps every change below.
+model AppToolConfig {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  name      String
+  /// The fact keys as the author declared them (`surfaces`, `permissions`, …).
+  facts     Json     @default("{}")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, name], name: "app_tool_config_identity")
+  @@map("app_tool_configs")
+}
+
+/// Every change to a Tool's facts, one row per key that moved: who, when, and
+/// what it was before and after.
+model AppToolConfigChange {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  name      String
+  key       String
+  before    Json?
+  after     Json?
+  /// Who, by name — the person or the system that wrote it.
+  actor     String
+  createdAt DateTime @default(now()) @map("created_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, name, createdAt])
+  @@map("app_tool_config_changes")
+}
+
 /// One stage of the automated checks over a Tool — compatibility or security —
 /// as it ran on a working copy (`versionId` null) or on the version a publish
 /// wrote (lib/tools/checks/). The author, the space's admins and a Visvine

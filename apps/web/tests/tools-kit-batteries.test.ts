@@ -65,6 +65,20 @@ const KIT_VALUE_EXPORTS = [
   'KanbanBoard',
   'KanbanColumn',
   'KanbanCard',
+  // the app's own (@visvine/ui), kit 2
+  'Alert',
+  'Avatar',
+  'Checkbox',
+  'ConfirmDialog',
+  'IconButton',
+  'LoadingText',
+  'Menu',
+  'Modal',
+  'Row',
+  'SearchInput',
+  'SettingsSection',
+  'Skeleton',
+  'Toggle',
 ] as const
 
 const built = buildVendorFiles()
@@ -113,11 +127,18 @@ test('the kit bundle imports only the externals the frame can resolve', async ()
   // The batteries are bundled IN — none of them may leak out as an import.
   assert.ok(!specifiers.has('recharts'))
   assert.ok(!specifiers.has('react-markdown'))
-  assert.ok(!specifiers.has('react-dom'))
   assert.equal(code.includes('Dynamic require of'), false)
 })
 
-test('all four vendor files build', async () => {
+test('kit 1 keeps its own components and stylesheet, for the Tools written against it', async () => {
+  const files = await built
+  const kit1 = files['tool-kit-1.js'].code
+  assert.ok(kit1.includes('vv-btn'), 'kit 1 paints with its own rules')
+  assert.ok(!files['tool-kit.js'].code.includes('vv-btn--'), 'kit 2 paints with the app\'s components')
+  assert.ok(files['tool-kit.css'].code.includes('--vv-color-accent'), 'kit 2 ships the design tokens')
+})
+
+test('every vendor file builds', async () => {
   const files = await built
   for (const name of VENDOR_FILES) {
     assert.ok(files[name].code.length > 0, `${name} built`)

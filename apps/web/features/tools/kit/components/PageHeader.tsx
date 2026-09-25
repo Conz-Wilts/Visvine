@@ -7,18 +7,18 @@ export interface PageHeaderProps {
 }
 
 /**
- * A Tool renders inside the app's content area, which already carries the page
- * chrome — so this is a heading row, not a title bar, and it never tries to
- * look like one.
+ * A heading row. The app's band already names the Tool and carries its
+ * sections and buttons (`surfaces.nav`, `surfaces.actions`), so this is for a
+ * heading inside the Tool's own content — never a second title bar.
  */
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="vv-page-header">
-      <div>
-        <h1 className="vv-page-header__title">{title}</h1>
-        {description && <p className="vv-page-header__description">{description}</p>}
+    <div className="flex items-start justify-between gap-4 pb-4">
+      <div className="min-w-0">
+        <h1 className="text-lg font-semibold text-fg">{title}</h1>
+        {description && <p className="mt-1 text-sm text-fg-muted">{description}</p>}
       </div>
-      {actions && <div className="vv-page-header__actions">{actions}</div>}
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
   );
 }

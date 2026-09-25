@@ -45,7 +45,7 @@
 import prisma from '@/lib/prisma'
 import { isSuperAdmin } from '@/lib/session'
 import { logAudit } from '@/lib/notes/audit'
-import { writeGated } from '@/lib/notes/contextService'
+import { readVisible, writeGated } from '@/lib/notes/contextService'
 import { principalCanWrite, principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
@@ -59,6 +59,7 @@ import {
   toolSourceHash,
 } from './builds'
 import {
+  manifestOf,
   TOOL_NAME_RE,
   parseToolBandActions,
   parseToolNav,
@@ -66,6 +67,7 @@ import {
   parseToolTags,
   toolIndexPath,
   unwrapSource,
+  toolModuleFileOf,
   type ToolConfig,
   type ToolTypeSurface,
 } from './config'
@@ -77,6 +79,7 @@ import {
 } from './perimeter'
 import { decodeListingState, ensureListing, type ListingState } from './verdicts'
 import { runStaticChecks, type StaticCheckInput } from './checks/analyze'
+import { parseManifestFacts, type ToolManifestFacts } from '@visvine/tool-protocol/manifest'
 import { blockingFindings, findingLine, reportStatus, type CheckFinding, type CheckReport } from './checks/findings'
 import { recordReport, versionReports } from './checks/runs'
 import { diffManifest } from './manifestDiff'
@@ -132,6 +135,8 @@ export interface ToolVersionSummary {
   perimeter: ToolPerimeter
   /** Rail row and type claims the Tool asks for, for the marketplace card. */
   surfaces: { rail: { label: string; icon: string } | null; types: ToolTypeSurface[] }
+  /** The version's manifest facts: its reach in the abstract, its binding slots, its settings. */
+  manifest: ToolManifestFacts
   /**
    * The Tool's own rail glyph when it ships one (`rail.icon: custom`), already
    * sanitized at build time. Null means it picked a built-in shape.
@@ -155,6 +160,8 @@ export interface ToolVersionDetail extends ToolVersionSummary {
   indexSource: string
   uiSource: string
   dataSource: string
+  /** The interface's own modules, by file (`src/chart.tsx`). */
+  modules: Record<string, string>
 }
 
 /** A marketplace row: the latest approved version of one Tool, plus its reach. */
@@ -261,6 +268,11 @@ export function decodeToolConfig(raw: unknown, name: string): ToolConfig {
       actions: ((a) => (a.ok ? a.actions : []))(parseToolBandActions(surfaces.actions)),
     },
     perimeter: decodeToolPerimeter(value.perimeter),
+    ...(((m) => (m && m.ok ? { manifest: m.value } : {}))(
+      value.manifest && typeof value.manifest === 'object' && !Array.isArray(value.manifest)
+        ? parseManifestFacts(value.manifest as Record<string, unknown>)
+        : null,
+    )),
     tags: ((t) => (t.ok ? t.tags : []))(parseToolTags(value.tags)),
     previewUrl: ((p) => (p.ok ? p.previewUrl : null))(parseToolPreviewUrl(value.previewUrl)),
   }
@@ -311,6 +323,7 @@ const DETAIL_SELECT = {
   indexSource: true,
   uiSource: true,
   dataSource: true,
+  modules: true,
 } as const
 
 type SummaryRow = {
@@ -342,7 +355,24 @@ type SummaryRow = {
   author: { id: string; name: string } | null
 }
 
-type DetailRow = SummaryRow & { indexSource: string; uiSource: string; dataSource: string }
+type DetailRow = SummaryRow & { indexSource: string; uiSource: string; dataSource: string; modules: unknown }
+
+/** A stored module map, text values only. */
+function decodeModules(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+}
+
+/** A Tool's module notes → its modules by file, unwrapped as the compiler reads them. */
+function unwrapModules(notes: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [relative, note] of Object.entries(notes ?? {})) {
+    const unwrapped = unwrapSource(note)
+    const file = unwrapped ? toolModuleFileOf(relative, unwrapped.lang) : null
+    if (unwrapped && file) out[file] = unwrapped.code
+  }
+  return out
+}
 
 function toSummary(row: SummaryRow): ToolVersionSummary {
   const config = decodeToolConfig(row.config, row.name)
@@ -368,6 +398,7 @@ function toSummary(row: SummaryRow): ToolVersionSummary {
     // install time; config.perimeter is the same thing inside the snapshot.
     perimeter: decodeToolPerimeter(row.perimeter),
     surfaces: config.surfaces,
+    manifest: manifestOf(config),
     iconSvg: row.iconSvg,
     releaseNotes: row.releaseNotes,
     tags: row.tags,
@@ -384,6 +415,7 @@ function toDetail(row: DetailRow): ToolVersionDetail {
     indexSource: row.indexSource,
     uiSource: row.uiSource,
     dataSource: row.dataSource,
+    modules: decodeModules(row.modules),
   }
 }
 
@@ -640,6 +672,7 @@ export async function publishTool(
     index: indexNote,
     ui: unwrapSource(sources.ui)?.code ?? sources.ui,
     data: sources.data ? (unwrapSource(sources.data)?.code ?? sources.data) : null,
+    modules: unwrapModules(sources.modules),
     config,
     build: { ok: build.ok, errors: build.errors, warnings: build.warnings, configError: build.configError },
   })
@@ -691,6 +724,7 @@ export async function publishTool(
         indexSource: splitFrontmatter(indexNote).body,
         uiSource: unwrapSource(sources.ui ?? '')?.code ?? '',
         dataSource: sources.data ? (unwrapSource(sources.data)?.code ?? '') : '',
+        modules: unwrapModules(sources.modules),
         // Snapshotted from the BUILD, not re-read from icon.md: the build is
         // where sanitization happened, so this is the reviewed, trusted markup.
         iconSvg: buildRow.iconSvg,
@@ -736,7 +770,10 @@ export async function publishTool(
 
   // Human origin on purpose: a person pressed Publish. 'agent'/'maintenance'
   // would hit the tools/ AI freeze in contextService.lockedDenial.
-  const bumped = bumpIndexVersion(indexNote, created.version)
+  // The NOTE, not the composed index: the manifest's facts live in the row,
+  // and writing them back into the note is what the gate refuses.
+  const note = (await readVisible(p, context, indexPath)) ?? indexNote
+  const bumped = bumpIndexVersion(note, created.version)
   let warning: string | null = null
   if (bumped === null) {
     warning = `Published as version ${created.version}, but ${indexPath} has no frontmatter to record it in.`

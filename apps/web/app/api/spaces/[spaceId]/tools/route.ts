@@ -35,6 +35,10 @@ const installSchema = z.object({
   typeClaims: z.record(z.string(), z.enum(['page', 'tab', 'none'])).optional(),
   /** On the rail, or tucked into More. */
   placement: z.enum(['rail', 'more']).optional(),
+  /** What each binding slot is bound to; an unnamed slot takes its suggestion when the space has it. */
+  bindings: z.record(z.string(), z.string()).optional(),
+  /** The install's settings; unset ones take their defaults. */
+  settings: z.record(z.string(), z.unknown()).optional(),
 })
 
 /**
@@ -59,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     spaceId,
     body.versionId,
     { userId: ctx.principal.userId, email: ctx.principal.email },
-    { slug: body.slug, typeClaims: body.typeClaims, placement: body.placement },
+    { slug: body.slug, typeClaims: body.typeClaims, placement: body.placement, bindings: body.bindings, settings: body.settings },
   )
   if (!result.ok) return bad(result.error, result.status)
 

@@ -27,15 +27,43 @@ import type {
   BridgeParams,
   BridgeResult,
   FrameMessage,
+  HostMethod,
+  HostMethods,
   ToolInitMessage,
   ToolSubject,
 } from '@/lib/tools/protocol';
 
 /** Mirrors `PROTOCOL_VERSION` in lib/tools/protocol.ts (pinned by a test). */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /** How long an ordinary call waits before giving up on the host. */
 export const CALL_TIMEOUT_MS = 15_000;
+
+/** A question put to the viewer (`ui.confirm`, `ui.download`) waits on a person, not a server. */
+const ASK_TIMEOUT_MS = 10 * 60_000;
+
+/** `ai.complete` waits on the space's model. */
+const AI_TIMEOUT_MS = 70_000;
+
+/** Every method a Tool can call — the server's and the host's own. */
+type AnyMethod = BridgeMethod | HostMethod;
+type AnyParams<M extends AnyMethod> = M extends BridgeMethod
+  ? BridgeParams<M>
+  : M extends HostMethod
+    ? HostMethods[M]['params']
+    : never;
+type AnyResult<M extends AnyMethod> = M extends BridgeMethod
+  ? BridgeResult<M>
+  : M extends HostMethod
+    ? HostMethods[M]['result']
+    : never;
+
+function timeoutFor(method: AnyMethod): number {
+  if (method === 'data.call') return DATA_CALL_TIMEOUT_MS;
+  if (method === 'ui.confirm' || method === 'ui.download') return ASK_TIMEOUT_MS;
+  if (method === 'ai.complete' || method === 'ai.decide') return AI_TIMEOUT_MS;
+  return CALL_TIMEOUT_MS;
+}
 
 /**
  * `data.call` runs a handler in the QuickJS isolate, which the server itself
@@ -60,7 +88,7 @@ type Unsubscribe = () => void;
 
 export interface BridgeClient {
   /** Ask the host for something. Rejects with a `BridgeCallError`. */
-  call<M extends BridgeMethod>(method: M, params: BridgeParams<M>): Promise<BridgeResult<M>>;
+  call<M extends AnyMethod>(method: M, params: AnyParams<M>): Promise<AnyResult<M>>;
   /** Fires once the handshake lands; late subscribers get the init they missed. */
   onInit(fn: (init: ToolInitMessage) => void): Unsubscribe;
   onTheme(fn: (theme: Record<string, string>) => void): Unsubscribe;
@@ -193,7 +221,7 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
   }
 
   return {
-    call<M extends BridgeMethod>(method: M, params: BridgeParams<M>): Promise<BridgeResult<M>> {
+    call<M extends AnyMethod>(method: M, params: AnyParams<M>): Promise<AnyResult<M>> {
       if (closed) {
         return Promise.reject(
           new BridgeCallError({ code: 'internal', message: 'This Tool is no longer connected to Visvine.' }),
@@ -201,8 +229,8 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
       }
       seq += 1;
       const id = `c${seq}`;
-      const timeoutMs = method === 'data.call' ? DATA_CALL_TIMEOUT_MS : CALL_TIMEOUT_MS;
-      return new Promise<BridgeResult<M>>((resolve, reject) => {
+      const timeoutMs = timeoutFor(method);
+      return new Promise<AnyResult<M>>((resolve, reject) => {
         const timer = setTimeout(() => {
           settle(id, (p) =>
             p.reject(new BridgeCallError({ code: 'timeout', message: `${method} did not answer within ${timeoutMs}ms.` })),

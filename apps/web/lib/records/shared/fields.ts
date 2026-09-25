@@ -42,6 +42,24 @@ export function recordColumns(config: NodeTypeConfig): TableColumn[] {
   )
 }
 
+/**
+ * The kinds whose nodes are configuration or places, not records: nothing
+ * reads their metadata as a record's fields.
+ */
+const NON_RECORD_KINDS = new Set(['agent', 'connector', 'model', 'tool', 'channel', 'section', 'note'])
+
+/** Is this node kind one a record query may read? */
+export function isRecordKind(canonical: string): boolean {
+  return !!canonical && !NON_RECORD_KINDS.has(canonical)
+}
+
+/** A node-backed type's field columns: what its nodes keep in metadata — its type's fields and its tracked fields. */
+export function nodeRecordColumns(type: string, config: NodeTypeConfig | null): TableColumn[] {
+  return columnsForType(type, config).filter(
+    (column) => column.source === 'metadata' && (column.origin === 'tracked' || column.origin === 'type'),
+  )
+}
+
 /** A projected value: one typed column filled, or `invalid` with what was written. */
 export interface ProjectedValue {
   textValue: string | null
@@ -145,6 +163,8 @@ export const RECORD_SCAN_MAX = 5_000
 /** A record as a query answers it: the note, and its fields as cells. */
 export interface RecordRow {
   path: string
+  /** A node-backed record's node. */
+  nodeId?: string
   type: string
   title: string
   tags: string[]
@@ -215,8 +235,8 @@ export function decodeRecordCursor(cursor: string | null | undefined): number {
 }
 
 /** The predicates of a query that name a field this type has, or the first that does not. */
-export function checkQuery(config: NodeTypeConfig, query: RecordQuery): string | null {
-  const keys = new Set(recordColumns(config).map((column) => column.key))
+export function checkQuery(config: NodeTypeConfig, query: RecordQuery, columns: TableColumn[] = recordColumns(config)): string | null {
+  const keys = new Set(columns.map((column) => column.key))
   for (const predicate of query.where ?? []) {
     if (!keys.has(predicate.key)) return `"${predicate.key}" is not a field of ${config.name}`
   }

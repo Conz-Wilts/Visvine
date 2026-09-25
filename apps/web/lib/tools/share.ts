@@ -30,11 +30,14 @@ import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
 import { readSpaceConfig, updateSpaceConfig } from '@/lib/spaces/spaceConfig'
 import { mergeFeatureConfig, toolRailKey } from '@/lib/featureAccess'
 import { ADMIN_ALIAS_ID, DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
-import { TOOL_NAME_RE, toolIndexPath, toolNameOfFolder } from './config'
+import { defaultBindings, type BindingValues } from '@visvine/tool-protocol/bindings'
+import type { ToolManifestFacts } from '@visvine/tool-protocol/manifest'
+import { manifestOf, TOOL_NAME_RE, toolIndexPath, toolNameOfFolder } from './config'
 import { toolFolderIn, toolFolders } from './location'
-import { decodeToolConfig, decodeToolPerimeter, toolKey } from './registry'
-import { computeRequirements, type SpaceAvailability } from './requirements'
+import { decodeToolConfig, toolKey } from './registry'
+import { boundRequirements, type SpaceAvailability } from './requirements'
 import { featureConfigWithoutRail, orderWithRail, uniqueSlug } from './installs'
+import { bindableSpace } from './bindable'
 
 const SHARED_OWNER_KEY = 'shared'
 
@@ -72,6 +75,18 @@ export function sharedInstallPlan(input: {
     if (row.sharedFromSpaceId === input.houseId && !wanted.has(row.spaceId)) plan.remove.push(row.spaceId)
   }
   return plan
+}
+
+/**
+ * A room's bindings for a shared Tool: what a room admin already bound, else
+ * the house's suggestion when the room has that thing too. The rest stay
+ * unbound, and the Tool runs degraded in the room until a room admin binds it.
+ */
+async function roomBindings(room: string, manifest: ToolManifestFacts, current?: unknown): Promise<BindingValues> {
+  if (Object.keys(manifest.bindings).length === 0) return {}
+  const stored = current && typeof current === 'object' && !Array.isArray(current) ? (current as Record<string, unknown>) : {}
+  const values = Object.fromEntries(Object.entries(stored).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+  return defaultBindings(manifest, await bindableSpace(room), values)
 }
 
 /**
@@ -156,19 +171,20 @@ export async function syncSharedToolInstalls(houseId: string, name: string): Pro
   const existing = roomIds.length
     ? await prisma.appToolInstall.findMany({
         where: { key, spaceId: { in: roomIds } },
-        select: { spaceId: true, sharedFromSpaceId: true, versionId: true },
+        select: { spaceId: true, sharedFromSpaceId: true, versionId: true, bindings: true },
       })
     : []
   const plan = sharedInstallPlan({ houseId, targets, rooms: roomIds, versionId: version?.versionId ?? null, existing })
   if (plan.create.length + plan.update.length + plan.remove.length === 0) return plan
 
   const config = version ? decodeToolConfig(version.config, name) : null
-  const perimeter = version ? decodeToolPerimeter(version.perimeter) : null
+  const manifest = config ? manifestOf(config) : null
   const installedBy = version?.installedBy ?? (plan.create.length ? await houseAdminId(houseId) : null)
 
   for (const room of plan.create) {
-    if (!version || !config || !perimeter || !installedBy) break
-    const requirements = computeRequirements(perimeter, await roomAvailability(room))
+    if (!version || !config || !manifest || !installedBy) break
+    const bindings = await roomBindings(room, manifest)
+    const requirements = boundRequirements(manifest, bindings, await roomAvailability(room))
     try {
       await updateSpaceConfig(room, async (stored, tx) => {
         const siblings = await tx.appToolInstall.findMany({ where: { spaceId: room }, select: { key: true, slug: true } })
@@ -183,6 +199,7 @@ export async function syncSharedToolInstalls(houseId: string, name: string): Pro
             installedBy,
             sharedFromSpaceId: houseId,
             requirements: requirements as unknown as object,
+            bindings: bindings as unknown as object,
             // No page ownership: a shared Tool never takes a type's page off a
             // Tool the room chose for itself. Its tabs and rail row still show.
             typeClaims: {},
@@ -203,12 +220,19 @@ export async function syncSharedToolInstalls(houseId: string, name: string): Pro
   }
 
   for (const room of plan.update) {
-    if (!version || !perimeter) break
+    if (!version || !manifest) break
     try {
-      const requirements = computeRequirements(perimeter, await roomAvailability(room))
+      const current = existing.find((row) => row.spaceId === room)?.bindings
+      const bindings = await roomBindings(room, manifest, current)
+      const requirements = boundRequirements(manifest, bindings, await roomAvailability(room))
       await prisma.appToolInstall.updateMany({
         where: { spaceId: room, key, sharedFromSpaceId: houseId },
-        data: { versionId: version.versionId, pendingVersionId: null, requirements: requirements as unknown as object },
+        data: {
+          versionId: version.versionId,
+          pendingVersionId: null,
+          requirements: requirements as unknown as object,
+          bindings: bindings as unknown as object,
+        },
       })
     } catch (err) {
       logger.error('tools.share.update_failed', { err, houseId, name, room })

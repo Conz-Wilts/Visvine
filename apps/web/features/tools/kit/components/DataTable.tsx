@@ -10,7 +10,8 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode, UIEvent } from 'react';
-import { cx } from './cx';
+import { clsx as cx } from 'clsx';
+import { CLICKABLE_ROW, RIGHT, TABLE, TD, TH } from './tableClasses';
 
 export type SortDirection = 'asc' | 'desc';
 
@@ -133,7 +134,7 @@ export function DataTable<T>({
   const bottomPad = windowed ? (sorted.length - end) * rowHeight : 0;
 
   const table = (
-    <table className={cx('vv-table', 'vv-datatable', maxHeight !== undefined && 'vv-datatable--sticky')}>
+    <table className={TABLE}>
       <thead>
         <tr>
           {columns.map((c) => {
@@ -143,13 +144,13 @@ export function DataTable<T>({
               <th
                 key={c.key}
                 style={c.width ? { width: c.width } : undefined}
-                className={cx(c.align === 'right' && 'vv-table__cell--right', sortable && 'vv-datatable__th--sortable')}
+                className={cx(TH, c.align === 'right' && RIGHT, maxHeight !== undefined && 'sticky top-0 z-[1] bg-surface')}
                 aria-sort={active ? (sort?.direction === 'asc' ? 'ascending' : 'descending') : undefined}
               >
                 {sortable ? (
-                  <button type="button" className="vv-datatable__sort" onClick={() => toggleSort(c.key)}>
+                  <button type="button" className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-fg" onClick={() => toggleSort(c.key)}>
                     <span>{c.header}</span>
-                    <span className={cx('vv-datatable__arrow', active && `vv-datatable__arrow--${sort?.direction}`)} aria-hidden>
+                    <span className={cx('text-[10px]', active ? 'text-accent-strong' : 'opacity-40')} aria-hidden>
                       {active ? (sort?.direction === 'asc' ? '▲' : '▼') : '▴'}
                     </span>
                   </button>
@@ -164,31 +165,31 @@ export function DataTable<T>({
       <tbody>
         {sorted.length === 0 && empty !== undefined ? (
           <tr>
-            <td colSpan={columns.length}>{empty}</td>
+            <td colSpan={columns.length} className={TD}>{empty}</td>
           </tr>
         ) : (
           <>
             {topPad > 0 && (
-              <tr aria-hidden className="vv-datatable__spacer">
+              <tr aria-hidden>
                 <td colSpan={columns.length} style={{ height: topPad, padding: 0, border: 0 }} />
               </tr>
             )}
             {visible.map((row, i) => (
               <tr
                 key={rowKey(row, start + i)}
-                className={cx(onRowClick && 'vv-table__row--clickable')}
+                className={cx(onRowClick && CLICKABLE_ROW)}
                 style={windowed ? { height: rowHeight } : undefined}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
               >
                 {columns.map((c) => (
-                  <td key={c.key} className={cx(c.align === 'right' && 'vv-table__cell--right')}>
+                  <td key={c.key} className={cx(TD, c.align === 'right' && RIGHT)}>
                     {c.render(row)}
                   </td>
                 ))}
               </tr>
             ))}
             {bottomPad > 0 && (
-              <tr aria-hidden className="vv-datatable__spacer">
+              <tr aria-hidden>
                 <td colSpan={columns.length} style={{ height: bottomPad, padding: 0, border: 0 }} />
               </tr>
             )}
@@ -198,9 +199,9 @@ export function DataTable<T>({
     </table>
   );
 
-  if (maxHeight === undefined) return <div className={cx('vv-datatable__wrap', className)}>{table}</div>;
+  if (maxHeight === undefined) return <div className={cx('w-full overflow-x-auto', className)}>{table}</div>;
   return (
-    <div className={cx('vv-datatable__wrap', 'vv-datatable__wrap--scroll', className)} style={{ maxHeight }} onScroll={onScroll}>
+    <div className={cx('w-full overflow-auto', className)} style={{ maxHeight }} onScroll={onScroll}>
       {table}
     </div>
   );

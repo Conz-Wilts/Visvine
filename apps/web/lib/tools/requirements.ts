@@ -26,6 +26,8 @@
  * space on every render. Adding the connector doesn't clear it — a re-check does
  * (lib/tools/installs.ts#refreshRequirements).
  */
+import { resolveReach, sourceBindings, type BindingValues } from '@visvine/tool-protocol/bindings'
+import type { ToolManifestFacts } from '@visvine/tool-protocol/manifest'
 import {
   EMPTY_PERIMETER,
   refuseAgent,
@@ -39,6 +41,8 @@ export interface ToolRequirements {
   connectors: string[]
   types: string[]
   agents: string[]
+  /** Binding slots with nothing bound here, by label. */
+  bindings?: string[]
 }
 
 /** What the space actually has, in the three dimensions a Tool can miss. */
@@ -96,12 +100,47 @@ export function computeRequirements(
   }
 }
 
+/** Unbound slots by label, as the banner and the checklist name them. */
+export function unboundLabels(facts: ToolManifestFacts, unbound: readonly string[]): string[] {
+  return unbound.map((slot) => facts.bindings[slot]?.label ?? slot)
+}
+
+/**
+ * A manifest's requirements as one install runs it: its reach BOUND to the
+ * install's values and checked against the space, plus each slot left
+ * unbound. A `$slot` is never itself a requirement — what it names is.
+ */
+export function boundRequirements(
+  facts: ToolManifestFacts,
+  values: BindingValues,
+  available: SpaceAvailability,
+): ToolRequirements {
+  const { reach, unbound } = resolveReach(facts, values)
+  const out = computeRequirements(
+    { read: reach.read, write: reach.write, types: reach.types, connectors: reach.connectors, agents: reach.agents },
+    available,
+  )
+  const labels = unboundLabels(facts, unbound)
+  return labels.length ? { ...out, bindings: labels } : out
+}
+
+/**
+ * A working copy's requirements in the space that wrote it, where every slot
+ * is bound to its own suggestion — the author's checklist and check_tool's.
+ */
+export function sourceRequirements(config: { perimeter: ToolPerimeter; manifest?: ToolManifestFacts }, available: SpaceAvailability): ToolRequirements {
+  const facts = config.manifest
+  if (!facts) return computeRequirements(config.perimeter, available)
+  return boundRequirements(facts, sourceBindings(facts), available)
+}
+
 /** True when something the Tool declared is missing — the banner's condition. */
 export function isDegraded(requirements: ToolRequirements): boolean {
   return (
     requirements.connectors.length > 0 ||
     requirements.types.length > 0 ||
-    requirements.agents.length > 0
+    requirements.agents.length > 0 ||
+    (requirements.bindings?.length ?? 0) > 0
   )
 }
 
@@ -117,6 +156,7 @@ export function describeRequirements(requirements: ToolRequirements): string[] {
     ...requirements.connectors.map((name) => `No connector in this space matches ${name}`),
     ...requirements.types.map((name) => `No node type in this space matches ${name}`),
     ...requirements.agents.map((name) => `No agent in this space matches ${name}`),
+    ...(requirements.bindings ?? []).map((label) => `${label} is not bound`),
   ]
 }
 
@@ -132,7 +172,8 @@ export function requirementsEqual(a: ToolRequirements, b: ToolRequirements): boo
   return (
     sameNames(a.connectors, b.connectors) &&
     sameNames(a.types, b.types) &&
-    sameNames(a.agents, b.agents)
+    sameNames(a.agents, b.agents) &&
+    sameNames(a.bindings ?? [], b.bindings ?? [])
   )
 }
 
@@ -150,9 +191,11 @@ function stringList(raw: unknown): string[] {
  */
 export function parseRequirements(raw: unknown): ToolRequirements {
   const value = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const bindings = stringList(value.bindings)
   return {
     connectors: stringList(value.connectors),
     types: stringList(value.types),
     agents: stringList(value.agents),
+    ...(bindings.length ? { bindings } : {}),
   }
 }

@@ -1,5 +1,5 @@
 import type { ReactNode, SelectHTMLAttributes } from 'react';
-import { cx } from './cx';
+import { Select as UISelect } from '@visvine/ui';
 
 export interface SelectOption {
   value: string;
@@ -12,9 +12,10 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   children?: ReactNode;
 }
 
-export function Select({ options, className, children, ...rest }: SelectProps) {
+/** The app's own select (@visvine/ui). */
+export function Select({ options, children, ...rest }: SelectProps) {
   return (
-    <select {...rest} className={cx('vv-select', className)}>
+    <UISelect {...rest}>
       {options
         ? options.map((o) => (
             <option key={o.value} value={o.value}>
@@ -22,6 +23,6 @@ export function Select({ options, className, children, ...rest }: SelectProps) {
             </option>
           ))
         : children}
-    </select>
+    </UISelect>
   );
 }

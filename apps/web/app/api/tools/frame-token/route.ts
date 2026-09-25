@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
     install: resolved.install,
     degraded: resolved.degraded,
     viewer: { id: session.userId, name: session.name, isAdmin: resolved.isAdmin },
+    ui: { download: resolved.reach?.ui.download ?? false },
   }
   return NextResponse.json(response)
 }

@@ -24,6 +24,7 @@ import { FetchJsonError, fetchJsonBody } from '@/lib/fetchJson'
 import {
   PROTOCOL_VERSION,
   isFrameMessage,
+  isHostMethod,
   isInAppPath,
   type BridgeError,
   type BridgeErrorCode,
@@ -31,6 +32,7 @@ import {
   type BridgeResponse,
   type BridgeTarget,
   type HostMessage,
+  type HostMethod,
   type ToolDegraded,
   type ToolInstallInfo,
   type ToolSubject,
@@ -110,6 +112,8 @@ export interface FrameTokenResponse {
   install: ToolInstallInfo
   degraded: ToolDegraded | null
   viewer: ToolViewer
+  /** The host services this Tool declared — `ui.download` asks before it saves, and only when declared. */
+  ui?: { download: boolean }
 }
 
 export interface HostBridgeOptions {
@@ -138,6 +142,12 @@ export interface HostBridgeOptions {
   onRevoked?: (message: string) => void
   /** The Tool asked to switch its own section. The page decides whether it is one. */
   onSection?: (section: string) => void
+  /**
+   * A host service the Tool called (`ui.*`) — a toast, a confirm, a download,
+   * opening a record or a file. Answered by the page, never the server; absent,
+   * every one is refused.
+   */
+  onHostCall?: (method: HostMethod, params: unknown) => Promise<BridgeResponse>
   /**
    * Injected by tests; defaults to the real POST. Whatever it resolves is run
    * through `readResponse` — there is exactly one place a bridge answer is
@@ -235,6 +245,7 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
     navigate,
     onRevoked,
     onSection,
+    onHostCall,
     send = postBridge,
   } = options
 
@@ -262,10 +273,16 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
     }
   }
 
-  async function relay(id: string, method: BridgeRequest['method'], params: unknown): Promise<void> {
+  async function relay(id: string, method: BridgeRequest['method'] | HostMethod, params: unknown): Promise<void> {
     let response: BridgeResponse
     try {
-      response = readResponse(await send({ target, method, params }))
+      if (isHostMethod(method)) {
+        response = onHostCall
+          ? readResponse(await onHostCall(method, params))
+          : { ok: false, error: { code: 'invalid', message: `${method} is not available here.` } }
+      } else {
+        response = readResponse(await send({ target, method, params }))
+      }
     } catch (cause) {
       response = { ok: false, error: relayError(cause) }
     }

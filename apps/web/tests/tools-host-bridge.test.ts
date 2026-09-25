@@ -506,9 +506,12 @@ test('an unpainted token falls back rather than shipping empty', () => {
 
 test('every published token has both halves and none is the brand marketing face', () => {
   const tokens = themeTokensFrom(() => '')
-  const aliases = Object.keys(tokens).filter((name) => name.startsWith('--vv-'))
+  // The design tokens themselves go too, for kit 2's components; the rest pair up.
+  const designTokens = Object.keys(tokens).filter((name) => name.startsWith('--vv-color-'))
+  const aliases = Object.keys(tokens).filter((name) => name.startsWith('--vv-') && !name.startsWith('--vv-color-'))
   const sources = Object.keys(tokens).filter((name) => !name.startsWith('--vv-'))
   assert.equal(aliases.length, sources.length)
+  assert.ok(designTokens.includes('--vv-color-accent'))
   assert.ok(!('--font-brand' in tokens), 'ABC Ginto Rounded is marketing-only')
 })
 

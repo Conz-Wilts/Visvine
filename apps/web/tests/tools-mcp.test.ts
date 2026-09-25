@@ -21,6 +21,7 @@ import { appToolHandlers, type AppToolDeps } from '@/lib/actions/defs/apps'
 import type { BuildSummary } from '@/lib/tools/builds'
 import type { ToolConfig } from '@/lib/tools/config'
 import { EMPTY_PERIMETER } from '@/lib/tools/perimeter'
+import { factsFromPerimeter } from '@visvine/tool-protocol/manifest'
 import type { AuthoredToolDetail } from '@/lib/tools/service'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
@@ -118,6 +119,7 @@ function detail(over: Partial<AuthoredToolDetail> = {}): AuthoredToolDetail {
     build: build(),
     publication: null,
     config: config(),
+    modules: {},
     sources: {
       'index.md': '---\ntype: tool\n---\n\n# Board\n',
       'ui.tsx': 'export default function App() { return <p>hi</p> }',
@@ -144,6 +146,10 @@ function install(over: Partial<InstallSummary> = {}): InstallSummary {
     rail: { label: 'Board', icon: 'kanban' },
     types: [{ type: 'deal', mode: 'tab' }],
     pendingVersion: null,
+    slots: {},
+    bindings: {},
+    settingSpecs: {},
+    settings: {},
     ...over,
   }
 }
@@ -170,6 +176,7 @@ function version(over: Partial<ToolVersionSummary> = {}): ToolVersionSummary {
     author: { userId: 'user_1', name: 'Ada' },
     perimeter: { ...EMPTY_PERIMETER, read: ['deals/**'] },
     surfaces: { rail: { label: 'Board', icon: 'kanban' }, types: [] },
+    manifest: factsFromPerimeter({ ...EMPTY_PERIMETER, read: ['deals/**'] }),
     releaseNotes: null,
     tags: [],
     previewUrl: null,
@@ -207,6 +214,7 @@ function deps(over: Partial<AppToolDeps> = {}): AppToolDeps {
     spaceFacts: unexpected('spaceFacts'),
     appOrigin: () => 'https://visvine.test',
     capturePreview: unexpected('capturePreview'),
+    configureTool: unexpected('configureTool'),
     // The real rules, unrecorded: what check_tool reports is what they find.
     checkWorkingCopy: async (_spaceId, _name, _hash, input) => runStaticChecks(input),
     ...over,
@@ -1022,4 +1030,66 @@ test("publish_tool says an admin's publish is live here — and still not public
   assert.match(result.published, /APPROVED in this space/)
   // Approved in a space is still not public, and the wording may never blur it.
   assert.match(result.published, /NOT listed/)
+})
+
+// ── bind_tool ────────────────────────────────────────────────────────────────
+
+const BOUND = install({
+  slots: {
+    deals: { kind: 'folder', label: 'Deal notes', suggest: 'deals' },
+    crm: { kind: 'connector', label: 'CRM', recipe: 'hubspot', optional: true },
+  },
+  bindings: { deals: 'sales/pipeline' },
+  settingSpecs: { currency: { type: 'string', label: 'Currency', enum: ['USD', 'EUR'], default: 'USD' } },
+  settings: {},
+})
+
+const ADMIN_TARGET: Target = { ...TARGET, resolved: { ...RESOLVED, isAdmin: true } as ResolvedContext }
+
+const SPACE_HAS = {
+  folders: ['sales', 'sales/pipeline'],
+  types: {},
+  connectors: [{ name: 'hubspot-2', recipe: 'hubspot' }, { name: 'gmail', recipe: 'gmail' }],
+  agents: [],
+}
+
+test('bind_tool is an admin\'s, even to read — its choices name the space\'s connectors', async () => {
+  await refusal(
+    appToolHandlers.bindTool(CTX, { space_id: SPACE, tool: 'board' }, deps({ listInstalls: async () => [BOUND] })),
+    403,
+  )
+})
+
+test('bind_tool with nothing to change reads each slot, what it is bound to, and the choices here', async () => {
+  const out = await appToolHandlers.bindTool(
+    CTX,
+    { space_id: SPACE, tool: 'board' },
+    deps({ resolveTarget: async () => ADMIN_TARGET, listInstalls: async () => [BOUND], bindableSpace: async () => SPACE_HAS }),
+  )
+  assert.deepEqual(out.bindings.deals, { kind: 'folder', label: 'Deal notes', bound: 'sales/pipeline', choices: ['sales', 'sales/pipeline'] })
+  assert.deepEqual(out.bindings.crm, { kind: 'connector', label: 'CRM', bound: null, optional: true, choices: ['hubspot-2'] })
+  assert.deepEqual(out.settings.currency, { label: 'Currency', type: 'string', value: 'USD', options: ['USD', 'EUR'] })
+})
+
+test('bind_tool hands the change to the install service, as the admin', async () => {
+  let asked: unknown = null
+  await appToolHandlers.bindTool(
+    CTX,
+    { space_id: SPACE, tool: 'board', bindings: { crm: 'hubspot-2' }, settings: { currency: 'EUR' } },
+    deps({
+      resolveTarget: async () => ADMIN_TARGET,
+      listInstalls: async () => [BOUND],
+      bindableSpace: async () => SPACE_HAS,
+      setInstallBindings: async (spaceId, installId, actor, patch) => {
+        asked = { spaceId, installId, actor: actor.userId, patch }
+        return { ok: true, install: { ...BOUND, bindings: { ...BOUND.bindings, crm: 'hubspot-2' } } }
+      },
+    }),
+  )
+  assert.deepEqual(asked, {
+    spaceId: SPACE,
+    installId: BOUND.id,
+    actor: CTX.userId,
+    patch: { bindings: { crm: 'hubspot-2' }, settings: { currency: 'EUR' } },
+  })
 })

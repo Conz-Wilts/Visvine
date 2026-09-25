@@ -29,6 +29,7 @@ import type {
   VersionResponse,
 } from '@/lib/tools/api'
 import type { TypeClaims } from '@/lib/tools/installs'
+import type { BindableSpace } from '@visvine/tool-protocol/bindings'
 
 /** One version opened — the detail drawer's long description, reach and trail. */
 export function fetchVersion(versionId: string, signal?: AbortSignal): Promise<VersionResponse> {
@@ -51,6 +52,12 @@ export type InstallPatch =
   | { typeClaims: TypeClaims }
   | { applyUpgrade: true }
   | { recheck: true }
+  | { bind: { bindings?: Record<string, string>; settings?: Record<string, unknown> } }
+
+/** What this space can bind a Tool's slots to — admins only, for the install sheet's pickers. */
+export function fetchBindable(spaceId: string, signal?: AbortSignal): Promise<BindableSpace> {
+  return fetchJson<BindableSpace>(`/api/spaces/${encodeURIComponent(spaceId)}/tools/bindable`, { signal })
+}
 
 export function patchInstall(
   spaceId: string,
@@ -118,6 +125,8 @@ export function installToolVersion(
     versionId: string
     placement?: 'rail' | 'more'
     typeClaims?: Record<string, 'page' | 'tab' | 'none'>
+    bindings?: Record<string, string>
+    settings?: Record<string, unknown>
   },
 ): Promise<InstallCreatedResponse> {
   return fetchJsonBody<InstallCreatedResponse>(`/api/spaces/${encodeURIComponent(spaceId)}/tools`, 'POST', input)

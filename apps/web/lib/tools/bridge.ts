@@ -69,6 +69,31 @@ import {
 } from './protocol'
 import { runDataHandler, type IsolateCapabilities } from './dataRun'
 import { getToolState, setToolState, STATE_MAX_BYTES, STATE_MAX_KEYS } from './state'
+import { getRecord, queryRecords, setFields, type SetFieldsTarget } from '@/lib/records/service'
+import { listResources } from '@/lib/resources/list'
+import { loadView } from '@/lib/resources/views'
+import { readResourceTextAs } from '@/lib/resources/text'
+import { requireVisibleResource, resourceViewer } from '@/lib/resources/visibility'
+import { logResourceAccess } from '@/lib/resources/accessLog'
+import { referencesFor } from '@/lib/notes/contextService'
+import { excerptsForTargets } from '@/lib/notes/shared/references'
+import { splitFrontmatter } from '@/lib/notes/shared/markdown'
+import type { ActionCaller } from '@/lib/actions/types'
+import type { ToolReach } from '@visvine/tool-protocol/bindings'
+import {
+  refuseAction,
+  refuseAi,
+  refuseConnectorCall,
+  refuseRecordRead,
+  refuseRecordWrite,
+  refuseResourceList,
+  refuseResourceRead,
+  usesAi,
+} from '@visvine/tool-protocol/reach'
+import { planToolAction } from './actionAllowlist'
+import { tenantArgDenial } from './toolActions'
+import { resourceBlob, toToolResource } from './toolResources'
+import { toolComplete, toolDecide } from './toolAi'
 import { acquireDataCall, acquireDataCallShared } from './limits'
 import { targetKey, type ResolvedTarget } from './target'
 import { logger } from '@/lib/logger'
@@ -98,6 +123,22 @@ export interface BridgeDeps {
   logAudit: typeof logAudit
   /** A `data.call` slot for a target; absent, the in-process gate (tests). */
   acquireDataSlot?: (key: string) => Promise<(() => void) | null>
+  queryRecords: typeof queryRecords
+  getRecord: typeof getRecord
+  setFields: typeof setFields
+  referencesFor: typeof referencesFor
+  resourceViewer: typeof resourceViewer
+  listResources: typeof listResources
+  loadView: typeof loadView
+  requireVisibleResource: typeof requireVisibleResource
+  readResourceText: typeof readResourceTextAs
+  resourceBlob: typeof resourceBlob
+  logResourceAccess: typeof logResourceAccess
+  tenantArgDenial: typeof tenantArgDenial
+  /** Run one action as the viewer (lib/actions/run.ts), reached lazily: the registry imports half the app. */
+  runAction: (caller: ActionCaller, name: string, input: unknown) => Promise<unknown>
+  complete: typeof toolComplete
+  decide: typeof toolDecide
 }
 
 /** The real ones, named in exactly one place. Not exported: a caller wanting
@@ -117,6 +158,21 @@ const REAL_DEPS: BridgeDeps = {
   runDataHandler,
   logAudit,
   acquireDataSlot: acquireDataCallShared,
+  queryRecords,
+  getRecord,
+  setFields,
+  referencesFor,
+  resourceViewer,
+  listResources,
+  loadView,
+  requireVisibleResource,
+  readResourceText: readResourceTextAs,
+  resourceBlob,
+  logResourceAccess,
+  tenantArgDenial,
+  runAction: async (caller, name, input) => (await (await import('@/lib/actions/run')).runAction(caller, name, input)).result,
+  complete: toolComplete,
+  decide: toolDecide,
 }
 
 // ── shapes ────────────────────────────────────────────────────────────────────
@@ -167,6 +223,18 @@ function decodeCursor(cursor: string): string | null {
   }
 }
 
+const RECORD_KEY = z.string().min(1).max(64)
+const RECORD_SCALAR = z.union([z.string().max(500), z.number()])
+const RECORD_WHERE = z.discriminatedUnion('op', [
+  z.object({ key: RECORD_KEY, op: z.literal('eq'), value: z.union([z.string().max(500), z.number(), z.boolean()]) }),
+  z.object({ key: RECORD_KEY, op: z.literal('in'), values: z.array(RECORD_SCALAR).max(100) }),
+  z.object({ key: RECORD_KEY, op: z.literal('range'), min: RECORD_SCALAR.optional(), max: RECORD_SCALAR.optional() }),
+  z.object({ key: RECORD_KEY, op: z.literal('contains'), value: z.string().max(500) }),
+])
+const RECORD_TARGET = z
+  .object({ path: z.string().min(1).max(PATH_MAX).optional(), nodeId: z.string().min(1).max(200).optional() })
+  .refine((v) => (v.path === undefined) !== (v.nodeId === undefined), { message: 'pass exactly one of path or nodeId' })
+
 const P = {
   list: z.object({
     glob: z.string().max(PATH_MAX).optional(),
@@ -194,8 +262,51 @@ const P = {
     }),
   agent: z.object({ name: z.string().min(1).max(64) }),
   data: z.object({ fn: z.string().min(1).max(64), args: z.unknown() }),
-  stateGet: z.object({ key: z.string().min(1).max(200) }),
-  stateSet: z.object({ key: z.string().min(1).max(200), value: z.unknown() }),
+  stateGet: z.object({ key: z.string().min(1).max(200), scope: z.enum(['user', 'install']).optional() }),
+  stateSet: z.object({ key: z.string().min(1).max(200), value: z.unknown(), scope: z.enum(['user', 'install']).optional() }),
+  links: z.object({ path: z.string().min(1).max(PATH_MAX) }),
+  recordsQuery: z.object({
+    type: z.string().min(1).max(64),
+    where: z.array(RECORD_WHERE).max(10).optional(),
+    order: z.object({ key: z.string().min(1).max(64), direction: z.enum(['asc', 'desc']) }).optional(),
+    limit: z.number().int().min(1).max(BRIDGE_LIMITS.maxRows).optional(),
+    cursor: z.string().min(1).max(CURSOR_MAX).optional(),
+  }),
+  recordTarget: RECORD_TARGET,
+  recordsUpdate: z
+    .object({
+      path: z.string().min(1).max(PATH_MAX).optional(),
+      nodeId: z.string().min(1).max(200).optional(),
+      fields: z.record(z.string().min(1).max(64), z.unknown()),
+    })
+    .refine((v) => (v.path === undefined) !== (v.nodeId === undefined), { message: 'pass exactly one of path or nodeId' })
+    .refine((v) => Object.keys(v.fields).length > 0 && Object.keys(v.fields).length <= 50, { message: 'name 1–50 fields' }),
+  resourcesList: z.object({
+    folder: z.string().min(1).max(PATH_MAX).optional(),
+    kind: z.string().min(1).max(20).optional(),
+    q: z.string().min(1).max(200).optional(),
+    cursor: z.string().min(1).max(CURSOR_MAX).optional(),
+  }),
+  resource: z.object({ id: z.string().min(1).max(200) }),
+  resourceRead: z.object({ id: z.string().min(1).max(200), offset: z.number().int().min(0).optional() }),
+  resourceBlob: z.object({ id: z.string().min(1).max(200), rendition: z.enum(['original', 'thumb', 'preview']).optional() }),
+  action: z.object({ name: z.string().min(1).max(64), input: z.record(z.string(), z.unknown()).optional() }),
+  complete: z
+    .object({
+      prompt: z.string().min(1).max(32_000).optional(),
+      system: z.string().min(1).max(8_000).optional(),
+      messages: z
+        .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(32_000) }))
+        .min(1)
+        .max(40)
+        .optional(),
+      maxTokens: z.number().int().min(1).max(BRIDGE_LIMITS.aiMaxOutputTokens).optional(),
+    })
+    .refine((v) => (v.prompt === undefined) !== (v.messages === undefined), { message: 'pass exactly one of prompt or messages' }),
+  decide: z.object({
+    items: z.array(z.string().max(6_000)).min(1).max(BRIDGE_LIMITS.aiMaxDecideItems),
+    questions: z.array(z.unknown()).min(1).max(6),
+  }),
 }
 
 // ── paths ─────────────────────────────────────────────────────────────────────
@@ -546,8 +657,14 @@ async function checkWrite(
     // the seal follows the declaration too: a Tool neither mints one in a
     // folder of the space's own nor edits one already there.
     const current = await deps.readVisible(t.principal, t.context, path)
+    // A Tool's folder is the note's own, or — for a module under `src/` — the
+    // one above it: both are sealed, wherever the Tool is filed.
     const dir = path.slice(0, path.lastIndexOf('/'))
-    const inTool = dir && !path.endsWith('/index.md') ? declaresTool(await deps.readVisible(t.principal, t.context, `${dir}/index.md`)) : false
+    const homes = dir && !path.endsWith('/index.md') ? [dir, ...(dir.endsWith('/src') ? [dir.slice(0, -'/src'.length)] : [])] : []
+    let inTool = false
+    for (const home of homes) {
+      if (declaresTool(await deps.readVisible(t.principal, t.context, `${home}/index.md`))) inTool = true
+    }
     const kind =
       configKindOfContent(body) ??
       configKindOfContent(current) ??
@@ -575,6 +692,32 @@ async function checkWrite(
  */
 const TOOL_WRITE_ORIGIN = 'edit'
 
+/**
+ * A Tool that may ask the space's AI writes as AI-assisted text: its text may
+ * be the model's, so a folder frozen for AI refuses it as it refuses an
+ * agent's. Everything else about the write is the viewer's own.
+ */
+const TOOL_AI_WRITE_ORIGIN = 'ai-enrich'
+
+function writeOrigin(t: ResolvedTarget): typeof TOOL_WRITE_ORIGIN | typeof TOOL_AI_WRITE_ORIGIN {
+  return usesAi(reachOf(t)) ? TOOL_AI_WRITE_ORIGIN : TOOL_WRITE_ORIGIN
+}
+
+/** The bound reach, with manifest 2's families empty for a target resolved without one. */
+function reachOf(t: ResolvedTarget): ToolReach {
+  return (
+    t.reach ?? {
+      ...t.perimeter,
+      records: { read: [], write: [] },
+      resources: { read: [] },
+      connectorActions: {},
+      actions: [],
+      ai: { complete: false, decide: false },
+      ui: { download: false },
+    }
+  )
+}
+
 async function contextWrite(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
   const parsed = parseParams(P.write, params)
   if (!parsed.ok) return parsed.response
@@ -586,7 +729,7 @@ async function contextWrite(t: ResolvedTarget, params: unknown, deps: BridgeDeps
     t.context,
     checked.path,
     parsed.value.content,
-    TOOL_WRITE_ORIGIN,
+    writeOrigin(t),
   )
   if (result.status === 'denied') return err('forbidden', result.reason)
   void deps.logAudit(t.spaceId, {
@@ -610,7 +753,7 @@ async function contextAppend(t: ResolvedTarget, params: unknown, deps: BridgeDep
     t.context,
     checked.path,
     parsed.value.text,
-    TOOL_WRITE_ORIGIN,
+    writeOrigin(t),
   )
   if (result.status === 'denied') return err('forbidden', result.reason)
   void deps.logAudit(t.spaceId, {
@@ -648,7 +791,7 @@ async function connectorsCall(t: ResolvedTarget, params: unknown, deps: BridgeDe
   if (!parsed.ok) return parsed.response
   const { name, code, action, args } = parsed.value
 
-  const refusal = refuseConnector(t.perimeter, name)
+  const refusal = refuseConnector(t.perimeter, name) ?? refuseConnectorCall(reachOf(t), name, { code, action }, { foreign: t.foreign })
   if (refusal) return err('perimeter', refusal)
   if (missingHere(t.degraded?.missing.connectors, name)) {
     return err('degraded', `This space has no "${name}" connector — the tool is running degraded.`)
@@ -752,13 +895,13 @@ async function dataCall(t: ResolvedTarget, params: unknown, deps: BridgeDeps): P
 async function stateGet(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
   const parsed = parseParams(P.stateGet, params)
   if (!parsed.ok) return parsed.response
-  return ok(await deps.getToolState(t, parsed.value.key))
+  return ok(await deps.getToolState(t, parsed.value.key, parsed.value.scope ?? 'install'))
 }
 
 async function stateSet(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
   const parsed = parseParams(P.stateSet, params)
   if (!parsed.ok) return parsed.response
-  const result = await deps.setToolState(t, parsed.value.key, parsed.value.value ?? null)
+  const result = await deps.setToolState(t, parsed.value.key, parsed.value.value ?? null, parsed.value.scope ?? 'install')
   if (!result.ok) {
     if (result.reason === 'key_limit') {
       return err(
@@ -774,6 +917,339 @@ async function stateSet(t: ResolvedTarget, params: unknown, deps: BridgeDeps): P
     )
   }
   return ok(null)
+}
+
+// ── links ─────────────────────────────────────────────────────────────────────
+
+/**
+ * The notes a note links to, and the notes that link to it — each one a note
+ * the Tool may read and the viewer can open. A link from a note outside either
+ * is not reported at all: not even that it exists.
+ */
+async function contextLinks(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.links, params)
+  if (!parsed.ok) return parsed.response
+  const path = normalizeNotePath(parsed.value.path)
+  if (!path) return err('invalid', `"${parsed.value.path}" is not a note path.`)
+  const refusal = refuseRead(t.perimeter, path)
+  if (refusal) return err('perimeter', refusal)
+  if (!coAuthorsCanRead(t, path)) return err('not_found', `No note at ${path}.`)
+  const content = await deps.readVisible(t.principal, t.context, path)
+  if (content === null) return err('not_found', `No note at ${path}.`)
+
+  const { metas } = await deps.visibleVault(t.principal, t.context)
+  const config = configFoldersOf(metas)
+  const declared = readRefusal(t, path, config)
+  if (declared) return err('perimeter', declared)
+  const titles = new Map(metas.map((m) => [m.path, m.title || null]))
+  const reachable = (other: string) => titles.has(other) && readRefusal(t, other, config) === null && coAuthorsCanRead(t, other)
+  const outgoing = [...excerptsForTargets(path, splitFrontmatter(content).body).keys()]
+    .filter((target) => target !== path && reachable(target))
+    .slice(0, BRIDGE_LIMITS.maxRows)
+    .map((target) => ({ path: target, title: titles.get(target) ?? null }))
+  const refs = await deps.referencesFor(t.principal, t.context, path)
+  const seen = new Set<string>()
+  const incoming = refs.linked
+    .filter((ref) => reachable(ref.fromPath) && !seen.has(ref.fromPath) && seen.add(ref.fromPath))
+    .slice(0, BRIDGE_LIMITS.maxRows)
+    .map((ref) => ({ path: ref.fromPath, title: ref.fromTitle || null, excerpt: ref.excerpt }))
+  return ok({ outgoing, incoming })
+}
+
+// ── records ───────────────────────────────────────────────────────────────────
+
+/** A service refusal's status → the code a Tool branches on. */
+function codeOfStatus(status: number): BridgeErrorCode {
+  if (status === 404) return 'not_found'
+  if (status === 403 || status === 401) return 'forbidden'
+  if (status === 409) return 'forbidden'
+  if (status === 429) return 'rate_limited'
+  return status >= 500 ? 'internal' : 'invalid'
+}
+
+/** A record the Tool may not see through its notes: configuration, or a draft co-author's blind spot. */
+function recordHidden(t: ResolvedTarget, path: string): boolean {
+  if (!path) return false
+  return configNamespaceOf(path) !== null || !coAuthorsCanRead(t, path)
+}
+
+/** A record named by its note or its node; null when the path is not one a note can have. */
+function recordTargetOf(value: { path?: string; nodeId?: string }): SetFieldsTarget | null {
+  if (value.path === undefined) return { nodeId: value.nodeId! }
+  const path = normalizeNotePath(value.path)
+  return path ? { path } : null
+}
+
+function declaresRecords(reach: ToolReach): boolean {
+  return reach.records.read.length > 0 || reach.records.write.length > 0
+}
+
+async function recordsQuery(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.recordsQuery, params)
+  if (!parsed.ok) return parsed.response
+  const refusal = refuseRecordRead(reachOf(t), parsed.value.type)
+  if (refusal) return err('perimeter', refusal)
+  const page = await deps.queryRecords(t.principal, t.context, {
+    type: parsed.value.type,
+    where: parsed.value.where,
+    order: parsed.value.order,
+    limit: parsed.value.limit,
+    cursor: parsed.value.cursor ?? null,
+  })
+  if (!page.ok) return err(codeOfStatus(page.status), page.error)
+  return ok({ type: page.type, rows: page.rows.filter((row) => !recordHidden(t, row.path)), nextCursor: page.nextCursor, total: page.total })
+}
+
+async function recordsGet(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.recordTarget, params)
+  if (!parsed.ok) return parsed.response
+  const reach = reachOf(t)
+  // Which type a record is, is only known by reading it — but a Tool that
+  // declared no records at all is told so before anything is read.
+  if (!declaresRecords(reach)) return err('perimeter', refuseRecordRead(reach, 'records')!)
+  const target = recordTargetOf(parsed.value)
+  if (!target) return err('invalid', `"${parsed.value.path}" is not a note path.`)
+  if ('path' in target && recordHidden(t, target.path)) return err('not_found', 'No such record.')
+  const found = await deps.getRecord(t.principal, t.context, target)
+  if (!found.ok) return err(codeOfStatus(found.status), found.error)
+  const refusal = refuseRecordRead(reach, found.record.type)
+  if (refusal) return err('perimeter', refusal)
+  if (recordHidden(t, found.record.path)) return err('not_found', 'No such record.')
+  return ok(found.record)
+}
+
+async function recordsUpdate(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.recordsUpdate, params)
+  if (!parsed.ok) return parsed.response
+  const reach = reachOf(t)
+  if (reach.records.write.length === 0) {
+    return err('perimeter', refuseRecordWrite(reach, 'records', Object.keys(parsed.value.fields))!)
+  }
+  const target = recordTargetOf(parsed.value)
+  if (!target) return err('invalid', `"${parsed.value.path}" is not a note path.`)
+  const found = await deps.getRecord(t.principal, t.context, target)
+  if (!found.ok) return err(codeOfStatus(found.status), found.error)
+  const refusal = refuseRecordWrite(reach, found.record.type, Object.keys(parsed.value.fields))
+  if (refusal) return err('perimeter', refusal)
+  const notePath = found.record.path
+  if (recordHidden(t, notePath)) return err('not_found', 'No such record.')
+  if (notePath && coAuthors(t).some((p) => writeDenial(p, t.context, notePath) !== null)) {
+    return err('forbidden', `${DRAFT_REACH}, and one of them may not edit ${notePath}.`)
+  }
+  const written = await deps.setFields(
+    t.principal,
+    t.context,
+    target,
+    parsed.value.fields,
+    { origin: writeOrigin(t) },
+  )
+  if (!written.ok) return err(codeOfStatus(written.status), written.error)
+  void deps.logAudit(t.spaceId, {
+    userId: t.principal.userId,
+    name: t.principal.name,
+    action: 'tool',
+    path: notePath || written.record,
+    detail: `${toolLabel(t)} set ${Object.keys(parsed.value.fields).join(', ')}`,
+  })
+  return ok({ record: written.record, fields: written.fields })
+}
+
+// ── resources ─────────────────────────────────────────────────────────────────
+
+/**
+ * One resource the viewer can see, in this space, inside the Tool's
+ * `permissions.resources` — or the refusal. The declaration is asked first;
+ * where a resource sits is only known once it is found, and one the viewer
+ * cannot see reads as absent whatever the Tool declared.
+ */
+async function gatedResource(
+  t: ResolvedTarget,
+  id: string,
+  deps: BridgeDeps,
+): Promise<{ ok: true; view: NonNullable<Awaited<ReturnType<BridgeDeps['loadView']>>> } | { ok: false; response: BridgeResponse }> {
+  const reach = reachOf(t)
+  const declared = refuseResourceList(reach)
+  if (declared) return { ok: false, response: err('perimeter', declared) }
+  let gated
+  try {
+    gated = await deps.requireVisibleResource(id, t.principal.userId, t.principal.email)
+  } catch {
+    return { ok: false, response: err('not_found', 'No such file here.') }
+  }
+  if (gated.spaceId !== t.spaceId) return { ok: false, response: err('not_found', 'No such file here.') }
+  for (const author of coAuthors(t)) {
+    try {
+      await deps.requireVisibleResource(id, author.userId, author.email)
+    } catch {
+      return { ok: false, response: err('forbidden', `${DRAFT_REACH}, and one of them may not see this file.`) }
+    }
+  }
+  const view = await deps.loadView(id, gated.viewer)
+  if (!view) return { ok: false, response: err('not_found', 'No such file here.') }
+  const refusal = refuseResourceRead(reach, view.notePath)
+  if (refusal) return { ok: false, response: err('perimeter', refusal) }
+  return { ok: true, view }
+}
+
+function logToolUse(t: ResolvedTarget, resourceId: string, action: 'read' | 'download', deps: BridgeDeps): Promise<void> {
+  return deps.logResourceAccess({
+    resourceId,
+    spaceId: t.spaceId,
+    userId: t.principal.userId,
+    via: 'tool',
+    action,
+    agentName: toolLabel(t),
+  })
+}
+
+async function resourcesList(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.resourcesList, params)
+  if (!parsed.ok) return parsed.response
+  const reach = reachOf(t)
+  const declared = refuseResourceList(reach)
+  if (declared) return err('perimeter', declared)
+  const offset = parsed.value.cursor === undefined ? 0 : Number(decodeCursor(parsed.value.cursor))
+  if (!Number.isInteger(offset) || offset < 0) return err('invalid', 'That cursor is not one this Tool was given.')
+  const kinds = ['image', 'pdf', 'doc', 'sheet', 'slides', 'video', 'audio', 'text', 'code', 'archive', 'link', 'files', 'all']
+  const kind = parsed.value.kind ?? 'all'
+  if (!kinds.includes(kind)) return err('invalid', `kind is one of ${kinds.join(', ')}`)
+  const folder = parsed.value.folder ? normalizeNotePath(parsed.value.folder) : null
+  if (parsed.value.folder && (!folder || !`${folder}/`.startsWith('resources/'))) {
+    return err('invalid', 'folder is a folder under resources/.')
+  }
+  const viewer = await deps.resourceViewer(t.spaceId, t.principal.userId, t.principal.email)
+  const page = await deps.listResources(t.spaceId, viewer, {
+    kind: kind as never,
+    channelId: null,
+    by: null,
+    q: parsed.value.q ?? null,
+    since: null,
+    sort: 'recent' as never,
+    trash: false,
+    folder,
+    offset,
+    limit: Math.min(60, BRIDGE_LIMITS.maxRows),
+  })
+  const items = page.items.filter((view) => refuseResourceRead(reach, view.notePath) === null).map(toToolResource)
+  return ok({ items, nextCursor: page.nextOffset === null ? null : encodeCursor(String(page.nextOffset)) })
+}
+
+async function resourcesGet(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.resource, params)
+  if (!parsed.ok) return parsed.response
+  const found = await gatedResource(t, parsed.value.id, deps)
+  if (!found.ok) return found.response
+  return ok(toToolResource(found.view))
+}
+
+async function resourcesRead(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.resourceRead, params)
+  if (!parsed.ok) return parsed.response
+  const found = await gatedResource(t, parsed.value.id, deps)
+  if (!found.ok) return found.response
+  const text = await deps.readResourceText(t.principal, t.spaceId, found.view.id, {
+    offsetChars: parsed.value.offset ?? 0,
+    maxChars: BRIDGE_LIMITS.maxResourceReadChars,
+  })
+  if (!text) return err('not_found', `${found.view.name} has no text to read.`)
+  await logToolUse(t, found.view.id, 'read', deps)
+  return ok(text)
+}
+
+async function resourcesBlob(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.resourceBlob, params)
+  if (!parsed.ok) return parsed.response
+  const found = await gatedResource(t, parsed.value.id, deps)
+  if (!found.ok) return found.response
+  const blob = await deps.resourceBlob(found.view.id, parsed.value.rendition ?? 'original', BRIDGE_LIMITS.maxBlobBytes)
+  if (!blob.ok) {
+    return blob.reason === 'too_large'
+      ? err('too_large', `That is ${blob.bytes} bytes, over the ${BRIDGE_LIMITS.maxBlobBytes} byte limit — ask for its thumb or preview.`)
+      : err('not_found', `${found.view.name} has no ${parsed.value.rendition ?? 'original'} to hand back.`)
+  }
+  await logToolUse(t, found.view.id, 'download', deps)
+  return ok({ mimeType: blob.mimeType, dataUrl: blob.dataUrl })
+}
+
+// ── actions ───────────────────────────────────────────────────────────────────
+
+/**
+ * One of the space's actions from the allowlist (lib/tools/toolActions.ts),
+ * run as the viewer with that action's scope alone, in this space alone.
+ */
+async function actionsRun(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.action, params)
+  if (!parsed.ok) return parsed.response
+  const { name } = parsed.value
+  const reach = reachOf(t)
+  const declared = refuseAction(reach, name)
+  if (declared) return err('perimeter', declared)
+  const plan = planToolAction(name, parsed.value.input ?? {}, t.spaceId)
+  if (!plan.ok) return err(plan.code, plan.message)
+  if (coAuthors(t).length > 0) return err('forbidden', `${DRAFT_REACH}; a draft runs no actions until it is approved.`)
+  for (const arg of plan.tenantArgs) {
+    const denial = await deps.tenantArgDenial(arg.thing, arg.value, t.spaceId, reach)
+    if (denial) return err(denial.code, `${arg.arg}: ${denial.message}`)
+  }
+  const { actionByName } = await import('@/lib/actions/registry')
+  const def = actionByName(name)
+  if (!def) return err('not_found', `No action named ${name}.`)
+  const caller: ActionCaller = {
+    userId: t.principal.userId,
+    name: t.principal.name,
+    email: t.principal.email ?? '',
+    scopes: [def.scope],
+    via: 'tool',
+    agentName: toolLabel(t),
+    runId: null,
+    client: 'app',
+  }
+  try {
+    const value = await deps.runAction(caller, name, plan.input)
+    void deps.logAudit(t.spaceId, {
+      userId: t.principal.userId,
+      name: t.principal.name,
+      action: 'tool',
+      path: `tools/${t.config.name}`,
+      detail: `${toolLabel(t)} ran ${name}`,
+    })
+    return ok(value)
+  } catch (e) {
+    const status = typeof (e as { status?: unknown })?.status === 'number' ? (e as { status: number }).status : null
+    if (status !== null && e instanceof Error) return err(codeOfStatus(status), e.message)
+    throw e
+  }
+}
+
+// ── ai ────────────────────────────────────────────────────────────────────────
+
+async function aiComplete(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.complete, params)
+  if (!parsed.ok) return parsed.response
+  const refusal = refuseAi(reachOf(t), 'complete')
+  if (refusal) return err('perimeter', refusal)
+  const { prompt, system, messages, maxTokens } = parsed.value
+  const answer = await deps.complete({
+    spaceId: t.spaceId,
+    toolName: t.config.name,
+    messages: [
+      ...(system ? [{ role: 'system' as const, content: system }] : []),
+      ...(messages
+        ? messages.map((m) => (m.role === 'assistant' ? { role: 'assistant' as const, content: m.content } : { role: 'user' as const, content: m.content }))
+        : [{ role: 'user' as const, content: prompt! }]),
+    ],
+    maxTokens: maxTokens ?? BRIDGE_LIMITS.aiMaxOutputTokens,
+  })
+  return answer.ok ? ok({ text: answer.text }) : err(answer.code, answer.message)
+}
+
+async function aiDecide(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.decide, params)
+  if (!parsed.ok) return parsed.response
+  const refusal = refuseAi(reachOf(t), 'decide')
+  if (refusal) return err('perimeter', refusal)
+  const answer = await deps.decide({ spaceId: t.spaceId, items: parsed.value.items, questions: parsed.value.questions })
+  return answer.ok ? ok(answer.answers) : err(answer.code, answer.message)
 }
 
 // ── the door ──────────────────────────────────────────────────────────────────
@@ -814,6 +1290,28 @@ export async function handleBridgeCall(
         // Takes no params, so there is nothing to validate and nothing to
         // refuse: the host, not the frame, decides what a Tool is shown about.
         return ok(t.subject)
+      case 'context.links':
+        return await contextLinks(t, params, deps)
+      case 'records.query':
+        return await recordsQuery(t, params, deps)
+      case 'records.get':
+        return await recordsGet(t, params, deps)
+      case 'records.update':
+        return await recordsUpdate(t, params, deps)
+      case 'resources.list':
+        return await resourcesList(t, params, deps)
+      case 'resources.get':
+        return await resourcesGet(t, params, deps)
+      case 'resources.read':
+        return await resourcesRead(t, params, deps)
+      case 'resources.blob':
+        return await resourcesBlob(t, params, deps)
+      case 'actions.run':
+        return await actionsRun(t, params, deps)
+      case 'ai.complete':
+        return await aiComplete(t, params, deps)
+      case 'ai.decide':
+        return await aiDecide(t, params, deps)
       default:
         return err('invalid', `Unknown method ${String(method)}.`)
     }
@@ -862,7 +1360,17 @@ export function bridgeCapabilities(t: ResolvedTarget, deps: BridgeDeps = REAL_DE
         ...(typeof args[1] === 'string' ? { code: args[1] } : (args[1] as object | undefined) ?? {}),
       }),
     'agents.run': (args) => call('agents.run', { name: args[0] }),
-    'state.get': (args) => call('state.get', { key: args[0] }),
-    'state.set': (args) => call('state.set', { key: args[0], value: args[1] }),
+    'state.get': (args) => call('state.get', { key: args[0], ...(args[1] === undefined ? {} : { scope: args[1] }) }),
+    'state.set': (args) => call('state.set', { key: args[0], value: args[1], ...(args[2] === undefined ? {} : { scope: args[2] }) }),
+    'context.links': (args) => call('context.links', { path: args[0] }),
+    'records.query': (args) => call('records.query', args[0] ?? {}),
+    'records.get': (args) => call('records.get', args[0] ?? {}),
+    'records.update': (args) => call('records.update', args[0] ?? {}),
+    'resources.list': (args) => call('resources.list', args[0] ?? {}),
+    'resources.get': (args) => call('resources.get', { id: args[0] }),
+    'resources.read': (args) => call('resources.read', { id: args[0], ...(args[1] === undefined ? {} : { offset: args[1] }) }),
+    'actions.run': (args) => call('actions.run', { name: args[0], ...(args[1] === undefined ? {} : { input: args[1] }) }),
+    'ai.complete': (args) => call('ai.complete', typeof args[0] === 'string' ? { prompt: args[0] } : (args[0] ?? {})),
+    'ai.decide': (args) => call('ai.decide', args[0] ?? {}),
   }
 }

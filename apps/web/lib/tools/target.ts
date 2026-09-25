@@ -51,6 +51,12 @@ import { principalForUser } from '@/lib/agents/principal'
 import { listingHoldFor, runDenial, type ListingHold } from './verdicts'
 import { draftAuthorship, nobodyPrincipal, type DraftAuthorship } from './draftAuthors'
 import { toolRunDenial, type ToolClient } from './clientClass'
+import { composeToolIndex } from './indexFacts'
+import { manifestOf } from './config'
+import { parseManifestFacts, sdkMajorOf, settingValue, type ToolManifestFacts } from '@visvine/tool-protocol/manifest'
+import { resolveReach, sourceBindings, type ToolReach } from '@visvine/tool-protocol/bindings'
+import { readToolFacts } from './toolFacts'
+import { unboundLabels } from './requirements'
 
 /** The stored shape `resolveBridgeTarget` needs off an install row. */
 interface InstallRow {
@@ -62,6 +68,8 @@ interface InstallRow {
   enabled: boolean
   requirements: unknown
   sharedFromSpaceId?: string | null
+  bindings?: unknown
+  settings?: unknown
   version: {
     name: string
     title: string
@@ -101,6 +109,8 @@ export interface TargetDeps {
   draftAuthorship?: (spaceId: string, name: string, folder: string) => Promise<DraftAuthorship>
   /** An author's principal in the space, or null when they are gone. */
   principalForUser?: (spaceId: string, userId: string) => Promise<ContextPrincipal | null>
+  /** A working copy's facts row (toolFacts.ts). Absent: the index note alone. */
+  readFacts?: (spaceId: string, name: string) => Promise<Record<string, unknown> | null>
 }
 
 const REAL_DEPS: TargetDeps = {
@@ -119,6 +129,7 @@ const REAL_DEPS: TargetDeps = {
   listingHold: listingHoldFor,
   draftAuthorship,
   principalForUser,
+  readFacts: readToolFacts,
 }
 
 /**
@@ -139,8 +150,21 @@ export interface ResolvedTarget {
   coPrincipals?: ContextPrincipal[]
   /** The space's shared context — Tools never see anyone's personal context. */
   context: Context
-  /** The declared reach: the version's for an install, the note's for a preview. */
+  /**
+   * The declared reach, BOUND: the version's for an install (its `$slots`
+   * filled with this space's folders, types, connectors, agents), the note's
+   * for a preview (bound to its own suggestions). What every gate reads.
+   */
   perimeter: ToolPerimeter
+  /** Every family of reach, bound — the v1 lists above plus records, resources, actions, ai, ui. */
+  reach?: ToolReach
+  /** The install's settings (manifest 2), defaults filled; {} for a v1 Tool. */
+  settings?: Record<string, unknown>
+  /**
+   * Installed from outside this space's family — a listed Tool another space
+   * wrote. Such a Tool calls a connector's named actions only, never code.
+   */
+  foreign?: boolean
   config: ToolConfig
   /** Compiled `data.js`, or '' when the Tool has none (or has not compiled). */
   dataBundle: string
@@ -223,10 +247,47 @@ function configOfJson(raw: unknown, name: string, perimeter: ToolPerimeter): Too
       actions: ((a) => (a.ok ? a.actions : []))(parseToolBandActions(surfaces.actions)),
     },
     perimeter,
+    ...(((m) => (m && m.ok ? { manifest: m.value } : {}))(
+      record.manifest && typeof record.manifest === 'object' && !Array.isArray(record.manifest)
+        ? parseManifestFacts(record.manifest as Record<string, unknown>)
+        : null,
+    )),
     // Marketplace metadata; a hostile value falls back to none, like the rest.
     tags: ((t) => (t.ok ? t.tags : []))(parseToolTags(record.tags)),
     previewUrl: ((p) => (p.ok ? p.previewUrl : null))(parseToolPreviewUrl(record.previewUrl)),
   }
+}
+
+function objectOf(raw: unknown): Record<string, unknown> {
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+}
+
+/** A stored binding map, keeping only string values. */
+function stringMap(raw: unknown): Record<string, string> {
+  return Object.fromEntries(Object.entries(objectOf(raw)).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+}
+
+/** The v1 lists the gates read, from a bound reach. */
+function perimeterOfReach(reach: ToolReach): ToolPerimeter {
+  return { read: reach.read, write: reach.write, types: reach.types, connectors: reach.connectors, agents: reach.agents }
+}
+
+/** Each declared setting's value here, or its default; a stored value its spec refuses falls back to the default. */
+function settingsWithDefaults(facts: ToolManifestFacts, stored: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, spec] of Object.entries(facts.settings)) {
+    const value = stored[key]
+    if (value !== undefined && settingValue(spec, value).ok) out[key] = value
+    else if (spec.default !== undefined) out[key] = spec.default
+  }
+  return out
+}
+
+/** Unbound slots join what the space is missing: the Tool runs degraded, behind the same banner. */
+function withUnbound(degraded: ToolDegraded | null, unbound: readonly string[], facts: ToolManifestFacts): ToolDegraded | null {
+  const labels = unboundLabels(facts, unbound)
+  if (labels.length === 0) return degraded
+  return { missing: { ...(degraded?.missing ?? { connectors: [], types: [], agents: [] }), bindings: labels } }
 }
 
 /** The install's requirements snapshot → the degraded banner, or null. */
@@ -328,22 +389,36 @@ async function resolveInstall(
   if (denial) return denial
 
   // The VERSION, not the working copy: an install runs the code and the reach a
-  // reviewer approved, whatever the source space's notes say today.
+  // reviewer approved, whatever the source space's notes say today — bound to
+  // what this install's admin bound its slots to.
   const parsed = parseToolPerimeter(install.version.perimeter)
-  const perimeter = parsed.ok ? parsed.perimeter : EMPTY_PERIMETER
-  const config = configOfJson(install.version.config, install.version.name, perimeter)
+  const config = configOfJson(install.version.config, install.version.name, parsed.ok ? parsed.perimeter : EMPTY_PERIMETER)
+  const facts = manifestOf(config)
+  const bound = resolveReach(facts, stringMap(install.bindings))
+  const perimeter = perimeterOfReach(bound.reach)
+  const settings = settingsWithDefaults(facts, objectOf(install.settings))
 
   return {
     spaceId: install.spaceId,
     principal: await deps.principalOf(resolved),
     context: { spaceId: install.spaceId, ownerKey: SHARED_OWNER_KEY },
     perimeter,
+    reach: bound.reach,
+    settings,
+    foreign: sourceSpaceId !== install.spaceId && !install.sharedFromSpaceId,
     config,
     dataBundle: install.version.dataBundle,
     installId: install.id,
     versionId: install.versionId ?? null,
-    degraded: degradedOfRequirements(install.requirements),
-    install: { slug: install.slug, title: config.title, key: install.key },
+    degraded: withUnbound(degradedOfRequirements(install.requirements), bound.unbound, facts),
+    install: {
+      slug: install.slug,
+      title: config.title,
+      key: install.key,
+      settings,
+      bindings: stringMap(install.bindings),
+      sdk: sdkMajorOf(facts.sdk),
+    },
     isAdmin: resolved.isAdmin,
     subject: null,
   }
@@ -374,8 +449,10 @@ async function resolvePreview(
   // preview cannot be used to probe which Tools exist in a folder the viewer
   // cannot see.
   const folder = deps.toolFolder ? await deps.toolFolder(target.spaceId, name) : undefined
-  const source = await deps.readVisible(principal, context, toolIndexPath(name, folder))
-  if (source === null) return fail('not_found', `No tool named "${name}" here.`)
+  const note = await deps.readVisible(principal, context, toolIndexPath(name, folder))
+  if (note === null) return fail('not_found', `No tool named "${name}" here.`)
+  // The working copy's facts row, rendered into the note the way the build reads it.
+  const source = composeToolIndex(note, deps.readFacts ? await deps.readFacts(target.spaceId, name) : null)
 
   const parsedConfig = parseToolConfig(parseFrontmatter(source) as NoteFrontmatter, name)
   if (!parsedConfig.ok) return fail('invalid', parsedConfig.error)
@@ -397,19 +474,26 @@ async function resolvePreview(
     }
   }
 
+  // A working copy runs in the space that wrote it, bound to its own suggestions.
+  const facts = manifestOf(parsedConfig.config)
+  const bindings = sourceBindings(facts)
+  const bound = resolveReach(facts, bindings)
+  const settings = settingsWithDefaults(facts, {})
   return {
     spaceId: target.spaceId,
     principal,
     coPrincipals,
     context,
-    perimeter: parsedConfig.config.perimeter,
+    perimeter: perimeterOfReach(bound.reach),
+    reach: bound.reach,
+    settings,
     config: parsedConfig.config,
     dataBundle: build?.ok ? (build.dataBundle ?? '') : '',
     installId: null,
     // Requirements are an install concept; an author previewing their own work
     // sees the real failures instead of a banner.
     degraded: null,
-    install: { preview: true, name },
+    install: { preview: true, name, settings, bindings, sdk: sdkMajorOf(facts.sdk) },
     isAdmin: resolved.isAdmin,
     subject: null,
   }

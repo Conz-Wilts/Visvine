@@ -1302,9 +1302,9 @@ pagination.
 
 ## Tools
 
-A Tool is three notes (`tools/<name>/{index.md,ui.tsx,data.js}`) compiled on
-write, run in a sandboxed iframe on a cookie-less origin. `docs/tools.md` is the
-guide. The invariants:
+A Tool is its notes (`tools/<name>/{index.md,ui.tsx,data.js}` and optional
+`src/<module>.tsx`) and its facts row, compiled on write, run in a sandboxed
+iframe on a cookie-less origin. `docs/tools.md` is the guide. The invariants:
 
 - **A Tool belongs to the space that wrote it.** Publishing ships it there and
   NOWHERE else. `AppToolVersion` carries two independent verdicts, both asked in
@@ -1363,7 +1363,40 @@ guide. The invariants:
 - **The kit's catalog is one list** (`lib/tools/catalog.ts`): `get_tool_sdk`,
   the `tool_design` guide on `create_tool`/`write_tool`, the builder's prompt
   and the Workbench's Components panel all read it, and
-  `tests/tools-catalog.test.ts` holds it to the kit's exports.
+  `tests/tools-catalog.test.ts` holds it to the kit's exports. The app's own
+  components in it are generated from `packages/ui`
+  (`scripts/build-tool-catalog.ts` → `catalog.generated.ts`, checked current).
+- **A Tool's manifest facts are a row; its index note is prose.** Surfaces,
+  reach (`permissions`, or a v1 `perimeter` — never both), bindings, settings,
+  `sdk`, dependencies live in `app_tool_configs` (changes in
+  `app_tool_config_changes`), written by `writeToolFile`'s split of index.md,
+  the hook's adoption of one written straight to the store, or
+  `configure_tool`; every reader parses the composed index
+  (`indexFacts.ts#composeToolIndex`). The contract — wire protocol, manifest,
+  permission grammar, bindings, reach gates, curated dependencies — is the pure
+  `packages/tool-protocol`.
+- **A Tool names the KIND of thing it needs; each space binds its own.**
+  `$slot` in permissions and type surfaces is filled per install
+  (`app_tool_installs.bindings`/`settings`, an admin's through `bind_tool` or
+  the install sheet, audited): the source space takes each `suggest`, another
+  space binds its own folder/type/connector/agent, a room shared into takes the
+  suggestions it has. An unbound slot runs the Tool degraded, never blocks an
+  install. The bridge enforces the BOUND reach (`target.ts` →
+  `resolveReach`); review reads the abstract one.
+- **Bridge v2 keeps the order: the Tool's permission, then the viewer's
+  access.** `records.*`, `resources.*`, `context.links`, `actions.run`, `ai.*`
+  each refuse `perimeter` before any grant is asked
+  (`tests/tools-bridge-v2.test.ts`). `actions.run` is `TOOL_ACTIONS` only, the
+  install's space forced, every id it is handed checked to be this space's; a
+  Tool declaring `ai` writes under `ai-enrich`, which Freeze for AI refuses;
+  `ui.*` is answered by the host page, never the server. `state` is per viewer
+  (`scope: 'user'`, kit 2's default) or shared (`'install'`, what a call naming
+  none gets).
+- **Two kit majors, chosen per Tool by its `sdk`.** Kit 2 is `@visvine/ui`
+  plus the kit's data-bound components and the compiled `tool-kit.css`; kit 1
+  (`features/tools/kit/legacy`, `tool-kit-1.js`) is frozen so a Tool written
+  before it renders unchanged. Third-party imports are the curated, pinned list
+  a manifest declares (`dependencies.ts`), vendored beside React.
 
 ## Production
 

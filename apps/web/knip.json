@@ -11,6 +11,9 @@
     // whichever half of the app has been written so far.
     "features/tools/kit/index.ts",
     "features/tools/kit/runtime.ts",
+    // Kit 1, frozen: built into its own vendor file for the Tools written against it.
+    "features/tools/kit/kit1.ts",
+    "features/tools/kit/legacyBoot.ts",
     "lib/tools/protocol.ts",
     "lib/tools/sdkDocs.ts"
   ],
@@ -20,5 +23,7 @@
   // `@visvine/tool-kit` only resolves through the frame's import map at run
   // time. They are fixtures, not modules.
   "ignore": ["scripts/fixtures/**"],
-  "ignoreDependencies": []
+  // Curated dependencies the vendor build serves to Tools (lib/tools/vendorBundle.ts,
+  // @visvine/tool-protocol/dependencies); nothing in the app imports them.
+  "ignoreDependencies": ["date-fns"]
 }

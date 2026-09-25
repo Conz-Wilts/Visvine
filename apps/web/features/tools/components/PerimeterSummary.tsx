@@ -39,11 +39,14 @@ type EntryState = 'same' | 'added' | 'removed';
 export default function PerimeterSummary({
   perimeter,
   diff,
+  extra = [],
   className,
 }: {
   perimeter: ToolPerimeter;
   /** Change against the previously approved version, when there is one. */
   diff?: PerimeterDiff;
+  /** A manifest 2 Tool's other families of reach — records, resources, actions, AI — shown when present. */
+  extra?: ReadonlyArray<{ key: string; label: string; entries: readonly string[] }>;
   className?: string;
 }) {
   const rows = GROUPS.map(([key, label]) => {
@@ -57,8 +60,14 @@ export default function PerimeterSummary({
       // appended from the diff rather than found in it.
       ...(diff ? diff[key].removed.map((value) => ({ value, state: 'removed' as EntryState })) : []),
     ];
-    return { key, label, entries };
-  }).filter((row) => row.entries.length > 0 || ALWAYS_SHOWN.includes(row.key));
+    return { key: key as string, label, entries };
+  })
+    .filter((row) => row.entries.length > 0 || ALWAYS_SHOWN.includes(row.key as keyof ToolPerimeter))
+    .concat(
+      extra
+        .filter((row) => row.entries.length > 0)
+        .map((row) => ({ ...row, entries: row.entries.map((value) => ({ value, state: 'same' as EntryState })) })),
+    );
 
   return (
     <dl className={clsx('space-y-2', className)}>

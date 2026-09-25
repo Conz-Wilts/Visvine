@@ -30,7 +30,10 @@
  * author's problem to see, not an exception to swallow.
  */
 import { createHash } from 'node:crypto'
+import { posix } from 'node:path'
 import { build, type Message, type Metafile, type Plugin } from 'esbuild'
+import { isCuratedDependency } from '@visvine/tool-protocol/dependencies'
+import { MAX_TOOL_MODULES, TOOL_MODULE_RE } from './config'
 
 /**
  * Ceilings for one compile. `maxBundleBytes` is the larger of the two because
@@ -53,24 +56,31 @@ export const TOOL_BUNDLE_LIMITS = {
 export const EXTERNALS = [
   'react',
   'react/jsx-runtime',
+  'react-dom',
   'react-dom/client',
   '@visvine/tool-kit',
 ] as const
 
-//  (the legacy root API) is deliberately NOT here. The frame's
-// import map (lib/tools/frameDocument.ts) only serves , so
-// allowing the bare specifier would compile cleanly and then fail to resolve
-// at runtime — the worst kind of error for an author. Refusing it here gives
-// them the rule and the fix in one line. Pinned by tests/tools-compile.test.ts.
+// Every one of these has an entry in the frame's import map
+// (lib/tools/frameDocument.ts) — an external without one would compile cleanly
+// and then fail to resolve at runtime, the worst kind of error for an author.
+// Pinned by tests/tools-frame-document.test.ts.
 
 const ALLOWED_IMPORTS: ReadonlySet<string> = new Set(EXTERNALS)
 
 /** Named in every refusal, so the author learns the whole rule from one error. */
 const IMPORT_RULE =
-  'Only react, react/jsx-runtime, react-dom/client and @visvine/tool-kit may be imported (use react-dom/client, not react-dom)'
+  'Only react, react/jsx-runtime, react-dom, react-dom/client, @visvine/tool-kit and the dependencies the manifest declares may be imported'
 
 const UI_FILENAME = 'ui.tsx'
 const DATA_FILENAME = 'data.js'
+
+/**
+ * A Tool's own modules (`src/<name>.tsx`, config.ts#TOOL_MODULE_RE) are
+ * imported from ui.tsx as `./src/<name>` and from each other as `./<name>`,
+ * resolved from memory by the guard below — never from a disk.
+ */
+const MODULE_NAMESPACE = 'tool-src'
 
 /**
  * One compile error or warning. `line` is 1-based and `column` 0-based —
@@ -83,6 +93,8 @@ export interface CompileDiagnostic {
   line: number | null
   column: number | null
   text: string | null
+  /** The module it is in (`src/chart.tsx`), when not the file compiled. */
+  file?: string
 }
 
 export type CompileResult =
@@ -108,7 +120,9 @@ function diagnostic(message: string, location?: Message['location']): CompileDia
 function fromMessage(m: Message): CompileDiagnostic {
   const notes = m.notes.map((n) => n.text).filter(Boolean)
   const message = notes.length > 0 ? `${m.text} (${notes.join(' ')})` : m.text
-  return diagnostic(message, m.location)
+  const found = diagnostic(message, m.location)
+  const file = m.location?.file ?? ''
+  return file.startsWith(`${MODULE_NAMESPACE}:`) ? { ...found, file: file.slice(MODULE_NAMESPACE.length + 1) } : found
 }
 
 /**
@@ -173,14 +187,34 @@ function withTimeout<T>(work: Promise<T>, what: string): Promise<T> {
  * `external` option, so the outcome does not depend on which of the two esbuild
  * consults first.
  */
-const importGuard: Plugin = {
-  name: 'visvine-tool-imports',
-  setup(hooks) {
-    hooks.onResolve({ filter: /.*/ }, (args) => {
-      if (ALLOWED_IMPORTS.has(args.path)) return { path: args.path, external: true }
-      return { errors: [{ text: `Cannot import ${JSON.stringify(args.path)}. ${IMPORT_RULE}` }] }
-    })
-  },
+function importGuard(modules: Readonly<Record<string, string>>, dependencies: ReadonlySet<string>): Plugin {
+  return {
+    name: 'visvine-tool-imports',
+    setup(hooks) {
+      hooks.onResolve({ filter: /.*/ }, (args) => {
+        if (ALLOWED_IMPORTS.has(args.path) || dependencies.has(args.path)) return { path: args.path, external: true }
+        if (args.path.startsWith('./') || args.path.startsWith('../')) {
+          // Relative to the importing file inside the Tool's own folder — never
+          // a disk: ui.tsx sits at the root, a module under src/.
+          const from = args.namespace === MODULE_NAMESPACE ? posix.dirname(args.importer) : '.'
+          const joined = posix.normalize(posix.join(from, args.path))
+          const found = [joined, `${joined}.tsx`, `${joined}.ts`].find((candidate) => TOOL_MODULE_RE.test(candidate) && candidate in modules)
+          if (found) return { path: found, namespace: MODULE_NAMESPACE }
+          return {
+            errors: [{ text: `Cannot import ${JSON.stringify(args.path)} — there is no module ${joined}.tsx. ${IMPORT_RULE}, and a tool's own modules as ./src/<name>` }],
+          }
+        }
+        if (isCuratedDependency(args.path)) {
+          return { errors: [{ text: `Cannot import ${JSON.stringify(args.path)} — declare it in the manifest's dependencies first` }] }
+        }
+        return { errors: [{ text: `Cannot import ${JSON.stringify(args.path)}. ${IMPORT_RULE}` }] }
+      })
+      hooks.onLoad({ filter: /.*/, namespace: MODULE_NAMESPACE }, (args) => ({
+        contents: modules[args.path] ?? '',
+        loader: args.path.endsWith('.tsx') ? 'tsx' : 'ts',
+      }))
+    },
+  }
 }
 
 /** Every specifier esbuild parsed, including ones tree-shaking then dropped. */
@@ -427,11 +461,27 @@ function exportsDefault(metafile: Metafile): boolean {
  */
 export async function compileToolUi(
   source: string,
-  opts: { filename?: string } = {},
+  opts: {
+    filename?: string
+    /** The Tool's own modules, by path (`src/chart.tsx`). */
+    modules?: Readonly<Record<string, string>>
+    /** The curated dependencies the manifest declares — the only ones it may import. */
+    dependencies?: readonly string[]
+  } = {},
 ): Promise<CompileResult> {
   const filename = opts.filename ?? UI_FILENAME
-  const oversize = overSourceCap(source, filename)
+  const modules = opts.modules ?? {}
+  const moduleNames = Object.keys(modules)
+  const badName = moduleNames.find((name) => !TOOL_MODULE_RE.test(name))
+  if (badName) {
+    return { ok: false, errors: [diagnostic(`${badName} is not a module name — src/<name>.tsx or .ts, lower-case letters, digits and hyphens`)], warnings: [] }
+  }
+  if (moduleNames.length > MAX_TOOL_MODULES) {
+    return { ok: false, errors: [diagnostic(`A tool has at most ${MAX_TOOL_MODULES} modules in src/`)], warnings: [] }
+  }
+  const oversize = overSourceCap([source, ...Object.values(modules)].join('\n'), filename)
   if (oversize) return { ok: false, errors: [oversize], warnings: [] }
+  const dependencies: ReadonlySet<string> = new Set((opts.dependencies ?? []).filter((name) => isCuratedDependency(name)))
 
   let built
   try {
@@ -452,7 +502,7 @@ export async function compileToolUi(
         // the server's stdout on an author's typo.
         logLevel: 'silent',
         metafile: true,
-        plugins: [importGuard],
+        plugins: [importGuard(modules, dependencies)],
       }),
       `Compiling ${filename}`,
     )
@@ -460,7 +510,11 @@ export async function compileToolUi(
     return { ok: false, ...fromThrow(e) }
   }
 
-  const warnings = [...built.warnings.map(fromMessage), ...designWarnings(source, filename)]
+  const warnings = [
+    ...built.warnings.map(fromMessage),
+    ...designWarnings(source, filename),
+    ...Object.entries(modules).flatMap(([name, text]) => designWarnings(text, name).map((w) => ({ ...w, file: name }))),
+  ]
   const bundle = built.outputFiles[0]?.text ?? ''
   const sizeBytes = bytes(bundle)
   const errors: CompileDiagnostic[] = []
@@ -468,22 +522,21 @@ export async function compileToolUi(
   // A dynamic import whose specifier esbuild can't read statically never
   // reaches `importGuard.onResolve` and never lands in `metafile.inputs[].imports`
   // either, so it would otherwise compile clean straight through to the bundle.
-  for (const index of findNonLiteralDynamicImports(source)) {
-    errors.push(
-      diagnostic(
-        `Cannot import a non-literal value. ${IMPORT_RULE}`,
-        locationAt(source, filename, index),
-      ),
-    )
+  for (const [name, text] of [[filename, source], ...Object.entries(modules)] as Array<[string, string]>) {
+    for (const index of findNonLiteralDynamicImports(text)) {
+      const found = diagnostic(`Cannot import a non-literal value. ${IMPORT_RULE}`, locationAt(text, name, index))
+      errors.push(name === filename ? found : { ...found, file: name })
+    }
   }
 
   // The guard never sees an import whose binding went unused, because esbuild
   // drops those before resolving them. Harmless in the bundle — the import is
   // gone — but the author asked for something they may not have, so say so.
-  for (const path of importedPaths(built.metafile)) {
-    if (!ALLOWED_IMPORTS.has(path)) {
-      errors.push(diagnostic(`Cannot import ${JSON.stringify(path)}. ${IMPORT_RULE}`))
-    }
+  for (const listed of importedPaths(built.metafile)) {
+    // A module is listed by what it resolved to, in its own namespace.
+    const path = listed.startsWith(`${MODULE_NAMESPACE}:`) ? listed.slice(MODULE_NAMESPACE.length + 1) : listed
+    if (ALLOWED_IMPORTS.has(path) || dependencies.has(path) || (TOOL_MODULE_RE.test(path) && path in modules)) continue
+    errors.push(diagnostic(`Cannot import ${JSON.stringify(path)}. ${IMPORT_RULE}`))
   }
 
   if (!exportsDefault(built.metafile)) {

@@ -1,7 +1,9 @@
 /**
- * The component catalog: every component and hook the Tool kit exports, what
- * it is for, when the app itself uses its shape, and a snippet that compiles —
- * plus the design rules in brief. Pure.
+ * The component catalog: every component and hook kit 2 exports, what it is
+ * for, when the app itself uses its shape, and a snippet that compiles — plus
+ * the design rules in brief. Pure. The app's own components kit 2 re-exports
+ * are generated from packages/ui (./catalog.generated.ts,
+ * scripts/build-tool-catalog.ts); the kit's own are written here.
  *
  * One source, four readers: `get_tool_sdk` hands it to any AI client, the
  * `tool_design` guide carries it into `create_tool` and `write_tool`'s
@@ -13,6 +15,8 @@
  * `tests/tools-catalog.test.ts` holds it to the kit: every export is listed,
  * nothing listed is missing from the kit, and every snippet compiles.
  */
+
+import { UI_CATALOG } from './catalog.generated'
 
 export interface CatalogEntry {
   name: string
@@ -29,7 +33,8 @@ export interface CatalogEntry {
   imports?: string[]
 }
 
-export const TOOL_CATALOG: readonly CatalogEntry[] = [
+/** The kit's own components and hooks. */
+const KIT_CATALOG: readonly CatalogEntry[] = [
   // ── layout ──
   {
     name: 'Stack',
@@ -51,8 +56,8 @@ export const TOOL_CATALOG: readonly CatalogEntry[] = [
   {
     name: 'Card',
     kind: 'component',
-    what: 'A bordered group with an optional title and actions.',
-    when: 'Sparingly: the app is flat, with hairline sections and no cards. Use one only to set a group apart from a page of lists.',
+    what: 'A section with an optional title and actions, set off by a hairline.',
+    when: 'To group part of a page. The app is flat — a section, not a box.',
     props: 'title? · actions? · flush?',
     snippet: `<Card title="Totals">\n  <p>12 open</p>\n</Card>`,
   },
@@ -84,7 +89,7 @@ export const TOOL_CATALOG: readonly CatalogEntry[] = [
   {
     name: 'Banner',
     kind: 'component',
-    what: 'A one-line notice with a tone.',
+    what: 'A notice with a tone — the app\'s rule-and-words notice, with a title and an action.',
     when: 'Only when something is actually wrong or needs a decision. A normal state is silent.',
     props: "tone?: 'info' | 'success' | 'warn' | 'danger' · title? · action?",
     snippet: `<Banner tone="warn" title="Two deals have no owner" />`,
@@ -92,7 +97,7 @@ export const TOOL_CATALOG: readonly CatalogEntry[] = [
   {
     name: 'Chip',
     kind: 'component',
-    what: 'A small label for a status or a type.',
+    what: 'The app\'s chip: a small label for a status or a type, muted or in a tone.',
     when: 'A row\'s status or type, the way the Directory labels a record.',
     props: "tone?: 'neutral' | 'accent' | 'danger' | 'warn' | 'info'",
     snippet: `<Chip tone="accent">Won</Chip>`,
@@ -101,9 +106,9 @@ export const TOOL_CATALOG: readonly CatalogEntry[] = [
   {
     name: 'Button',
     kind: 'component',
-    what: 'A button.',
-    when: 'Labels are one to three words that name the act: Save, Run now, New deal.',
-    props: "variant?: 'primary' | 'secondary' | 'ghost' | 'danger' · size?: 'sm' | 'md' · any button attribute",
+    what: 'The app\'s button.',
+    when: 'Labels are one to three words that name the act: Save, Run now, New deal. One primary per view.',
+    props: "variant?: 'primary' | 'secondary' | 'ghost' | 'danger' · size?: 'sm' | 'md' · loading? · loadingText? · any button attribute",
     snippet: `<Button variant="primary" onClick={() => {}}>Save</Button>`,
   },
   {
@@ -243,9 +248,9 @@ export const TOOL_CATALOG: readonly CatalogEntry[] = [
   {
     name: 'useVisvine',
     kind: 'hook',
-    what: 'The bridge: context, connectors, agents, data, state, the viewer, navigate.',
-    when: 'Every Tool that touches the space. Everything it reaches is inside the perimeter the index note declares.',
-    props: 'visvine.context.list/read/search/write/append · connectors.call · agents.run · data.call · state.get/set · viewer · navigate(path)',
+    what: 'The bridge: notes, records, files, connectors, agents, actions, the space\'s AI, state, the host\'s dialogs.',
+    when: 'Every Tool that touches the space. Everything it reaches is inside the permissions its manifest declares, bound to this space.',
+    props: 'context.list/read/search/write/append/links · records.query/get/update · resources.list/get/read/blob · connectors.call · agents.run · actions.run · ai.complete/decide · data.call · state.get/set (per viewer by default) · ui.toast/confirm/download/openRecord/openResource · install.settings/bindings · viewer · navigate(path)',
     snippet: `const visvine = useVisvine()`,
   },
   {
@@ -315,6 +320,9 @@ export const TOOL_CATALOG: readonly CatalogEntry[] = [
     snippet: `const colors = useChartColors()`,
   },
 ]
+
+/** Everything a Tool author can reach for: the kit's own, then the app's. */
+export const TOOL_CATALOG: readonly CatalogEntry[] = [...KIT_CATALOG, ...UI_CATALOG]
 
 /** The rules a Tool keeps to look like the app — the same ones the app keeps. */
 const TOOL_DESIGN_RULES: readonly string[] = [

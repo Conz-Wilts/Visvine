@@ -22,7 +22,7 @@ export type StageStatus = (typeof STAGE_STATUSES)[number]
 export type CheckTrigger = 'check' | 'publish' | 'rescan'
 
 /** The files a finding can point into, by their author-facing names. */
-export type CheckFile = 'index.md' | 'ui.tsx' | 'data.js'
+export type CheckFile = 'index.md' | 'ui.tsx' | 'data.js' | `src/${string}`
 
 export interface CheckFinding {
   /** Stable id of the rule, e.g. `escape.top-navigation` — what a reviewer searches by. */

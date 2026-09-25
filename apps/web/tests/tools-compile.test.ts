@@ -94,13 +94,13 @@ test('refuses any other import, wherever it points', async () => {
     const text = errorText(result)
     assert.match(
       text,
-      /Only react, react\/jsx-runtime, react-dom\/client and @visvine\/tool-kit may be imported/,
+      /Only react, react\/jsx-runtime, react-dom, react-dom\/client, @visvine\/tool-kit and the dependencies the manifest declares may be imported/,
       `${label} should be refused with the import rule`,
     )
   }
 })
 
-test('names all four allowed specifiers in the refusal', async () => {
+test('names every allowed specifier in the refusal', async () => {
   const result = await compileToolUi(`import _ from 'lodash'\nexport default () => null`)
   const text = errorText(result)
   for (const specifier of EXTERNALS) {
@@ -121,7 +121,7 @@ test('refuses a dynamic import whose specifier is not a literal, even though it 
   assert.match(text, /Cannot import a non-literal value/)
   assert.match(
     text,
-    /Only react, react\/jsx-runtime, react-dom\/client and @visvine\/tool-kit may be imported/,
+    /Only react, react\/jsx-runtime, react-dom, react-dom\/client, @visvine\/tool-kit and the dependencies the manifest declares may be imported/,
   )
 })
 
@@ -317,17 +317,67 @@ test('sourceHash is a stable sha256 over the parts, boundaries included', () => 
   assert.notEqual(hash, sourceHash(['ab']))
 })
 
-test('refuses a bare react-dom import — the import map has no entry for it, so it would fail at runtime', async () => {
-  // Pins the fix for the import-map bug: react-dom used to be allowed at
-  // compile time but absent from IMPORT_MAP_ENTRIES, so the Tool built clean
-  // and then failed to resolve in the browser. Now the compiler refuses it and
-  // names the fix.
-  assert.ok(!(EXTERNALS as readonly string[]).includes('react-dom'))
+test('react-dom is a bare import the frame resolves — for createPortal and flushSync', async () => {
+  // The import map serves react-dom beside react-dom/client (one instance, the
+  // renderer's), so a Tool may reach createPortal the way the kit's dialogs do.
+  assert.ok((EXTERNALS as readonly string[]).includes('react-dom'))
   const result = await compileToolUi(
-    `import { render } from 'react-dom'\nexport default function App() { return <b>{String(render)}</b> }`,
+    `import { createPortal } from 'react-dom'\nexport default function App() { return <b>{String(createPortal)}</b> }`,
   )
+  assert.equal(result.ok, true)
+  assert.match(result.ok ? result.bundle : '', /from "react-dom"/)
+})
+
+// ── modules and dependencies ──
+
+test('a tool\'s own modules compile into the one bundle, from ui.tsx and from each other', async () => {
+  const result = await compileToolUi(
+    `import { Chart } from './src/chart'\nexport default function App() { return <Chart n={1} /> }`,
+    {
+      modules: {
+        'src/chart.tsx': `import { fmt } from './format'\nexport function Chart({ n }: { n: number }) { return <p>{fmt(n)}</p> }`,
+        'src/format.ts': `export const fmt = (n: number) => n.toFixed(2)`,
+      },
+    },
+  )
+  assert.equal(result.ok, true, result.ok ? '' : JSON.stringify(result.errors))
+  assert.match(result.ok ? result.bundle : '', /toFixed\(2\)/)
+})
+
+test('a relative import reaches no disk: a missing module, or one outside src/, is refused', async () => {
+  for (const specifier of ['./src/nope', '../secrets', './src/../../etc/passwd', './index']) {
+    const result = await compileToolUi(`import x from '${specifier}'\nexport default function App() { return <p>{String(x)}</p> }`, { modules: {} })
+    assert.equal(result.ok, false, specifier)
+  }
+  const nested = await compileToolUi(`import { a } from './src/a'\nexport default function App() { return <p>{a}</p> }`, {
+    modules: { 'src/a.ts': `import b from '../../x'\nexport const a = b` },
+  })
+  assert.equal(nested.ok, false)
+})
+
+test('a module\'s error names the module', async () => {
+  const result = await compileToolUi(`import { A } from './src/a'\nexport default function App() { return <A /> }`, {
+    modules: { 'src/a.tsx': `export function A() { return <p>{</p> }` },
+  })
   assert.equal(result.ok, false)
-  const text = errorText(result)
-  assert.match(text, /Only react, react\/jsx-runtime, react-dom\/client and @visvine\/tool-kit may be imported/)
-  assert.match(text, /use react-dom\/client, not react-dom/)
+  assert.ok(!result.ok && result.errors.some((e) => e.file === 'src/a.tsx'), JSON.stringify(!result.ok && result.errors))
+})
+
+test('module names are src/<name>.tsx or .ts, and there are only so many', async () => {
+  const bad = await compileToolUi(`export default function App() { return null }`, { modules: { 'lib/x.tsx': '' } })
+  assert.equal(bad.ok, false)
+  const many = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`src/m${i}.ts`, 'export const x = 1']))
+  assert.equal((await compileToolUi(`export default function App() { return null }`, { modules: many })).ok, false)
+})
+
+test('a curated dependency imports once the manifest declares it, and stays a bare import for the frame', async () => {
+  const source = `import { format } from 'date-fns'\nexport default function App() { return <p>{format(new Date(0), 'yyyy')}</p> }`
+  const undeclared = await compileToolUi(source)
+  assert.equal(undeclared.ok, false)
+  assert.match(errorText(undeclared), /declare it in the manifest's dependencies/)
+  const declared = await compileToolUi(source, { dependencies: ['date-fns'] })
+  assert.equal(declared.ok, true, declared.ok ? '' : JSON.stringify(declared.errors))
+  assert.match(declared.ok ? declared.bundle : '', /from "date-fns"/)
+  const uncurated = await compileToolUi(`import _ from 'lodash'\nexport default function App() { return <p>{String(_)}</p> }`, { dependencies: ['lodash'] })
+  assert.equal(uncurated.ok, false, 'declaring a package the server does not serve grants nothing')
 })

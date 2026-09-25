@@ -36,7 +36,7 @@ import { featureAccessForbidden } from '@/lib/auth'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
 import { toBuildSummary, rebuildTool, toolDiagnosticLine, type BuildSummary } from '@/lib/tools/builds'
-import type { ToolConfig } from '@/lib/tools/config'
+import { TOOL_MODULE_RE, type ToolConfig } from '@/lib/tools/config'
 import { appOrigin as liveAppOrigin } from '@/lib/tools/origin'
 import { describePerimeter } from '@/lib/tools/perimeter'
 import { runStaticChecks, type StaticCheckInput } from '@/lib/tools/checks/analyze'
@@ -50,9 +50,11 @@ import {
 import { recordReport } from '@/lib/tools/checks/runs'
 import { BRIDGE_METHODS } from '@/lib/tools/protocol'
 import { TOOL_PHONE_REFUSAL } from '@/lib/tools/clientClass'
-import { computeRequirements, describeRequirements, isDegraded } from '@/lib/tools/requirements'
+import { describeRequirements, isDegraded, sourceRequirements } from '@/lib/tools/requirements'
 import { TOOL_AUTHOR_GUIDE, TOOL_KIT_DTS } from '@/lib/tools/sdkDocs'
 import { renderCatalog } from '@/lib/tools/catalog'
+import { bindableSpace as bindableSpaceService } from '@/lib/tools/bindable'
+import { bindingChoices, type BindableSpace, type BindingValues } from '@visvine/tool-protocol/bindings'
 import {
   captureToolPreview,
   SCREENSHOT_BUDGET_MS,
@@ -60,12 +62,14 @@ import {
   type ScreenshotResult,
 } from '@/lib/tools/screenshot'
 import {
+  configureTool as configureToolService,
   createTool as createToolService,
   describeAuthoredTool as describeAuthoredToolService,
   listAuthoredTools as listAuthoredToolsService,
   writeToolFile as writeToolFileService,
   type AuthoredToolDetail,
   type AuthoredToolSummary,
+  type ConfigureToolResult,
   type CreateToolResult,
   type ToolFileName,
   type WriteToolFileResult,
@@ -80,6 +84,7 @@ import {
   applyUpgrade as applyUpgradeService,
   installVersion as installVersionService,
   listInstalls as listInstallsService,
+  setInstallBindings as setInstallBindingsService,
   setInstallEnabled as setInstallEnabledService,
   setTypeClaims as setTypeClaimsService,
   uninstall as uninstallService,
@@ -158,9 +163,11 @@ export interface AppToolDeps {
     spaceId: string,
     versionId: string,
     actor: { userId: string; email: string },
-    opts?: { placement?: 'rail' | 'more' },
+    opts?: { placement?: 'rail' | 'more'; bindings?: BindingValues; settings?: Record<string, unknown> },
   ): Promise<InstallResult>
   listInstalls(spaceId: string): Promise<InstallSummary[]>
+  /** Change a Tool's facts row (lib/tools/service.ts#configureTool). */
+  configureTool(p: ContextPrincipal, context: Context, name: string, patch: Record<string, unknown>): Promise<ConfigureToolResult>
   /** The static stages over a working copy, recorded against it (lib/tools/checks/). */
   checkWorkingCopy(spaceId: string, name: string, sourceHash: string, input: StaticCheckInput): Promise<CheckReport>
   /** The four changes `update_install` makes, each admin-gated by the service. */
@@ -168,6 +175,15 @@ export interface AppToolDeps {
   setTypeClaims(spaceId: string, installId: string, actor: Actor, claims: Record<string, TypeClaimChoice>): Promise<InstallUpdateResult>
   applyUpgrade(spaceId: string, installId: string, actor: Actor): Promise<InstallUpdateResult>
   uninstall(spaceId: string, installId: string, actor: Actor): Promise<UninstallResult>
+  /** An install's binding and setting values (lib/tools/installs.ts#setInstallBindings). */
+  setInstallBindings(
+    spaceId: string,
+    installId: string,
+    actor: Actor,
+    patch: { bindings?: BindingValues; settings?: Record<string, unknown> },
+  ): Promise<InstallUpdateResult>
+  /** What a space can bind a slot to (lib/tools/bindable.ts). */
+  bindableSpace(spaceId: string): Promise<BindableSpace>
   /** The newest APPROVED version of a marketplace key, for `install_tool { key }`. */
   latestApprovedVersion(key: string): Promise<ToolVersionSummary | null>
   /**
@@ -199,6 +215,7 @@ const liveDeps: AppToolDeps = {
   publishTool: publishToolService,
   installVersion: installVersionService,
   listInstalls: listInstallsService,
+  configureTool: configureToolService,
   checkWorkingCopy: async (spaceId, name, sourceHash, input) => {
     const report = await runStaticChecks(input)
     await recordReport({ spaceId, name, versionId: null, sourceHash, trigger: 'check', report })
@@ -208,6 +225,8 @@ const liveDeps: AppToolDeps = {
   setTypeClaims: setTypeClaimsService,
   applyUpgrade: applyUpgradeService,
   uninstall: uninstallService,
+  setInstallBindings: setInstallBindingsService,
+  bindableSpace: bindableSpaceService,
   latestApprovedVersion: async (key) => {
     // versionHistory is newest-first, so the first listed row is the newest.
     // LISTED, not merely approved: `install_tool { key }` names a tool by its
@@ -384,6 +403,8 @@ interface InstallToolArgs {
   version_id?: string
   key?: string
   placement?: 'rail' | 'more'
+  bindings?: Record<string, string>
+  settings?: Record<string, unknown>
 }
 
 // ── handlers ──────────────────────────────────────────────────────────────────
@@ -445,7 +466,8 @@ async function listTools(ctx: ActionCaller, args: ListToolsArgs, deps: AppToolDe
 
 async function readTool(ctx: ActionCaller, args: ReadToolArgs, deps: AppToolDeps = liveDeps) {
   const { detail } = await requireTool(ctx, args.space_id, args.name, deps)
-  const wanted = args.file ? { [args.file]: detail.sources[args.file] } : detail.sources
+  const every: Record<string, string | null> = { ...detail.sources, ...detail.modules }
+  const wanted = args.file ? { [args.file]: every[args.file] ?? null } : every
   return {
     name: detail.name,
     title: detail.title,
@@ -498,9 +520,7 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
   const config = build.config ?? detail.config
 
   const facts = await deps.spaceFacts(target.principal, target.context)
-  const requirements = config
-    ? computeRequirements(config.perimeter, facts.available)
-    : { connectors: [], types: [], agents: [] }
+  const requirements = config ? sourceRequirements(config, facts.available) : { connectors: [], types: [], agents: [] }
 
   // The same static stages a publish runs — so what check_tool says passes is
   // what publish will accept — recorded, so the Tool tab shows the same report.
@@ -508,6 +528,7 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
     index: detail.sources['index.md'],
     ui: detail.sources['ui.tsx'],
     data: detail.sources['data.js'],
+    modules: detail.modules,
     config,
     build: { ok: build.ok, errors: build.errors, warnings: build.warnings, configError: build.configError },
     facts: { customTypes: facts.customTypes, missing: describeRequirements(requirements) },
@@ -723,9 +744,16 @@ async function installTool(ctx: ActionCaller, args: InstallToolArgs, deps: AppTo
     target.context.spaceId,
     versionId,
     { userId: ctx.userId, email: ctx.email },
-    args.placement ? { placement: args.placement } : {},
+    {
+      ...(args.placement ? { placement: args.placement } : {}),
+      ...(args.bindings ? { bindings: args.bindings } : {}),
+      ...(args.settings ? { settings: args.settings } : {}),
+    },
   )
   if (!result.ok) refuse(result)
+  const slots = Object.keys(result.install.slots).length
+    ? bindingsView(result.install, await deps.bindableSpace(target.context.spaceId))
+    : undefined
   return {
     slug: result.install.slug,
     key: result.install.key,
@@ -737,11 +765,39 @@ async function installTool(ctx: ActionCaller, args: InstallToolArgs, deps: AppTo
       degraded: result.install.degraded,
       missing: describeRequirements(result.install.requirements),
     },
+    ...(slots ? { bindings: slots } : {}),
+    ...(Object.keys(result.install.settingSpecs).length ? { settings: settingsView(result.install) } : {}),
     type_claims: result.install.typeClaims,
     // `page` claims the space would not grant: a built-in page stays built in,
     // and a type whose page another install already owns is left alone.
     downgraded_to_tab: result.downgraded,
     conflicts: result.conflicts.map((c) => `"${c.type}" page is already owned by the ${c.heldBy} tool`),
+  }
+}
+
+interface ConfigureToolArgs {
+  space_id: string
+  name: string
+  facts: Record<string, unknown>
+}
+
+/**
+ * The structured half of a Tool, changed without rewriting its index.md —
+ * surfaces, permissions, bindings, settings, platforms, the kit range,
+ * dependencies, collections. Validated as it lands; the build comes back.
+ */
+async function configureTool(ctx: ActionCaller, args: ConfigureToolArgs, deps: AppToolDeps = liveDeps) {
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  const result = await deps.configureTool(target.principal, target.context, args.name, args.facts)
+  if (!result.ok) refuse(result)
+  const config = result.build.config
+  return {
+    name: args.name,
+    changed: result.changed,
+    build: buildReport(result.build),
+    perimeter: config ? describePerimeter(config.perimeter) : [],
+    surfaces: describeSurfaces(config),
   }
 }
 
@@ -798,6 +854,76 @@ async function updateInstall(ctx: ActionCaller, args: UpdateInstallArgs, deps: A
   }
 }
 
+/** Each slot an install declares: what it is bound to here, and what this space could bind it to. */
+function bindingsView(install: InstallSummary, space: BindableSpace) {
+  return Object.fromEntries(
+    Object.entries(install.slots).map(([name, slot]) => [
+      name,
+      {
+        kind: slot.kind,
+        label: slot.label,
+        bound: install.bindings[name] ?? null,
+        ...(slot.optional ? { optional: true } : {}),
+        choices: bindingChoices(slot, space),
+      },
+    ]),
+  )
+}
+
+/** Each setting an install declares, with its value here (unset reads as the default). */
+function settingsView(install: InstallSummary) {
+  return Object.fromEntries(
+    Object.entries(install.settingSpecs).map(([key, spec]) => [
+      key,
+      {
+        label: spec.label,
+        type: spec.type,
+        value: install.settings[key] ?? spec.default ?? null,
+        ...(spec.enum ? { options: spec.enum } : {}),
+      },
+    ]),
+  )
+}
+
+interface BindToolArgs {
+  space_id: string
+  tool: string
+  bindings?: Record<string, string>
+  settings?: Record<string, unknown>
+}
+
+/**
+ * Bind an installed Tool's slots to this space's own folders, types,
+ * connectors and agents, and set its settings. With neither, it reads: each
+ * slot, what it is bound to, and the choices this space offers.
+ */
+async function bindTool(ctx: ActionCaller, args: BindToolArgs, deps: AppToolDeps = liveDeps) {
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  const spaceId = target.context.spaceId
+  const installs = await deps.listInstalls(spaceId)
+  const found = installs.find((row) => row.id === args.tool || row.slug === args.tool || row.key === args.tool)
+  if (!found) throw new ActionError(404, `This space runs no tool "${args.tool}".`)
+  // The choices name every connector and agent the space holds: an admin's to read, as binding is theirs to do.
+  if (!target.resolved.isAdmin) throw new ActionError(403, 'Only space admins can bind a tool.')
+  let install = found
+  if (args.bindings || args.settings) {
+    const result = await deps.setInstallBindings(spaceId, found.id, { userId: ctx.userId, email: ctx.email }, {
+      ...(args.bindings ? { bindings: args.bindings } : {}),
+      ...(args.settings ? { settings: args.settings } : {}),
+    })
+    if (!result.ok) refuse(result)
+    install = result.install
+  }
+  return {
+    slug: install.slug,
+    bindings: bindingsView(install, await deps.bindableSpace(spaceId)),
+    settings: settingsView(install),
+    requirements: { degraded: install.degraded, missing: describeRequirements(install.requirements) },
+    href: inSpace(spaceId, `/t/${install.slug}`),
+  }
+}
+
 /**
  * The handlers on their own, for tests and for scripts/verify-*.ts: no server,
  * no transport, plain JSON in and out. `registerAppTools` is these same
@@ -814,6 +940,8 @@ export const appToolHandlers = {
   publishTool,
   installTool,
   updateInstall,
+  configureTool,
+  bindTool,
 }
 
 
@@ -828,9 +956,10 @@ const nameArg = z
   .describe("The tool's name: lower-case letters, digits and hyphens, e.g. 'deal-pipeline'")
 
 const fileArg = z
-  .enum(TOOL_FILES)
+  .union([z.enum(TOOL_FILES), z.string().regex(TOOL_MODULE_RE, 'a module is src/<name>.tsx or .ts') as z.ZodType<`src/${string}`>])
   .describe(
-    "'index.md' (frontmatter = config, body = docs), 'ui.tsx' (the React interface) or 'data.js' (server-side handlers)",
+    "'index.md' (frontmatter = config, body = docs), 'ui.tsx' (the React interface), 'data.js' (server-side handlers), " +
+      "or a module of the interface's own, 'src/<name>.tsx' (imported from ui.tsx as './src/<name>'; writing it empty removes it)",
   )
 
 /** The paragraph every authoring action needs an agent to have read once. */
@@ -931,6 +1060,26 @@ export const APP_ACTIONS = [
       content: z.string().describe('The complete new contents of that file'),
     },
     run: (ctx, args) => writeTool(ctx, args),
+  }),
+
+  defineAction({
+    name: 'configure_tool',
+    scope: 'tools:author',
+    summary: "Change a Tool's structured facts — surfaces, permissions, bindings, settings — without rewriting index.md.",
+    description:
+      "Change the structured half of a Tool: `surfaces`, `permissions` (context, records, resources, connectors, agents, " +
+      'types, actions, ai, ui), `bindings` (slots the installing space fills: folder, type, connector, agent — referenced ' +
+      'as `$name` in permissions), `settings` (install-time values an admin sets), `platforms` (web, desktop), `sdk`, ' +
+      '`dependencies`, `collections`, `release`, `license`. Each key given replaces that key; null removes it. Checked ' +
+      "as it lands — a malformed value is refused with the reason — and the build comes back. Title, description and " +
+      "tags stay in index.md (write_tool). Setting a manifest-2 key on a Tool that still declares `perimeter` moves its " +
+      'reach into `permissions`.',
+    input: {
+      space_id: spaceArg,
+      name: nameArg,
+      facts: z.record(z.string(), z.unknown()).describe('The facts to set, e.g. { "permissions": { "context": { "read": ["$notes/**"] } } }'),
+    },
+    run: (ctx, args) => configureTool(ctx, args),
   }),
 
   defineAction({
@@ -1042,8 +1191,37 @@ export const APP_ACTIONS = [
         .optional()
         .describe("The tool's key, e.g. 'space_abc/deal-pipeline' — installs its newest listed version"),
       placement: z.enum(['rail', 'more']).optional().describe('On the rail (default) or tucked into More'),
+      bindings: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe(
+          "What each of the tool's binding slots is bound to in this space — a folder path, a type, connector or agent name, e.g. { deals: 'sales/pipeline' }. A slot left out takes the tool's suggestion when this space has it; bind_tool changes them later",
+        ),
+      settings: z.record(z.string(), z.unknown()).optional().describe("The tool's install settings; unset ones take their defaults"),
     },
     run: (ctx, args) => installTool(ctx, args),
+  }),
+
+  defineAction({
+    name: 'bind_tool',
+    scope: 'tools:install',
+    summary: "Bind an installed tool's slots to this space's folders, types, connectors and agents, and set its settings.",
+    description:
+      "A tool declares the KIND of thing it needs — a folder, a type, a connector, an agent — and each space binds " +
+      'its own. SPACE ADMINS ONLY for a change. Name the install by slug, key or id. Pass `bindings` ({ slot: value }) ' +
+      'and/or `settings` ({ key: value }): named ones change, the rest keep theirs, and an empty value clears an ' +
+      'optional slot. Pass neither to read each slot, what it is bound to and the choices this space offers. A slot ' +
+      'left unbound runs the tool degraded; the reach it grants is the bound one, re-checked on every call.',
+    input: {
+      space_id: spaceArg,
+      tool: z.string().min(1).describe('The install: its slug, its key or its id'),
+      bindings: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("{ slot: value } — a folder path (e.g. 'sales/pipeline'), or a type, connector or agent name"),
+      settings: z.record(z.string(), z.unknown()).optional().describe('{ key: value } for the settings it declares'),
+    },
+    run: (ctx, args) => bindTool(ctx, args),
   }),
 
   defineAction({

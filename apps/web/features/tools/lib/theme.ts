@@ -9,10 +9,12 @@
  * mechanism behind "installed Tools don't look like twelve different
  * websites".
  *
- * Every token goes over twice: under the name the app's variable had when the
- * contract was written (`--color-brand-green`, `--text-muted`), because a Tool
- * author may reference those directly, and under a stable `--vv-*` alias the
- * kit's stylesheet is written against (features/tools/kit/styles.ts). Both are
+ * Every token goes over under its design-token name (`--vv-color-accent`),
+ * which the kit's @visvine/ui components paint from; under the name the app's
+ * variable had when the contract was written (`--color-brand-green`,
+ * `--text-muted`), because a Tool author may reference those directly; and
+ * under the stable `--vv-*` alias the kit's own rules are written against
+ * (features/tools/kit/styles.ts). Both are
  * the contract. The app itself now paints with the design tokens
  * (`--vv-color-accent`, `--vv-color-fg-muted`) and this map is what keeps an
  * installed Tool pinned to an old version painting right.
@@ -71,6 +73,9 @@ export function themeTokensFrom(read: ThemeReader): Record<string, string> {
   for (const [source, legacy, alias, fallback] of THEME_TOKENS) {
     const raw = read(source).trim()
     const value = raw || fallback
+    // The design token itself too: the kit's @visvine/ui components paint
+    // from it (bg-accent → --vv-color-accent), exactly as the app does.
+    if (source.startsWith('--vv-color-')) tokens[source] = value
     tokens[legacy] = value
     tokens[alias] = value
   }

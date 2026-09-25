@@ -15,6 +15,15 @@ import { createHash } from 'node:crypto'
 import prisma from '@/lib/prisma'
 import type { CompileDiagnostic } from './compile'
 import type { FrameTokenPayload } from './frameToken'
+import { decodeToolConfig } from './registry'
+import { manifestOf } from './config'
+import { sdkMajorOf } from '@visvine/tool-protocol/manifest'
+
+/** The kit a stored config was written for: 2 for a Tool that says so, 1 for everything before. */
+function kitOf(rawConfig: unknown, name: string): 1 | 2 {
+  if (!rawConfig) return 1
+  return sdkMajorOf(manifestOf(decodeToolConfig(rawConfig, name)).sdk) >= 2 ? 2 : 1
+}
 
 /** `v_<versionId>` for a pinned install, `b_<buildId>` for an author's working copy. */
 export interface RuntimeBundleRef {
@@ -28,6 +37,8 @@ export interface RuntimeBundleRef {
    * year. A working copy is recompiled on every write to `ui.tsx`.
    */
   immutable: boolean
+  /** The kit major the Tool was written for — which kit its frame loads. */
+  kit: 1 | 2
 }
 
 interface RuntimeBundleProblem {
@@ -66,7 +77,7 @@ async function resolveInstall(
   // install id that has since moved, or was guessed, in another.
   const install = await prisma.appToolInstall.findFirst({
     where: { id: payload.installId, spaceId: payload.spaceId },
-    select: { versionId: true, enabled: true },
+    select: { versionId: true, enabled: true, version: { select: { name: true, config: true } } },
   })
   if (!install) {
     return {
@@ -90,6 +101,7 @@ async function resolveInstall(
     kind: 'version',
     recordId: install.versionId,
     immutable: true,
+    kit: kitOf(install.version.config, install.version.name),
   }
 }
 
@@ -98,7 +110,7 @@ async function resolvePreview(
 ): Promise<RuntimeBundleResult> {
   const build = await prisma.appToolBuild.findFirst({
     where: { spaceId: payload.spaceId, name: payload.name },
-    select: { id: true, ok: true, uiBundle: true, errors: true, configError: true },
+    select: { id: true, ok: true, uiBundle: true, errors: true, configError: true, config: true },
   })
   if (!build) {
     return {
@@ -121,7 +133,7 @@ async function resolvePreview(
       details: details.length > 0 ? details : undefined,
     }
   }
-  return { ok: true, id: `b_${build.id}`, kind: 'build', recordId: build.id, immutable: false }
+  return { ok: true, id: `b_${build.id}`, kind: 'build', recordId: build.id, immutable: false, kit: kitOf(build.config, payload.name) }
 }
 
 /** The one place a frame token turns into a bundle id. */

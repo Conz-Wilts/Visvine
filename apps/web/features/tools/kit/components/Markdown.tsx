@@ -18,7 +18,8 @@ import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { useMemo } from 'react';
 import { useVisvineMaybe } from '../hooks';
-import { cx } from './cx';
+import { clsx as cx } from 'clsx';
+import { TABLE } from './tableClasses';
 
 const REMOVED_TAGS = new Set(['img', 'picture', 'source', 'input']);
 
@@ -73,8 +74,8 @@ export function Markdown({ source, className, onLinkClick }: MarkdownProps) {
         );
       },
       table: ({ children }) => (
-        <div className="vv-md__table-wrap">
-          <table className="vv-table">{children}</table>
+        <div className="my-2 overflow-x-auto">
+          <table className={TABLE}>{children}</table>
         </div>
       ),
     }),

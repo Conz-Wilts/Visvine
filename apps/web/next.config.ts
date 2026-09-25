@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   // same code in both places or it is two decisions. @visvine/tokens is the
   // generated design tokens, the same values every platform is built from, and
   // @visvine/ui the shared components built on them.
-  transpilePackages: ["@visvine/tokens", "@visvine/ui", "@visvine/vm-policy"],
+  transpilePackages: ["@visvine/tokens", "@visvine/tool-protocol", "@visvine/ui", "@visvine/vm-policy"],
   experimental: {
     // The proxy buffers every request body and cuts it off here, silently —
     // at the 10MB default a 20MB Drive upload reached its route truncated. Just
@@ -34,6 +34,12 @@ const nextConfig: NextConfig = {
     "mysql2",
     // Native: a PDF's first page is drawn server-side (lib/resources/renditions.ts).
     "@napi-rs/canvas",
+    // Native: the Tool kit's stylesheet is compiled with Tailwind in development
+    // (lib/tools/vendorBundle.ts); production serves the prebuilt file and never
+    // loads these.
+    "@tailwindcss/node",
+    "@tailwindcss/oxide",
+    "lightningcss",
   ],
   async headers() {
     // TRANSPORT headers only. The Content-Security-Policy is NOT here, and that

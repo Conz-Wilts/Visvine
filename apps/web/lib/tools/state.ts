@@ -4,13 +4,16 @@
  * This exists because the frame runs sandboxed WITHOUT `allow-same-origin`, so
  * it has no `localStorage`, no cookies and no origin-scoped storage of any kind.
  * A Tool that wants to remember a column order or a chosen filter has nowhere to
- * put it. State is that place, and deliberately nothing more: values are small,
- * per install, and shared by everyone who can see the Tool.
+ * put it. State is that place, and deliberately nothing more: values are small
+ * and per install, in one of two scopes — `user`, the viewer's own (kit 2's
+ * default, and what a remembered filter wants), or `install`, one value every
+ * viewer shares (what a version 1 Tool always had, and what a call naming no
+ * scope still gets).
  *
- * It is NOT private to a viewer and NOT a database. A Tool storing a person's
- * notes here instead of writing context notes would be putting space data
- * somewhere the space cannot search, share or audit — the perimeter and
- * `context.write` are for that, and the 64KB cap is the nudge.
+ * It is NOT a database. A Tool storing a person's notes here instead of
+ * writing context notes would be putting space data somewhere the space cannot
+ * search, share or audit — the perimeter and `context.write` are for that, and
+ * the 64KB cap is the nudge.
  *
  * Preview targets have no install row to key against, so their state lives in a
  * per-process map: an author's preview keeps its state for as long as the server
@@ -37,8 +40,19 @@ export type StateSetResult =
   | { ok: false; reason: 'too_large'; bytes: number }
   | { ok: false; reason: 'key_limit' }
 
-/** Preview state, keyed by `targetKey` then by the Tool's own key. */
+export type StateScope = 'user' | 'install'
+
+/** Preview state, keyed by `targetKey` and scope owner, then by the Tool's own key. */
 const previewState = new Map<string, Map<string, unknown>>()
+
+/** Whose value a scope names: the viewer for `user`, '' — everyone — for `install`. */
+function ownerOf(t: ResolvedTarget, scope: StateScope): string {
+  return scope === 'user' ? t.principal.userId : ''
+}
+
+function previewBucketKey(t: ResolvedTarget, scope: StateScope): string {
+  return `${targetKey(t)}\u0000${ownerOf(t, scope)}`
+}
 
 /**
  * A value as it will be stored, or null when it isn't storable at all.
@@ -55,12 +69,12 @@ function storable(value: unknown): { json: string; value: unknown } | null {
 }
 
 /** One key's value, or null when unset (indistinguishable from a stored null). */
-export async function getToolState(t: ResolvedTarget, key: string): Promise<unknown> {
+export async function getToolState(t: ResolvedTarget, key: string, scope: StateScope = 'install'): Promise<unknown> {
   if (t.installId === null) {
-    return previewState.get(targetKey(t))?.get(key) ?? null
+    return previewState.get(previewBucketKey(t, scope))?.get(key) ?? null
   }
   const row = await prisma.appToolState.findUnique({
-    where: { app_tool_state_identity: { installId: t.installId, key } },
+    where: { app_tool_state_identity: { installId: t.installId, userId: ownerOf(t, scope), key } },
     select: { value: true },
   })
   return row ? (row.value as unknown) : null
@@ -75,6 +89,7 @@ export async function setToolState(
   t: ResolvedTarget,
   key: string,
   value: unknown,
+  scope: StateScope = 'install',
 ): Promise<StateSetResult> {
   const prepared = value === null || value === undefined ? null : storable(value)
   if (prepared !== null) {
@@ -83,8 +98,9 @@ export async function setToolState(
   }
 
   if (t.installId === null) {
-    const bucket = previewState.get(targetKey(t)) ?? new Map<string, unknown>()
-    previewState.set(targetKey(t), bucket)
+    const bucketKey = previewBucketKey(t, scope)
+    const bucket = previewState.get(bucketKey) ?? new Map<string, unknown>()
+    previewState.set(bucketKey, bucket)
     if (prepared === null) {
       bucket.delete(key)
     } else {
@@ -101,7 +117,7 @@ export async function setToolState(
     return { ok: true }
   }
 
-  const identity = { installId: t.installId, key }
+  const identity = { installId: t.installId, userId: ownerOf(t, scope), key }
   if (prepared === null) {
     await prisma.appToolState.deleteMany({ where: identity })
     return { ok: true }
@@ -113,7 +129,8 @@ export async function setToolState(
   // a separate existence check.
   const updated = await prisma.appToolState.updateMany({ where: identity, data: { value: stored } })
   if (updated.count === 0) {
-    const rows = await prisma.appToolState.count({ where: { installId: t.installId } })
+    // The cap is per scope owner: each viewer has their own hundred keys.
+    const rows = await prisma.appToolState.count({ where: { installId: t.installId, userId: identity.userId } })
     if (rows >= STATE_MAX_KEYS) return { ok: false, reason: 'key_limit' }
     // `upsert`, not `create`: two concurrent first writes to the same key both
     // see `count === 0`, and the loser of that race would hit the

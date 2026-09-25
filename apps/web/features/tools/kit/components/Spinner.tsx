@@ -1,4 +1,4 @@
-import { cx } from './cx';
+import { clsx } from 'clsx';
 
 export interface SpinnerProps {
   size?: 'sm' | 'lg';
@@ -7,5 +7,14 @@ export interface SpinnerProps {
 }
 
 export function Spinner({ size = 'sm', label = 'Loading' }: SpinnerProps) {
-  return <span className={cx('vv-spinner', size === 'lg' && 'vv-spinner--lg')} role="status" aria-label={label} />;
+  return (
+    <span
+      role="status"
+      aria-label={label}
+      className={clsx(
+        'inline-block animate-spin rounded-full border-2 border-line-subtle border-t-accent',
+        size === 'lg' ? 'h-6 w-6' : 'h-4 w-4',
+      )}
+    />
+  );
 }

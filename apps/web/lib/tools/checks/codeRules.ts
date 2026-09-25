@@ -33,6 +33,18 @@ export interface BridgeCallSite {
     | 'data.call'
     | 'state.get'
     | 'state.set'
+    | 'context.links'
+    | 'records.query'
+    | 'records.get'
+    | 'records.update'
+    | 'resources.list'
+    | 'resources.get'
+    | 'resources.read'
+    | 'resources.blob'
+    | 'actions.run'
+    | 'ai.complete'
+    | 'ai.decide'
+    | 'ui.download'
   /** The literal first argument (a path, glob, name or handler), or null when computed. */
   arg: string | null
   file: CheckFile
@@ -98,11 +110,17 @@ const BRIDGE_FAMILIES: Record<string, Record<string, BridgeCallSite['method']>> 
     searchPage: 'context.search',
     write: 'context.write',
     append: 'context.append',
+    links: 'context.links',
   },
   connectors: { call: 'connectors.call' },
   agents: { run: 'agents.run' },
   data: { call: 'data.call' },
   state: { get: 'state.get', set: 'state.set' },
+  records: { query: 'records.query', get: 'records.get', update: 'records.update' },
+  resources: { list: 'resources.list', get: 'resources.get', read: 'resources.read', blob: 'resources.blob' },
+  actions: { run: 'actions.run' },
+  ai: { complete: 'ai.complete', decide: 'ai.decide' },
+  ui: { download: 'ui.download' },
 }
 
 type AnyNode = acorn.AnyNode

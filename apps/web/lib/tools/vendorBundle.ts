@@ -37,13 +37,24 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build, type Plugin } from 'esbuild'
 import { logger } from '@/lib/logger'
+import { CURATED_DEPENDENCIES, type CuratedDependencyName } from '@visvine/tool-protocol/dependencies'
 
-/** The four files the import map names. Nothing else is servable. */
+/**
+ * The files the import map names: React, its JSX runtime and DOM client, the
+ * kit, and one per curated dependency (@visvine/tool-protocol/dependencies).
+ * Nothing else is servable.
+ */
 export const VENDOR_FILES = [
   'react.js',
   'react-jsx-runtime.js',
+  'react-dom.js',
   'react-dom-client.js',
   'tool-kit.js',
+  'tool-kit-1.js',
+  'tool-kit.css',
+  'dep-zod.js',
+  'dep-date-fns.js',
+  'dep-clsx.js',
 ] as const
 
 export type VendorFileName = (typeof VENDOR_FILES)[number]
@@ -151,8 +162,75 @@ function reExportEntry(specifier: string): string {
     .join('\n')
 }
 
-/** The `@visvine/tool-kit` surface: the author-facing exports plus the booter. */
+/** A curated dependency's file → its package, for the build below. */
+function dependencyOf(file: VendorFileName): CuratedDependencyName | null {
+  const found = (Object.entries(CURATED_DEPENDENCIES) as Array<[CuratedDependencyName, { file: string }]>).find(
+    ([, dep]) => dep.file === file,
+  )
+  return found ? found[0] : null
+}
+
+/**
+ * The version of a package on disk. Read from its own package.json, found by
+ * walking up from its entry — `<name>/package.json` is not a subpath every
+ * package exports.
+ */
+export function installedVersion(name: string): string {
+  const require = createRequire(pathToFileURL(join(appRoot(), 'package.json')))
+  let dir = dirname(require.resolve(name))
+  for (;;) {
+    const manifest = join(dir, 'package.json')
+    if (existsSync(manifest)) {
+      const parsed = JSON.parse(readFileSync(manifest, 'utf8')) as { name?: string; version?: string }
+      if (parsed.name === name && parsed.version) return parsed.version
+    }
+    const parent = dirname(dir)
+    if (parent === dir) throw new Error(`No package.json for ${name}`)
+    dir = parent
+  }
+}
+
+/**
+ * An ESM package re-exported whole. Its `default` rides along when it has
+ * one — read off the module at build time, like React's names above.
+ */
+async function dependencyEntry(name: CuratedDependencyName): Promise<string> {
+  const require = createRequire(pathToFileURL(join(appRoot(), 'package.json')))
+  const loaded = require(name) as Record<string, unknown>
+  const hasDefault = 'default' in loaded && loaded.default !== loaded
+  return [`export * from ${JSON.stringify(name)}`, hasDefault ? `export { default } from ${JSON.stringify(name)}` : '', '']
+    .filter(Boolean)
+    .join('\n')
+}
+
+/**
+ * The kit's stylesheet: the design tokens, the @theme that names Tailwind's
+ * utilities after them, and every utility `@visvine/ui` and the kit use —
+ * compiled the way the app's own globals.css is, so a Tool's components are
+ * the app's components, painted the same. Tailwind's preflight comes with it:
+ * the frame is a document of its own and starts from the same reset.
+ */
+async function buildKitStylesheet(): Promise<string> {
+  const root = appRoot()
+  const { compile, optimize } = await import('@tailwindcss/node')
+  const { Scanner } = await import('@tailwindcss/oxide')
+  const input = [
+    '@import "tailwindcss" source(none);',
+    '@import "@visvine/tokens/tokens.css";',
+    '@import "@visvine/tokens/theme.css";',
+    '@source "../../packages/ui/src";',
+    `@source "./${KIT_DIR.split('\\').join('/')}";`,
+  ].join('\n')
+  const compiler = await compile(input, { base: root, onDependency: () => {} })
+  const scanner = new Scanner({ sources: compiler.sources })
+  return optimize(compiler.build(scanner.scan()), { minify: true }).code
+}
+
+/** The `@visvine/tool-kit` surface, kit 2: the author-facing exports plus the booter. */
 const KIT_ENTRY = "export * from './index'\nexport { bootTool } from './runtime'\n"
+
+/** Kit 1's surface, frozen, for a Tool written against it. */
+const KIT1_ENTRY = "export * from './kit1'\nexport { bootLegacyTool as bootTool } from './legacyBoot'\n"
 
 /**
  * Marks a specifier external in a way a CommonJS dependency can actually use.
@@ -247,8 +325,17 @@ async function buildModule(opts: {
   return code
 }
 
-function buildOne(name: VendorFileName): Promise<string> {
+async function buildOne(name: VendorFileName): Promise<string> {
   const root = appRoot()
+  const dependency = dependencyOf(name)
+  if (dependency) {
+    // Pinned: the version on disk is the one the table promises every Tool.
+    const served = installedVersion(dependency)
+    if (served !== CURATED_DEPENDENCIES[dependency].version) {
+      throw new Error(`${dependency} is ${served} on disk but the curated table serves ${CURATED_DEPENDENCIES[dependency].version}`)
+    }
+    return buildModule({ contents: await dependencyEntry(dependency), resolveDir: root, sourcefile: name, loader: 'js' })
+  }
   switch (name) {
     case 'react.js':
       return buildModule({
@@ -268,19 +355,32 @@ function buildOne(name: VendorFileName): Promise<string> {
         sourcefile: name,
         loader: 'js',
       })
-    case 'react-dom-client.js':
-      // Keeping `react` external is the whole point: the renderer must share
-      // the React instance the Tool and the kit got from the import map, or
-      // hooks throw. `react-dom` itself is not external — this file is its
-      // only consumer — and the plugin rather than `external` is what makes
-      // React DOM's CommonJS `require('react')` survive the trip.
+    case 'react-dom.js':
+      // `createPortal` and `flushSync` — what the kit's dialogs and toasts
+      // (@visvine/ui) reach for. The one React DOM instance the renderer
+      // below shares.
       return buildModule({
-        contents: reExportEntry('react-dom/client'),
+        contents: reExportEntry('react-dom'),
         resolveDir: root,
         sourcefile: name,
         loader: 'js',
         plugins: [externalViaEsm(['react'], root)],
       })
+    case 'react-dom-client.js':
+      // Keeping `react` and `react-dom` external is the whole point: the
+      // renderer must share the React instance the Tool and the kit got from
+      // the import map, or hooks throw, and the React DOM instance a portal
+      // was made with. The plugin rather than `external` is what makes React
+      // DOM's CommonJS `require('react')` survive the trip.
+      return buildModule({
+        contents: reExportEntry('react-dom/client'),
+        resolveDir: root,
+        sourcefile: name,
+        loader: 'js',
+        plugins: [externalViaEsm(['react', 'react-dom'], root)],
+      })
+    case 'tool-kit.css':
+      return buildKitStylesheet()
     case 'tool-kit.js':
       // The kit bundles recharts and react-markdown, whose CommonJS
       // dependencies `require('react')` — so the same ESM-stub plugin the
@@ -291,8 +391,18 @@ function buildOne(name: VendorFileName): Promise<string> {
         resolveDir: join(root, KIT_DIR),
         sourcefile: 'tool-kit.ts',
         loader: 'ts',
-        plugins: [externalViaEsm(['react', 'react-dom/client'], root)],
+        plugins: [externalViaEsm(['react', 'react-dom', 'react-dom/client'], root)],
       })
+    case 'tool-kit-1.js':
+      return buildModule({
+        contents: KIT1_ENTRY,
+        resolveDir: join(root, KIT_DIR),
+        sourcefile: 'tool-kit-1.ts',
+        loader: 'ts',
+        plugins: [externalViaEsm(['react', 'react-dom', 'react-dom/client'], root)],
+      })
+    default:
+      throw new Error(`No vendor build for ${name}`)
   }
 }
 

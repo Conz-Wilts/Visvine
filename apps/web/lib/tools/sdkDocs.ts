@@ -16,6 +16,9 @@
  */
 import { BRIDGE_LIMITS } from './protocol'
 import { STATE_MAX_BYTES, STATE_MAX_KEYS } from './state'
+import { MAX_TOOL_MODULES } from './config'
+import { TOOL_ACTIONS } from './actionAllowlist'
+import { CURATED_DEPENDENCIES } from '@visvine/tool-protocol/dependencies'
 
 /**
  * Ambient declarations for the bare specifier a Tool imports. An authoring
@@ -45,12 +48,28 @@ declare module '@visvine/tool-kit' {
   }
 
   export type ToolInstallInfo =
-    | { slug: string; title: string; key: string }
-    | { preview: true; name: string }
+    | {
+        slug: string
+        title: string
+        key: string
+        /** This install's settings (manifest settings:), defaults filled. */
+        settings?: Record<string, unknown>
+        /** What each binding slot is bound to in this space: a folder path, a type, connector or agent name. */
+        bindings?: Record<string, string>
+        /** The kit major the Tool was written for. */
+        sdk?: number
+      }
+    | { preview: true; name: string; settings?: Record<string, unknown>; bindings?: Record<string, string>; sdk?: number }
 
   /** Non-null when the space is missing something this Tool declared. */
   export interface ToolDegraded {
-    missing: { connectors: string[]; types: string[]; agents: string[] }
+    missing: {
+      connectors: string[]
+      types: string[]
+      agents: string[]
+      /** Binding slots nobody has bound here, by label. */
+      bindings?: string[]
+    }
   }
 
   export interface ContextEntry {
@@ -79,6 +98,63 @@ declare module '@visvine/tool-kit' {
     items: T[]
     nextCursor: string | null
   }
+
+  /** A note another links to, or one linking to it. */
+  export interface ContextLink {
+    path: string
+    title: string | null
+    /** The passage the link sits in — incoming links only. */
+    excerpt?: string
+  }
+
+  /** A record: a note of one of the space's types, or a node's (a person, an event…). */
+  export interface ToolRecord {
+    /** Its note — what records.get/update take — or '' for a node with no note. */
+    path: string
+    nodeId?: string
+    type: string
+    title: string
+    tags: string[]
+    updatedAt: string
+    /** Typed as their kind reads: a number, a YYYY-MM-DD date, true/false, text. */
+    fields: Record<string, unknown>
+    /** Fields whose written value does not read as their kind. */
+    invalid: string[]
+  }
+
+  export type RecordWhere =
+    | { key: string; op: 'eq'; value: string | number | boolean }
+    | { key: string; op: 'in'; values: Array<string | number> }
+    | { key: string; op: 'range'; min?: string | number; max?: string | number }
+    | { key: string; op: 'contains'; value: string }
+
+  /** A file or a link. Its text is resources.read, its bytes resources.blob. */
+  export interface ToolResource {
+    id: string
+    name: string
+    kind: string
+    source: 'upload' | 'link'
+    mimeType: string | null
+    fileSize: number | null
+    url: string | null
+    notePath: string | null
+    hasText: boolean
+    createdAt: string
+  }
+
+  export type DecideQuestion =
+    | { id: string; type?: 'yes_no'; ask: string }
+    | { id: string; type: 'choice' | 'scale'; ask: string; options: string[] }
+
+  export type DecideAnswer = Record<
+    string,
+    | { type: 'yes_no'; probability: number }
+    | { type: 'choice'; choice: string; confidence: number }
+    | { type: 'scale'; option: string; score: number; confidence: number }
+  >
+
+  /** The viewer's own value (kit 2's default), or one every viewer shares. */
+  export type StateScope = 'user' | 'install'
 
   export type BridgeErrorCode =
     | 'perimeter'
@@ -115,6 +191,37 @@ declare module '@visvine/tool-kit' {
       searchPage(query: string, opts?: { k?: number; cursor?: string | null }): Promise<ContextPage<ContextHit>>
       write(path: string, content: string): Promise<{ path: string }>
       append(path: string, text: string): Promise<{ path: string }>
+      /** The notes this one links to and those linking to it — only ones this Tool may read. */
+      links(path: string): Promise<{ outgoing: ContextLink[]; incoming: ContextLink[] }>
+    }
+    records: {
+      /** Records of a type in permissions.records, filtered, ordered, a page at a time (${BRIDGE_LIMITS.maxRows} max). */
+      query(
+        type: string,
+        opts?: { where?: RecordWhere[]; order?: { key: string; direction: 'asc' | 'desc' }; limit?: number; cursor?: string | null },
+      ): Promise<{ type: string; rows: ToolRecord[]; nextCursor: string | null; total: number }>
+      get(ref: { path: string } | { nodeId: string }): Promise<ToolRecord>
+      /** Only the fields permissions.records.write names; blank clears one. */
+      update(ref: { path: string } | { nodeId: string }, fields: Record<string, unknown>): Promise<{ record: string; fields: Record<string, unknown> }>
+    }
+    resources: {
+      /** Files and links inside permissions.resources.read, newest first. */
+      list(opts?: { folder?: string; kind?: string; q?: string; cursor?: string | null }): Promise<{ items: ToolResource[]; nextCursor: string | null }>
+      get(id: string): Promise<ToolResource>
+      /** The text extracted from a file, ${BRIDGE_LIMITS.maxResourceReadChars.toLocaleString('en-US')} characters a page. */
+      read(id: string, offset?: number): Promise<{ text: string; offset: number; totalChars: number; nextOffset: number | null }>
+      /** The bytes (or a thumb/preview image) as a data URL an <img> can draw; ${BRIDGE_LIMITS.maxBlobBytes.toLocaleString('en-US')} bytes at most. */
+      blob(id: string, rendition?: 'original' | 'thumb' | 'preview'): Promise<{ mimeType: string; dataUrl: string }>
+    }
+    actions: {
+      /** One of the space's actions tools may run, declared in permissions.actions, in this space. */
+      run<T = unknown>(name: string, input?: Record<string, unknown>): Promise<T>
+    }
+    ai: {
+      /** One answer from the space's model (permissions.ai.complete). */
+      complete(prompt: string | { system?: string; messages: Array<{ role: 'user' | 'assistant'; content: string }>; maxTokens?: number }): Promise<string>
+      /** The same questions about many texts, answered with numbers (permissions.ai.decide). */
+      decide(items: string[], questions: DecideQuestion[]): Promise<Array<DecideAnswer | null>>
     }
     connectors: {
       /**
@@ -131,9 +238,12 @@ declare module '@visvine/tool-kit' {
       call<T = unknown>(fn: string, args?: unknown): Promise<T>
     }
     state: {
-      /** Per-install key/value store. There is no localStorage in the sandbox. */
-      get<T = unknown>(key: string): Promise<T | null>
-      set(key: string, value: unknown): Promise<null>
+      /**
+       * A small key/value store — there is no localStorage in the sandbox. The
+       * viewer's own by default; { scope: 'install' } is one value every viewer shares.
+       */
+      get<T = unknown>(key: string, opts?: { scope?: StateScope }): Promise<T | null>
+      set(key: string, value: unknown, opts?: { scope?: StateScope }): Promise<null>
     }
     subject: ToolSubject | null
     viewer: ToolViewer
@@ -146,6 +256,14 @@ declare module '@visvine/tool-kit' {
     ui: {
       /** Switch to one of this Tool's declared sections. */
       navigate(to: { section: string }): void
+      /** A toast in the app's own corner. */
+      toast(message: string, tone?: 'info' | 'success' | 'warning' | 'error'): Promise<void>
+      /** Ask the viewer in the app's own dialog; true when they confirm. */
+      confirm(question: { title: string; body?: string; confirmLabel?: string; destructive?: boolean }): Promise<boolean>
+      /** Hand the viewer a file to save; the app names it and asks (permissions.ui.download). */
+      download(file: { filename: string; content: string; mimeType?: string }): Promise<boolean>
+      openRecord(ref: { path: string } | { nodeId: string }): Promise<void>
+      openResource(id: string): Promise<void>
     }
   }
 
@@ -216,13 +334,16 @@ declare module '@visvine/tool-kit' {
   export function usePagedList(glob: string | undefined, opts?: PagedListOptions): PagedListResult<ContextEntry>
 
   // ── components ──
-  // Styled from Visvine's theme tokens. Use these before writing your own CSS,
-  // so an installed Tool looks like the app it is running inside.
+  // The app's own components (@visvine/ui), and the kit's data-bound ones built
+  // on the same tokens. Use these before writing your own CSS, so an installed
+  // Tool looks like the app it is running inside.
 
-  export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
+  export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'brand' | 'neutral' | 'danger-text'
   export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
     variant?: ButtonVariant
     size?: 'sm' | 'md'
+    loading?: boolean
+    loadingText?: string
     children: ReactNode
   }
   export function Button(props: ButtonProps): JSX.Element
@@ -470,6 +591,30 @@ declare module '@visvine/tool-kit' {
   }
   /** Drag with the pointer to move; click still fires when there was no drag. */
   export function KanbanCard(props: KanbanCardProps): JSX.Element
+
+  // ── the app's own (@visvine/ui) ──
+
+  export function Alert(props: { variant?: 'error' | 'info' | 'warning' | 'success'; inline?: boolean; onDismiss?: () => void; className?: string; children: ReactNode }): JSX.Element
+  export function Avatar(props: { name: string; imageUrl?: string | null; size?: 'xs' | 'sm' | 'md' | 'chip' | 'lg' | 'xl'; fallback?: 'silhouette' | 'initials' | 'space'; className?: string }): JSX.Element
+  export function Checkbox(props: { checked: boolean; onChange: (checked: boolean) => void; label?: ReactNode; indeterminate?: boolean; disabled?: boolean; size?: 'sm' | 'md'; 'aria-label'?: string }): JSX.Element
+  export function ConfirmDialog(props: { open: boolean; title: string; body?: ReactNode; confirmLabel?: string; destructive?: boolean; confirmText?: string; error?: ReactNode; onConfirm: () => void | Promise<void>; onClose: () => void }): JSX.Element | null
+  export function IconButton(props: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: ReactNode; size?: 'sm' | 'md'; active?: boolean }): JSX.Element
+  export function LoadingText(props: { text?: string; className?: string }): JSX.Element
+  export interface MenuItem {
+    id: string
+    label: string
+    icon?: ReactNode
+    onSelect: () => void
+    danger?: boolean
+    disabled?: boolean
+  }
+  export function Menu(props: { trigger: (props: { open: boolean; toggle: () => void; id: string }) => ReactNode; items: MenuItem[]; align?: 'start' | 'end'; placement?: 'below' | 'above'; label: string }): JSX.Element
+  export function Modal(props: { onClose: () => void; open?: boolean; title?: ReactNode; footer?: ReactNode; size?: 'sm' | 'md' | 'lg'; children: ReactNode }): JSX.Element | null
+  export function Row(props: { gap?: number; align?: 'start' | 'center' | 'end' | 'stretch' | 'baseline'; justify?: 'start' | 'center' | 'end' | 'between'; wrap?: boolean; className?: string; children?: ReactNode }): JSX.Element
+  export function SearchInput(props: { value: string; onChange: (value: string) => void; placeholder?: string; autoFocus?: boolean; size?: 'sm' | 'md' | 'lg'; className?: string }): JSX.Element
+  export function SettingsSection(props: { title: ReactNode; description?: ReactNode; action?: ReactNode; flush?: boolean; children?: ReactNode }): JSX.Element
+  export function Skeleton(props: { className?: string }): JSX.Element
+  export function Toggle(props: { checked: boolean; onChange: (checked: boolean) => void; label?: ReactNode; disabled?: boolean; 'aria-label'?: string }): JSX.Element
 }
 `
 
@@ -481,50 +626,78 @@ declare module '@visvine/tool-kit' {
 export const TOOL_AUTHOR_GUIDE = `# Building a Visvine Tool
 
 A Tool is a small React app that runs inside a Visvine space. It renders in the
-main content area, reads and writes the space's own context notes, and can call
-the space's connectors and agents — but only the ones it declares up front.
+main content area, reads and writes the space's own notes and records, and can
+call the space's connectors, agents, actions and AI — but only what it declares
+up front.
 
-Three files, all of them notes in the space, so they have history, permissions
-and review like anything else:
+Its files are notes in the space, so they have history, permissions and review
+like anything else:
 
 \`\`\`
-tools/<name>/index.md    frontmatter = config, body = docs for humans
-tools/<name>/ui.tsx      the React component (compiled on write)
-tools/<name>/data.js     optional server-side handlers (sandboxed isolate)
-tools/<name>/icon.svg    optional: your own sidebar glyph
+tools/<name>/index.md        frontmatter = the manifest, body = docs for humans
+tools/<name>/ui.tsx          the React component (compiled on write)
+tools/<name>/src/<name>.tsx  optional: more modules, imported as './src/<name>'
+tools/<name>/data.js         optional: server-side handlers (sandboxed isolate)
+tools/<name>/icon.svg        optional: your own sidebar glyph
 \`\`\`
 
-## index.md
+## index.md — the manifest
 
 \`\`\`yaml
 ---
 type: tool
 title: Deal Pipeline
 description: Kanban over deal notes
+sdk: ^2                                    # the kit you write against (2 is current)
 surfaces:
   rail: { label: Deals, icon: kanban }     # optional: sidebar item + full page
-                                           # icon: one of the built-ins, or
-                                           # 'custom' to use your own icon.svg
-  types: [{ type: deal, mode: page }]      # optional: own the page for a type
+  types: [{ type: $deal, mode: page }]     # optional: own the page for a type
   nav:                                     # optional: your sections, drawn by Visvine
     style: tabs                            # tabs on the band (≤7) or side (a list)
     sections:
       - { id: board, label: Board }
       - { id: settings, label: Settings, admin: true }   # admins only
   actions: [{ id: new-deal, label: New deal }]           # optional: ≤2 band buttons
-perimeter:
-  read:  ["deals/**", "people/*/index.md"]
-  write: ["deals/**"]
-  types: [deal]
-  connectors: [hubspot]
+bindings:                                  # what the Tool needs; each space binds its own
+  deals: { kind: folder, label: Deal notes, suggest: deals }
+  deal:  { kind: type, label: Deal type, suggest: Deal, fields: [stage, amount] }
+  crm:   { kind: connector, label: CRM, recipe: hubspot, optional: true }
+permissions:
+  context: { read: ["$deals/**"], write: ["$deals/**"] }
+  records: { read: [$deal], write: [{ type: $deal, fields: [stage] }] }
+  resources: { read: ["resources/contracts/**"] }
+  connectors: [{ use: $crm, actions: [search_deals] }]
   agents: ["deal-*"]
+  actions: [list_events]
+  ai: { complete: true, decide: false }
+  ui: { download: true }
+settings:                                  # filled by an admin on the install sheet
+  currency: { type: string, label: Currency, enum: [USD, EUR, GBP], default: USD }
+dependencies: { date-fns: ^4 }             # from the curated list below
 tags: [crm, kanban]                        # optional marketplace tags: ≤8, [a-z0-9-]{1,24}
-preview: /api/media/…                      # optional marketplace preview image (same-origin
-                                           # /api/media/… path only — upload it first)
 ---
 
 What this Tool is for, in a paragraph or two.
 \`\`\`
+
+A Tool written before manifests had \`sdk\` still works exactly as it did: its
+\`perimeter:\` block (\`read\`, \`write\`, \`types\`, \`connectors\`, \`agents\`) is read as
+the same permissions with no bindings, and it keeps kit 1. Declare reach one way
+— \`permissions\` or \`perimeter\`, never both.
+
+## Bindings and settings
+
+A Tool names the KIND of thing it needs, not a path in one space. \`$deals/**\`
+is "whatever folder this space bound \`deals\` to" — \`sales/pipeline/**\` here,
+\`crm/deals/**\` there. In the space that wrote the Tool every slot is bound to its
+\`suggest\`; an admin installing it elsewhere picks from the space's own folders,
+types, connectors and agents. A folder slot may name a folder that does not
+exist yet (your first write makes it); a type, connector or agent must exist.
+An unbound slot runs the Tool degraded: \`visvine.degraded.missing.bindings\`
+names it, and the reach it would have granted is simply absent.
+
+Read what a slot is bound to, and the install's settings, from
+\`visvine.install.bindings\` and \`visvine.install.settings\`.
 
 ## Sections and band buttons — optional
 
@@ -572,56 +745,67 @@ to a strict shape and anything outside it fails the build:
 - **No colours** — paint is supplied by the sidebar so your icon follows the
   theme and the active-row highlight like a built-in. Draw strokes, not fills.
 
-## The perimeter
+## Permissions
 
-**The perimeter is the whole security story.** Anything not listed is refused at
-the bridge with a \`perimeter\` error, and an admin reads this block before
-installing. Declare the narrowest globs that work — a Tool asking for \`**\` will
-not be approved.
+**The permissions are the whole security story.** Anything not declared is
+refused at the bridge with a \`perimeter\` error, before any of the viewer's own
+access is asked, and an admin reads them — bound to their space, in plain words —
+before installing. Declare the narrowest reach that works.
 
-The perimeter narrows; it never widens. A Tool can only ever see what the person
-using it could already see. Two members with different grants running the same
-Tool see different data, and that is correct.
+They narrow; they never widen. A Tool can only ever see what the person using it
+could already see. Two members with different grants running the same Tool see
+different data, and that is correct.
 
-**\`tools/\`, \`agents/\` and \`connectors/\` are sealed against Tool writes**, whatever
-you declare — they hold configuration that runs. One exception: a Tool may CREATE
-\`agents/<name>/index.md\` (an agent brief) when its own \`perimeter.agents\` names
-that agent, e.g. \`agents: ["deal-*"]\` for \`agents/deal-nightly/index.md\`. A bare
-\`*\` names nobody. It may never rewrite a brief that already exists, never append
-to one, and never write one that says \`active: true\` — switching an agent on is a
-person's act, so a brief your Tool wrote does nothing until someone turns it on.
+| Family | Grammar | Unlocks |
+| --- | --- | --- |
+| \`context.read\` / \`write\` | note globs, or \`$slot/…\` | \`context.list/read/search/links\`, \`write/append\` |
+| \`records.read\` / \`write\` | type names or \`$slot\`; writes list their fields | \`records.query/get\`, \`records.update\` |
+| \`resources.read\` | globs over files' notes under \`resources/\`, or \`$slot\` | \`resources.list/get/read/blob\` |
+| \`connectors\` | names or \`$slot\`, with \`actions\` for the ones you call | \`connectors.call\` |
+| \`agents\` | names, \`prefix-*\`, or \`$slot\` | \`agents.run\` |
+| \`actions\` | names tools may run: ${Object.keys(TOOL_ACTIONS).map((name) => '\`' + name + '\`').join(', ')} | \`actions.run\` |
+| \`ai\` | \`{ complete, decide }\` | \`ai.complete\`, \`ai.decide\` |
+| \`ui\` | \`{ download }\` | \`ui.download\` |
+
+**\`tools/\`, \`agents/\`, \`connectors/\` and \`models/\` are sealed against Tool writes**,
+whatever you declare — they hold configuration that runs — and a read of them
+needs a glob that names them (\`**\` never reaches configuration). One exception: a
+Tool may CREATE \`agents/<name>/index.md\` (an agent brief) when its own \`agents\`
+names that agent, e.g. \`agents: ["deal-*"]\` for \`agents/deal-nightly/index.md\`. A
+bare \`*\` names nobody. It may never rewrite a brief that already exists, never
+append to one, and never write one that says \`active: true\`.
+
+A Tool that declares \`ai\` writes as AI-assisted text: a folder frozen for AI
+refuses its writes as it refuses an agent's.
 
 ## ui.tsx
 
 \`\`\`tsx
-import { useVisvine, useQuery, PageHeader, Card, Stack, Table, Spinner, Banner, Button } from '@visvine/tool-kit'
+import { useVisvine, useQuery, Stack, Table, Spinner, Banner, Button, Row } from '@visvine/tool-kit'
 
 export default function Tool() {
   const visvine = useVisvine()
-  const { data, error, loading, reload } = useQuery(() => visvine.context.list('deals/**'), [])
+  const { data, error, loading, reload } = useQuery(() => visvine.records.query('Deal', { order: { key: 'updated', direction: 'desc' } }), [])
 
   if (loading) return <Spinner size="lg" />
   if (error) return <Banner tone="danger" title="Could not load deals">{error.message}</Banner>
 
   return (
     <Stack gap="lg">
-      <PageHeader
-        title="Deals"
-        description={\`\${data?.length ?? 0} open\`}
-        actions={<Button onClick={reload}>Refresh</Button>}
+      <Row justify="between">
+        <span className="text-sm text-fg-muted">{data?.total ?? 0} open</span>
+        <Button onClick={reload}>Refresh</Button>
+      </Row>
+      <Table
+        columns={[
+          { key: 'title', header: 'Deal', render: (r) => r.title },
+          { key: 'stage', header: 'Stage', render: (r) => String(r.fields.stage ?? '') },
+        ]}
+        rows={data?.rows ?? []}
+        rowKey={(r) => r.path}
+        onRowClick={(r) => visvine.ui.openRecord({ path: r.path })}
+        empty="No deals yet."
       />
-      <Card flush>
-        <Table
-          columns={[
-            { key: 'title', header: 'Deal', render: (r) => r.title ?? r.path },
-            { key: 'updated', header: 'Updated', render: (r) => r.updatedAt.slice(0, 10) },
-          ]}
-          rows={data ?? []}
-          rowKey={(r) => r.path}
-          onRowClick={(r) => visvine.navigate(\`/directory/note/\${r.path}\`)}
-          empty="No deals yet."
-        />
-      </Card>
     </Stack>
   )
 }
@@ -629,31 +813,46 @@ export default function Tool() {
 
 Rules:
 
-- \`export default\` a component named \`Tool\`. It takes no props — everything
-  arrives through \`useVisvine()\`.
-- Import only \`react\`, \`react-dom/client\` and \`@visvine/tool-kit\`. There is no
-  package install step and no npm at runtime; any other import — including bare
-  \`react-dom\` and \`recharts\` — fails to compile. Charts come from the kit.
-- Do not render your own page chrome. The app supplies the navbar, the sidebar
-  and the page frame. Your Tool is the content.
+- \`export default\` a component. It takes no props — everything arrives through
+  \`useVisvine()\`.
+- Import only \`react\`, \`react-dom\`, \`react-dom/client\`, \`@visvine/tool-kit\`, your
+  own modules (\`./src/<name>\`), and the dependencies your manifest declares.
+  There is no package install step and no npm at runtime; any other import fails
+  to compile.
+- Do not render your own page chrome. The app supplies the navbar, the sidebar,
+  the band and the page frame. Your Tool is the content.
 - The frame is sized to your content automatically. Do not use
   \`position: fixed\` or \`100vh\` — they measure the iframe, not the window, and
   a Tool cannot escape it anyway.
 - \`visvine.subject\` is set when your Tool owns a type page: it is the note or
   node whose page is being rendered. It is null on your Tool's own page.
 
+## Modules and dependencies
+
+Split a large interface into modules under \`src/\` — \`src/board.tsx\`,
+\`src/format.ts\` — and import them from \`ui.tsx\` as \`./src/board\`, and from each
+other as \`./format\`. They compile into the one bundle, are reviewed with the
+rest, and number at most ${MAX_TOOL_MODULES}. \`data.js\` stays one plain script.
+
+Third-party code comes from one curated list, each package pinned to the one
+version the server serves — declare it in \`dependencies\` and import it by name:
+
+${Object.entries(CURATED_DEPENDENCIES).map(([name, dep]) => '- \`' + name + '\` ' + dep.version + ' — ' + dep.summary).join('\n')}
+
 ## What the kit gives you
 
-Layout and chrome: \`PageHeader\`, \`Card\`, \`Stack\`, \`Tabs\`, \`Banner\`, \`Chip\`,
-\`EmptyState\`, \`Spinner\`. Forms: \`Field\`, \`Input\`, \`Textarea\`, \`Select\`,
-\`DatePicker\` (\`YYYY-MM-DD\` strings), \`Button\`. Data: \`Table\` for a few rows,
-\`DataTable\` for many (sortable columns, sticky header, \`maxHeight\` +
-\`virtualize\` for thousands of rows). Content: \`Markdown\` renders a note body
-safely. Charts: \`LineChart\`, \`BarChart\`, \`AreaChart\`, \`PieChart\` — recharts
-underneath, already themed; the raw recharts API is on \`Recharts\` for anything
-else (\`<Recharts.ComposedChart>\`, \`<Recharts.ReferenceLine>\`). Boards:
-\`KanbanBoard\` / \`KanbanColumn\` / \`KanbanCard\` — you own the data, the board
-calls \`onMove\` and you write the note.
+The app's own components: \`Button\`, \`Input\`, \`Textarea\`, \`Select\`, \`Checkbox\`,
+\`Toggle\`, \`SearchInput\`, \`Field\`, \`Chip\`, \`Tabs\`, \`Alert\`, \`Avatar\`, \`Menu\`,
+\`IconButton\`, \`Modal\`, \`ConfirmDialog\`, \`SettingsSection\`, \`Skeleton\`,
+\`LoadingText\`, \`Row\`, \`Stack\`. The kit's own, painted from the same tokens:
+\`Banner\`, \`EmptyState\`, \`Spinner\`, \`Card\` (a flat section), \`PageHeader\`,
+\`DatePicker\` (\`YYYY-MM-DD\` strings). Data: \`Table\` for a few rows, \`DataTable\`
+for many (sortable columns, sticky header, \`maxHeight\` + \`virtualize\` for
+thousands of rows). Content: \`Markdown\` renders a note body safely. Charts:
+\`LineChart\`, \`BarChart\`, \`AreaChart\`, \`PieChart\` — recharts underneath, already
+themed; the raw recharts API is on \`Recharts\` for anything else. Boards:
+\`KanbanBoard\` / \`KanbanColumn\` / \`KanbanCard\` — you own the data, the board calls
+\`onMove\` and you write the note or the record.
 
 \`\`\`tsx
 <BarChart data={rows} x="month" series={['won', 'lost']} stacked height={220} />
@@ -661,7 +860,7 @@ calls \`onMove\` and you write the note.
   columns={[{ key: 'title', header: 'Deal', render: (r) => r.title, sortable: true, value: (r) => r.title }]}
   rows={deals} rowKey={(r) => r.path} maxHeight={480} virtualize
 />
-<KanbanBoard onMove={({ cardId, toColumnId }) => visvine.context.write(cardId, withStage(toColumnId))}>
+<KanbanBoard onMove={({ cardId, toColumnId }) => visvine.records.update({ path: cardId }, { stage: toColumnId })}>
   {stages.map((s) => (
     <KanbanColumn key={s} id={s} title={s} count={byStage[s].length}>
       {byStage[s].map((d) => <KanbanCard key={d.path} id={d.path}>{d.title}</KanbanCard>)}
@@ -674,42 +873,81 @@ calls \`onMove\` and you write the note.
 
 Visvine paints one page background behind every page. Your Tool's frame is
 **transparent**, so that backdrop shows through it exactly as it does behind a
-native page. This only works if you leave it alone:
+native page, and the frame loads the app's own stylesheet — its tokens and the
+components' styles. This only works if you leave the canvas alone:
 
 - **Never paint a page background.** No \`background\` on \`html\`, \`body\`,
-  \`#root\` or a full-page wrapper \`<div>\`. A hardcoded \`#fff\` or \`white\`
-  wrapper is the classic mistake: it pins a colour the app is free to change
-  and leaves the Tool a slab the moment it does.
-- **Opaque panels are \`Card\`** (or \`background: var(--vv-surface)\`). That is
-  the app's one opaque surface — cards, floats, inputs — and it is how content
-  gets a solid backing without covering the backdrop edge to edge.
-- **Subtle fills are \`--vv-surface-2\` / \`--vv-surface-3\`.** They are
-  translucent ink tints, not greys: over the backdrop they read as light grey,
-  and over a colour they tint it instead of painting a slab. Use them for
-  hovers, column backgrounds, code blocks.
-
-Style custom markup with the theme tokens, never literal colours — the viewer
-can switch the accent theme live and the runtime repaints \`:root\`, so a
-hardcoded hex is wrong a click later:
+  \`#root\` or a full-page wrapper \`<div>\`.
+- **Flat surfaces.** Sections separated by hairlines, no boxes around
+  everything, a shadow only on something that floats (a menu, a dialog).
+- **Colour comes from the theme.** Style your own markup with the design tokens,
+  never literal colours — the viewer can switch the accent live and the runtime
+  repaints \`:root\`, so a hardcoded hex is wrong a click later.
 
 | Token | Use for |
 | --- | --- |
-| \`--vv-accent\` / \`--vv-accent-strong\` / \`--vv-accent-soft\` | The space's accent: primary actions, active states, soft highlights |
-| \`--vv-surface\` | The one opaque surface (cards, inputs) |
-| \`--vv-surface-2\` / \`--vv-surface-3\` | Translucent fills (hover, wells) |
-| \`--vv-border\` / \`--vv-border-strong\` | Hairlines / input borders |
-| \`--vv-text\` / \`--vv-text-secondary\` / \`--vv-text-muted\` | Ink, three volumes |
-| \`--vv-danger\` \`--vv-warn\` \`--vv-info\` (+ \`-soft\`) | Status colours |
-| \`--vv-radius\` / \`--vv-radius-lg\` / \`--vv-radius-pill\` | Corner radii |
-| \`--vv-gap-sm\` / \`--vv-gap\` / \`--vv-gap-lg\` | Spacing steps |
-| \`--vv-font\` | The app's typeface (already on \`body\`) |
+| \`--vv-color-accent\` / \`-accent-strong\` / \`-accent-soft\` | The space's accent: primary actions, active states, soft highlights |
+| \`--vv-color-surface\` | The one opaque surface (floats, inputs) |
+| \`--vv-color-surface-subtle\` / \`-surface-muted\` | Translucent fills (hover, wells) |
+| \`--vv-color-line-subtle\` / \`--vv-color-line\` | Hairlines / input borders |
+| \`--vv-color-fg\` / \`-fg-secondary\` / \`-fg-muted\` | Ink, three volumes |
+| \`--vv-color-danger\` \`--vv-color-warning\` \`--vv-color-info\` \`--vv-color-success\` | Status colours |
 | \`--vv-chart-1..8\` | Chart series (or \`useChartColors()\`) |
-| \`--vv-backdrop\` | The backdrop *value* — informational only; do not repaint it |
 
-\`useTheme()\` returns the same map for the rare JS-side need (a \`<canvas>\`, an
-exported image). Everything from the kit — \`Card\`, \`Button\`, the charts, the
-kanban — is already painted from these tokens, which is why "use the kit's
-components first" is a design rule and not just a convenience.
+The role classes the app paints with (\`text-fg-muted\`, \`bg-surface-subtle\`,
+\`border-line-subtle\`) work in your markup too, as far as the app itself uses
+them; for anything else, a \`style\` with a token. \`useTheme()\` returns the same
+map for the rare JS-side need (a \`<canvas>\`, an exported image).
+
+## Records
+
+\`visvine.records.query(type, { where, order, limit, cursor })\` reads the records
+of one type — the notes that declare a type the space invented, or the nodes of
+one it is built on (people, organisations, events) — with their fields typed:
+
+\`\`\`tsx
+const won = await visvine.records.query('Deal', {
+  where: [{ key: 'stage', op: 'eq', value: 'Won' }, { key: 'amount', op: 'range', min: 1000 }],
+  order: { key: 'amount', direction: 'desc' },
+})
+await visvine.records.update({ path: won.rows[0].path }, { stage: 'Closed' })
+\`\`\`
+
+\`update\` writes only the fields \`permissions.records.write\` names, each parsed
+by the field's kind the way the Directory's table parses a cell; a value that
+does not read as its kind is refused, and a blank clears the field.
+
+## Files, links and actions
+
+\`visvine.resources.list({ folder, kind, q })\` lists the files and links inside
+\`permissions.resources.read\` that the viewer can see; \`read(id)\` pages through
+a file's extracted text; \`blob(id, 'thumb')\` hands back an image as a data URL
+for an \`<img>\`. \`visvine.context.links(path)\` is a note's outgoing and incoming
+links.
+
+\`visvine.actions.run(name, input)\` runs one of the actions tools may run, in
+this space only — \`space_id\` is set for you, and naming another space is
+refused. Every id it is handed (an event, a file, a channel) is checked to be
+this space's, and a file to be inside your \`resources\` permission, first.
+
+## The space's AI
+
+\`await visvine.ai.complete('Summarise: …')\` is one answer from the space's own
+model, on its key and under its monthly cap (\`{ system, messages, maxTokens }\`
+for a conversation). \`visvine.ai.decide(items, questions)\` asks the platform's
+judge the same questions about many texts — \`yes_no\`, \`choice\` or \`scale\` — and
+answers with numbers; it is literal, so ask plain statements about what the text
+says, never about dates or amounts. Both need \`permissions.ai\`, and a Tool that
+declares either writes as AI-assisted text.
+
+## The app's own dialogs
+
+The frame has no popups, no downloads and no navigation of its own; the app does
+these for you, in its chrome: \`visvine.ui.toast(message, tone)\`,
+\`await visvine.ui.confirm({ title, destructive })\`,
+\`await visvine.ui.download({ filename, content, mimeType })\` (needs
+\`permissions.ui.download\`; the app names the file and asks),
+\`visvine.ui.openRecord({ path } | { nodeId })\`, \`visvine.ui.openResource(id)\`.
 
 ## Live data
 
@@ -719,15 +957,14 @@ components first" is a design rule and not just a convenience.
 const deals = useLiveQuery(() => visvine.context.list('deals/**'), [], { paths: ['deals/**'] })
 \`\`\`
 
-When a note inside your read perimeter is written, renamed or deleted, Visvine
+When a note inside your read permission is written, renamed or deleted, Visvine
 tells the frame which paths changed and the query re-runs if one matches
 \`paths\` (or on any change when \`paths\` is omitted). This is **best-effort**:
 the change feed is per server process and a change on another instance, or a
 dropped connection, is not delivered — so the hook also re-runs every 30
 seconds (\`pollMs\`), which is the guarantee. Refreshes never flip \`loading\`
 back on; read \`refreshing\` if you want a subtle indicator. Do not build your
-own poll on top of it, and do not expect to see your own write echo faster than
-the bridge call that made it returns.
+own poll on top of it.
 
 ## Paging
 
@@ -735,15 +972,13 @@ the bridge call that made it returns.
 \`visvine.context.listPage(glob, cursor)\` / \`searchPage(query, { k, cursor })\`
 answer \`{ items, nextCursor }\`; hand \`nextCursor\` back until it is null. In the
 UI, \`usePagedList(glob, { pageSize })\` accumulates \`items\` and gives you
-\`hasMore\` / \`loadMore\` for a "Load more" button or an infinite scroll. Paging
-is by path order for lists and by rank for search, and the same perimeter and
-grants apply to every page.
+\`hasMore\` / \`loadMore\`. \`records.query\` and \`resources.list\` page the same way,
+with \`cursor\`.
 
 ## data.js
 
 Optional. Use it when the work should not happen in the browser — a connector
-call with a large response, a computation over many notes, anything you would
-rather the viewer's laptop did not do.
+call with a large response, a computation over many notes.
 
 \`\`\`js
 handlers.summary = async (args, visvine) => {
@@ -756,35 +991,43 @@ handlers.summary = async (args, visvine) => {
 Call it from the UI with \`visvine.data.call('summary', { ... })\`.
 
 Handlers run in a sandboxed isolate with the same \`visvine\` object the UI has
-and the same perimeter. There is no filesystem, no socket and no \`process\`; a
+and the same permissions. There is no filesystem, no socket and no \`process\`; a
 handler that has not returned within ${Math.round(BRIDGE_LIMITS.dataCallTimeoutMs / 1000)} seconds is killed.
 Handlers also get \`visvine.crypto\` — \`hmac(alg, key, data)\`, \`hash(alg, data)\`,
-\`randomHex(n)\`, \`base64.encode/decode\`, \`timingSafeEqual(a, b)\` — for the odd
-signature or digest; strings in, strings out.
+\`randomHex(n)\`, \`base64.encode/decode\`, \`timingSafeEqual(a, b)\`.
 
 \`visvine.connectors.call(name, code)\` runs JavaScript inside a declared
 connector's isolate; \`visvine.connectors.call(name, { action, args })\` runs one
-of the connector's named actions instead (see its page for the list) — the
-reviewable choice when the connector offers one.
+of the connector's named actions instead — the reviewable choice when the
+connector offers one.
+
+## State
+
+\`visvine.state\` is a small key/value store — there is no \`localStorage\` in the
+sandbox. In kit 2 a value is the viewer's own unless you say otherwise:
+\`set('filter', f)\` remembers this person's filter, \`set('layout', l, { scope:
+'install' })\` is one value everyone sees. It is for UI preferences, not space
+data — that belongs in notes and records, where it is searchable and shared.
 
 ## Limits
 
 | What | Cap |
 | --- | --- |
-| Rows from one \`context.list\` / \`context.search\` | ${BRIDGE_LIMITS.maxRows} |
+| Rows from one list, search or query | ${BRIDGE_LIMITS.maxRows} |
 | Bytes from one \`context.read\` | ${BRIDGE_LIMITS.maxReadBytes.toLocaleString('en-US')} |
 | Bytes in one \`context.write\` / \`context.append\` | ${BRIDGE_LIMITS.maxWriteBytes.toLocaleString('en-US')} |
 | Bytes of params in one call | ${BRIDGE_LIMITS.maxParamsBytes.toLocaleString('en-US')} |
 | Calls per minute, per viewer | ${BRIDGE_LIMITS.callsPerMinute} |
 | One \`data.call\` | ${Math.round(BRIDGE_LIMITS.dataCallTimeoutMs / 1000)}s |
+| One \`resources.read\` page | ${BRIDGE_LIMITS.maxResourceReadChars.toLocaleString('en-US')} characters |
+| One \`resources.blob\` | ${BRIDGE_LIMITS.maxBlobBytes.toLocaleString('en-US')} bytes |
+| One \`ai.complete\` answer | ${BRIDGE_LIMITS.aiMaxOutputTokens.toLocaleString('en-US')} tokens |
+| Items in one \`ai.decide\` | ${BRIDGE_LIMITS.aiMaxDecideItems} |
 | One \`state.set\` value, serialized | ${STATE_MAX_BYTES.toLocaleString('en-US')} bytes |
-| Keys in \`visvine.state\`, per install | ${STATE_MAX_KEYS} |
+| Keys in \`visvine.state\`, per scope | ${STATE_MAX_KEYS} |
 
-Page rather than asking for everything: an unpaged list that would exceed the
-row cap comes back truncated, not as an error — use \`listPage\` / \`usePagedList\`
-to see the rest. \`visvine.state\` is for UI preferences (a chosen filter, a column
-order), not for space data — that belongs in notes, where it is searchable and
-shared.
+An unpaged list that would exceed the row cap comes back truncated, not as an
+error — page to see the rest.
 
 ## Failure
 
@@ -792,13 +1035,13 @@ Every bridge method rejects with a \`BridgeCallError\` carrying a \`code\`:
 
 | Code | Means |
 | --- | --- |
-| \`perimeter\` | Your Tool never declared this reach. Fix the frontmatter. |
-| \`forbidden\` | The viewer cannot see it. Not yours to fix — handle it. |
-| \`not_found\` | No such note, connector or agent. |
-| \`degraded\` | This space lacks something you declared; see \`visvine.degraded\`. |
-| \`rate_limited\` | Too many calls. Back off. |
+| \`perimeter\` | Your Tool never declared this reach. Fix the manifest. |
+| \`forbidden\` | The viewer cannot do it. Not yours to fix — handle it. |
+| \`not_found\` | No such note, record, file, connector or agent. |
+| \`degraded\` | This space lacks something you declared, or a slot is unbound; see \`visvine.degraded\`. |
+| \`rate_limited\` | Too many calls, or a budget spent. Back off. |
 | \`too_large\` | Over one of the caps above. |
-| \`timeout\` | A \`data.call\` ran too long. |
+| \`timeout\` | A \`data.call\` or the model ran too long. |
 | \`invalid\` | Bad params. |
 | \`internal\` | Visvine's fault. |
 
@@ -807,16 +1050,23 @@ rendering nothing. If \`visvine.degraded\` is set, say so once at the top: reads
 against the missing pieces come back empty, so a Tool that stays silent looks
 broken instead of incomplete.
 
+## Kit 1
+
+A Tool whose manifest says \`sdk: ^1\`, or has no \`sdk\` because it was written
+before kit 2, keeps kit 1: its own component set and stylesheet, one shared
+\`state\` value per key, and everything else above. Moving to kit 2 is changing
+\`sdk\` to \`^2\` and checking the page — the components keep their names and props.
+
 ## Do / don't
 
 **Do**
 
-- Keep the perimeter as narrow as the Tool actually needs.
-- Use the kit's components. They carry the space's theme, so an installed Tool
-  looks like Visvine and not like a twelfth website.
-- Style your own markup with the \`--vv-*\` tokens, so it follows a live theme
+- Keep the permissions as narrow as the Tool actually needs, and bind by kind
+  (\`$deals/**\`) rather than naming one space's folders.
+- Use the kit's components. They are the app's, so an installed Tool looks like
+  Visvine and not like a twelfth website.
+- Style your own markup with the design tokens, so it follows a live theme
   switch the way the kit does.
-- Store per-install preferences in \`visvine.state\`.
 - Read \`visvine.viewer.isAdmin\` to hide admin-only affordances — but never to
   protect data. The server decides that.
 
@@ -825,14 +1075,12 @@ broken instead of incomplete.
 - Don't reach for \`localStorage\`, \`document.cookie\`, \`fetch\` or \`window.parent\`.
   The frame is sandboxed on a cookie-less origin with no network of its own;
   all four either fail or do nothing. \`visvine.state\` replaces the first two.
-- Don't import a UI library or a CSS framework. Nothing resolves at runtime and
-  the bundle has a size cap.
-- Don't paint a page background or hardcode colours. The frame is transparent
-  over the app's own backdrop, and the accent theme can change under you — a
-  \`background: #fff\` wrapper or a literal hex
-  is the difference between a Tool that belongs and one that looks pasted in.
-- Don't poll. Query on mount and after a write, give the reader a refresh, and
-  use \`useLiveQuery\` where staying current matters — it already polls, gently.
-- Don't put a secret in \`ui.tsx\` or \`data.js\`. Both are readable by anyone who
-  can read the note, and a published Tool ships its source into the registry.
+- Don't import a UI library or a CSS framework. Nothing resolves at runtime but
+  the list above, and the bundle has a size cap.
+- Don't paint a page background or hardcode colours.
+- Don't poll. Query on mount and after a write, and use \`useLiveQuery\` where
+  staying current matters — it already polls, gently.
+- Don't put a secret in \`ui.tsx\`, a module or \`data.js\`. All are readable by
+  anyone who can read the note, and a published Tool ships its source into the
+  registry.
 `

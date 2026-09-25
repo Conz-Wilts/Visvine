@@ -38,6 +38,8 @@ import { toolFolderPath, toolIndexPath } from '../lib/tools/config';
 import { toolKey } from '../lib/tools/registry';
 import { BUILDER_THREAD } from '../lib/tools/builder';
 import { SPACE_ID } from './seed/space';
+import { composeToolIndex } from '../lib/tools/indexFacts'
+import { readToolFacts } from '../lib/tools/toolFacts'
 
 const SPACE = process.argv[2] ?? SPACE_ID;
 const TOOL = 'rsvp-board';
@@ -257,7 +259,9 @@ async function main(): Promise<void> {
       `${seen.requests} requests · tools [${seen.toolNames.join(', ')}]`,
     );
     const build = await prisma.appToolBuild.findFirst({ where: { spaceId: SPACE, name: TOOL }, select: { ok: true } });
-    const index = await store.readNoteOrNull(shared(SPACE), toolIndexPath(TOOL));
+    // The index as every reader parses it: the note with its facts row composed in.
+    const note = await store.readNoteOrNull(shared(SPACE), toolIndexPath(TOOL))
+    const index = note === null ? null : composeToolIndex(note, await readToolFacts(SPACE, TOOL));
     const author = await prisma.contextNote.findFirst({ where: { spaceId: SPACE, path: toolIndexPath(TOOL), deletedAt: null }, select: { createdBy: true } });
     check(
       'the files were written as the member and compile',

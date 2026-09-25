@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { cx } from './cx';
+import { clsx as cx } from 'clsx';
+import { CLICKABLE_ROW, RIGHT, TABLE, TD, TH } from './tableClasses';
 
 export interface TableColumn<T> {
   key: string;
@@ -21,11 +22,11 @@ export interface TableProps<T> {
 
 export function Table<T>({ columns, rows, rowKey, onRowClick, empty }: TableProps<T>) {
   return (
-    <table className="vv-table">
+    <table className={TABLE}>
       <thead>
         <tr>
           {columns.map((c) => (
-            <th key={c.key} style={c.width ? { width: c.width } : undefined} className={cx(c.align === 'right' && 'vv-table__cell--right')}>
+            <th key={c.key} style={c.width ? { width: c.width } : undefined} className={cx(TH, c.align === 'right' && RIGHT)}>
               {c.header}
             </th>
           ))}
@@ -34,17 +35,17 @@ export function Table<T>({ columns, rows, rowKey, onRowClick, empty }: TableProp
       <tbody>
         {rows.length === 0 && empty !== undefined ? (
           <tr>
-            <td colSpan={columns.length}>{empty}</td>
+            <td colSpan={columns.length} className={TD}>{empty}</td>
           </tr>
         ) : (
           rows.map((row, i) => (
             <tr
               key={rowKey(row, i)}
-              className={cx(onRowClick && 'vv-table__row--clickable')}
+              className={cx(onRowClick && CLICKABLE_ROW)}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((c) => (
-                <td key={c.key} className={cx(c.align === 'right' && 'vv-table__cell--right')}>
+                <td key={c.key} className={cx(TD, c.align === 'right' && RIGHT)}>
                   {c.render(row)}
                 </td>
               ))}

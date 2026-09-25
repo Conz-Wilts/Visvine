@@ -18,12 +18,14 @@
  * three optimistic ones drifting apart.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from '@/features/shared/components/SpaceLink';
 import { BlocksIcon, CircleArrowUpIcon, ExternalLinkIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import { Chip, ConfirmDialog, EmptyState, Skeleton, Button, Select, Toggle } from '@visvine/ui';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
-import { fetchVersion, patchInstall, uninstallTool } from '@/features/tools/lib/client';
+import BindingFields from '@/features/tools/components/BindingFields';
+import { fetchBindable, fetchVersion, patchInstall, uninstallTool } from '@/features/tools/lib/client';
+import type { BindableSpace, BindingValues } from '@visvine/tool-protocol/bindings';
 import { describeRequirements } from '@/lib/tools/requirements';
 import type { InstallSummary, VersionDetail } from '@/lib/tools/api';
 import type { TypeClaimMode } from '@/lib/tools/installs';
@@ -46,6 +48,15 @@ export default function InstalledTab({
 }) {
   const [removing, setRemoving] = useState<InstallSummary | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [space, setSpace] = useState<BindableSpace | null>(null);
+  const binds = isAdmin && installs.some((i) => Object.keys(i.slots).length > 0);
+
+  useEffect(() => {
+    if (!spaceId || !binds) return;
+    const ctl = new AbortController();
+    fetchBindable(spaceId, ctl.signal).then(setSpace).catch(() => {});
+    return () => ctl.abort();
+  }, [spaceId, binds]);
 
   if (!spaceId) {
     return (
@@ -91,6 +102,7 @@ export default function InstalledTab({
             onAct={(run, done) => act(install, run, done)}
             onRemove={() => setRemoving(install)}
             onToast={onToast}
+            space={space}
           />
         ))}
       </div>
@@ -121,6 +133,7 @@ function InstallRow({
   onAct,
   onRemove,
   onToast,
+  space,
 }: {
   spaceId: string;
   install: InstallSummary;
@@ -129,8 +142,22 @@ function InstallRow({
   onAct: (run: () => Promise<unknown>, done: string) => void;
   onRemove: () => void;
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
+  space: BindableSpace | null;
 }) {
   const missing = describeRequirements(install.requirements);
+  const [bindings, setBindings] = useState<BindingValues>(install.bindings);
+  const [settings, setSettings] = useState<Record<string, unknown>>(install.settings);
+  const saved = JSON.stringify([install.bindings, install.settings]);
+  // A save re-reads the list, and the server's canonical values replace the draft.
+  useEffect(() => {
+    const [b, st] = JSON.parse(saved) as [BindingValues, Record<string, unknown>];
+    setBindings(b);
+    setSettings(st);
+  }, [saved]);
+  const dirty =
+    JSON.stringify(bindings) !== JSON.stringify(install.bindings) ||
+    JSON.stringify(settings) !== JSON.stringify(install.settings);
+  const configurable = Object.keys(install.slots).length > 0 || Object.keys(install.settingSpecs).length > 0;
 
   return (
     <section className="py-4">
@@ -274,6 +301,52 @@ function InstallRow({
               );
             })}
           </ul>
+        </div>
+      )}
+
+      {isAdmin && configurable && (
+        <div className="mt-3">
+          <BindingFields
+            headings
+            slots={install.slots}
+            settingSpecs={install.settingSpecs}
+            bindings={bindings}
+            settings={settings}
+            space={space}
+            onBindings={setBindings}
+            onSettings={setSettings}
+            disabled={busy}
+          />
+          {dirty && (
+            <div className="mt-2 flex justify-end">
+              <Button
+                variant="brand"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  onAct(
+                    () =>
+                      patchInstall(spaceId, install.id, {
+                        bind: {
+                          // Only what moved; a slot cleared in the picker is sent empty, which unbinds it.
+                          bindings: Object.fromEntries(
+                            Object.keys(install.slots)
+                              .filter((name) => (bindings[name] ?? '') !== (install.bindings[name] ?? ''))
+                              .map((name) => [name, bindings[name] ?? '']),
+                          ),
+                          settings: Object.fromEntries(
+                            Object.keys(install.settingSpecs).map((key) => [key, settings[key] ?? null]),
+                          ),
+                        },
+                      }),
+                    `${install.title} bound.`,
+                  )
+                }
+              >
+                Save
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

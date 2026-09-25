@@ -22,8 +22,10 @@ tools (Channels, installed Tools, …) and from MCP tools.
 
 | Path | Who writes | Holds |
 |---|---|---|
-| `tools/<name>/index.md` | any member (normal grants) | the **config**: `type: tool`, `title`, `description`, `version`, `surfaces`, `perimeter`; the body is author-facing docs |
+| `tools/<name>/index.md` | any member (normal grants) | the prose: `type: tool`, `title`, `description`, `version`, `tags`, `preview`, `share`; the body is author-facing docs |
+| `app_tool_configs` row | written through `configureTool` / `writeToolFile` | the **manifest's facts**: `surfaces`, the reach (`permissions`, or a v1 `perimeter`), `bindings`, `settings`, `sdk`, `platforms`, `dependencies`, `collections` — every change kept in `app_tool_config_changes` |
 | `tools/<name>/ui.md` | any member | the UI source — one fenced ` ```tsx ` block, addressed as `ui.tsx` |
+| `tools/<name>/src/<module>.md` | any member | optional modules of the UI — ` ```tsx ` or ` ```ts `, addressed as `src/<module>.tsx` / `.ts` |
 | `tools/<name>/data.md` | any member | the optional data source — one fenced ` ```js ` block, addressed as `data.js` |
 | `app_tool_builds` row | derived, never authoritative | the compiled bundles + diagnostics from the last write |
 
@@ -158,6 +160,69 @@ admin was viewing it, and reach connectors it never declared. A Tool has no dele
 and no move, so it cannot free the path either. See
 `lib/tools/bridge.ts#agentBriefExemption`; the rule is exercised by
 `tests/tools-bridge.test.ts` and the escape suite.
+
+### Manifest 2 — facts, bindings, settings
+
+A Tool's structured facts are a ROW, its note is prose — the platform's rule
+for every type. `app_tool_configs.facts` holds what a machine enforces or
+places; the index note keeps title, description, tags, `share:` and the docs.
+Every reader — the build, publish, the checks, `read_tool`, the Workbench —
+reads ONE index composed of the two (`lib/tools/indexFacts.ts#composeToolIndex`),
+so an author still writes one `index.md`: `writeToolFile` splits it
+(`splitToolIndex`), a note written straight to the store is adopted by the
+Tool hook (`hooks.ts#adoptIndexFacts`), and `configure_tool` changes the row
+alone, parsed before it lands (`service.ts#configureTool`). A v1 Tool — reach
+in `perimeter:` — reads as manifest 2 with no bindings and keeps kit 1; declare
+reach one way, never both.
+
+```yaml
+sdk: ^2                                      # the kit it is written against
+bindings:                                    # what it needs; each space binds its own
+  deals: { kind: folder, label: Deal notes, suggest: deals, within?: resources/ }
+  deal:  { kind: type, label: Deal type, suggest: Deal, fields: [stage] }
+  crm:   { kind: connector, label: CRM, recipe: hubspot, optional: true }
+permissions:
+  context:   { read: ["$deals/**"], write: ["$deals/**"] }
+  records:   { read: [$deal], write: [{ type: $deal, fields: [stage] }] }
+  resources: { read: ["resources/contracts/**"] }
+  connectors: [{ use: $crm, actions: [search_deals] }]
+  agents: ["deal-*"]
+  actions: [list_events]                     # names from TOOL_ACTIONS only
+  ai: { complete: true, decide: false }
+  ui: { download: true }
+settings:                                    # an admin fills these on the install sheet
+  currency: { type: string, label: Currency, enum: [USD, EUR], default: USD }
+dependencies: { date-fns: ^4 }               # the curated list, pinned by the server
+```
+
+**Bindings** (`@visvine/tool-protocol/bindings`, pure). `$slot` names a slot
+the installing space fills with a folder, type, connector or agent of its own.
+In the space that wrote the Tool every slot takes its `suggest`; elsewhere an
+admin binds each from pickers (`bindingChoices`) on the install sheet or with
+`bind_tool` — a folder of the space's own (it need not exist yet; never a
+sealed or reserved root; `within` narrows), a type that has the slot's
+`fields`, a connector of the slot's `recipe`, an agent that exists. A slot not
+named takes its suggestion when the space has that thing (`defaultBindings`);
+one still empty runs the Tool **degraded** — its reach is simply absent and
+`visvine.degraded.missing.bindings` names it — and never blocks an install.
+Review reads the abstract permissions; `resolveReach` substitutes the install's
+values at bridge-target resolution, so the gate enforces the concrete reach and
+the install sheet shows it (`features/tools/lib/reach.ts`). A `$type` claim in
+`surfaces.types` follows its slot. Bindings and settings are install data
+(`app_tool_installs.bindings` / `settings`), changed only by an admin through
+`bind_tool` or the sheet, audited; an upgrade carries them over, a shared-down
+install binds to the house's suggestions its room has (`share.ts#roomBindings`).
+
+**Modules and dependencies.** `src/<module>.tsx` notes beside `ui.md` compile
+into the one bundle, resolved in memory by the compiler's import guard
+(`compile.ts#importGuard`, `./src/<name>` from ui.tsx, `./<name>` between
+modules; nothing relative ever reaches a disk), at most 24, snapshotted into
+the version (`app_tool_versions.modules`) and scanned by the checks like
+`ui.tsx`. Third-party code is one curated list
+(`@visvine/tool-protocol/dependencies`: zod, date-fns, clsx), each pinned to
+the version on disk, vendored like React (`vendorBundle.ts`, `dep-*.js`) and
+importable only when the manifest declares it; a package not served, or a range
+the served version does not meet, blocks the publish (`compat.dependency`).
 
 ## Authoring loop (over MCP)
 
@@ -620,9 +685,36 @@ Methods (`lib/tools/protocol.ts#BridgeMethods`):
 | `context.write` / `context.append` | Write/append a `.md` note — refused for `tools/`, `agents/`, `connectors/`, `models/` and configuration filed elsewhere, except that `write` may CREATE the brief of an agent the perimeter names (see [Frontmatter reference](#frontmatter-reference)). |
 | `connectors.call` | Run a declared connector, exactly the path `run_connector` uses. |
 | `agents.run` | Trigger a declared, active agent (author-or-admin, dispatched not awaited). |
+| `context.links` | A note's outgoing and incoming links — only notes the Tool may read and the viewer can open; a hidden source is not reported at all. |
+| `records.query` / `records.get` / `records.update` | Records of a type in `permissions.records` — an invented type's notes, or a node-backed kind's nodes (`lib/records/service.ts`) — filtered, ordered, paged; `update` writes only the declared fields, through `setFields` and the record's own gate. |
+| `resources.list` / `get` / `read` / `blob` | Files and links under `permissions.resources.read` the viewer can see (`requireVisibleResource`, this space only): a trimmed view, a file's extracted text a page at a time, its bytes or a rendition as a data URL (2 MB at most). Never a URL — a signed one is a bearer capability. |
+| `actions.run` | One action from `TOOL_ACTIONS` the manifest declares, as the viewer with that action's scope alone (`via: 'tool'`). See the four rules below. |
+| `ai.complete` / `ai.decide` | The space's own model, on its key under its monthly cap and metered as `tool:<name>`; the judge on the space's allowance. |
 | `data.call` | Call a `data.js` handler in the isolate. |
-| `state.get` / `state.set` | Per-install key/value store (there is no `localStorage` in the sandbox). |
+| `state.get` / `state.set` | A small key/value store (there is no `localStorage` in the sandbox), `scope: 'user'` (the viewer's own — kit 2's default) or `'install'` (one value everyone shares — what a call naming no scope gets). |
 | `subject.get` | What the Tool is being shown about (set by the host on a type page; null otherwise). |
+
+**`actions.run` keeps four rules** (`lib/tools/actionAllowlist.ts`,
+`toolActions.ts`): the bridge sets `space_id` to the install's space and
+refuses a call naming another; no action whose data a bridge method already
+gates is on the list (an action runs with the viewer's full reach and never
+sees the Tool's permissions); every id an action is handed — an event, a file,
+a channel — is checked to be this space's, and a file to be inside
+`permissions.resources`, first; and nothing that creates or changes what runs
+or governs. `TOOL_ACTIONS` is `list_events`, `update_event`, `share_resource`,
+and grows one audited entry at a time.
+
+**A Tool that may ask the AI writes as AI-assisted text.** When its reach
+declares `ai`, its `context.write`/`append` and `records.update` are recorded
+under the `ai-enrich` origin, which a folder frozen for AI refuses as it
+refuses an agent's; otherwise a Tool's write is a person's `edit`.
+
+**The host's own services** (`ui.toast`, `ui.confirm`, `ui.download`,
+`ui.openRecord`, `ui.openResource`) never reach the server: the host page
+answers them in the app's chrome (`features/tools/lib/hostServices.ts`), one
+question at a time. A download needs `permissions.ui.download` — carried to
+the host on the frame token, never trusted from the frame — and the viewer's
+yes, and the file name keeps its last segment only.
 
 `data.call` and `subject.get` are the two methods **not** re-exposed as isolate
 capabilities (`bridgeCapabilities`) — a handler calling `data.call` would nest
@@ -689,6 +781,10 @@ numbers the server enforces:
 | Bytes of `params` per call | 64,000 |
 | Calls per minute, per viewer per install | 120 |
 | `data.call` wall clock | 20s |
+| Characters per `resources.read` page | 20,000 |
+| Bytes per `resources.blob` | 2,000,000 |
+| Tokens per `ai.complete` answer | 1,024 |
+| Items per `ai.decide` | 100 |
 
 Plus two throttles (`lib/tools/limits.ts`) on top of the isolate's own caps,
 both ROWS so they hold across instances: the call budget is a token bucket per
@@ -703,8 +799,10 @@ decide: a weaker limit, never none. And
 10s compile timeout.
 
 `state.set` has two caps of its own (`lib/tools/state.ts`): **64 KB** per
-serialized value (`STATE_MAX_BYTES`) and **100 keys** per install
-(`STATE_MAX_KEYS`). Past the key cap an *install* refuses the new key —
+serialized value (`STATE_MAX_BYTES`) and **100 keys** per install and scope
+owner — each viewer has their own hundred (`STATE_MAX_KEYS`; `app_tool_state.user_id`
+is `''` for the shared value, a viewer's id for theirs, and account deletion
+clears a person's). Past the key cap an *install* refuses the new key —
 evicting a row an installed Tool relies on would be silent data loss, where a
 refusal reaches the author through the bridge — while a *preview*, which has no
 author watching, drops its least-recently-written key instead. The smallness is
@@ -748,7 +846,29 @@ alone is never a requirement (it asks for a capability, not a specific thing);
 `deal-*` is satisfied by one match. Adding the missing piece doesn't clear the
 banner automatically — an admin re-checks (`refreshRequirements`), because a
 sweep on every connector/type/agent write would put a table write in the path
-of every note save.
+of every note save. An unbound binding slot is the same kind of gap: it joins
+the requirements by its label (`Deal type is not bound`) and the banner, and
+the reach it would have granted is simply absent until an admin binds it.
+
+### Kit 1 and kit 2
+
+`@visvine/tool-kit` has two majors, chosen per Tool by the frame document from
+its manifest's `sdk` (`runtimeBundle.ts#kitOf` → `frameDocument.ts`). **Kit 2**
+(`features/tools/kit/index.ts`, `tool-kit.js`) is the app's own components —
+`@visvine/ui` re-exported, and the kit's data-bound ones (tables, boards,
+charts, markdown) built on the same tokens — with the compiled stylesheet the
+frame links (`tool-kit.css`: the tokens, their `@theme` and every utility
+`@visvine/ui` and the kit use, built with Tailwind from the same sources as the
+app's own CSS, preflight included); its `state` is the viewer's own by default.
+**Kit 1** (`kit1.ts`, `legacy/`, `tool-kit-1.js`) is frozen: its own component
+set and stylesheet, one shared `state` value per key, so a Tool written before
+kit 2 renders exactly as it did. Both speak protocol 2 — every method it added
+is additive, and the host answers a version 1 frame as it always did. Both
+share one React and one React DOM through the import map (`react-dom` is
+vendored beside `react-dom/client`). The component catalog is generated from
+`packages/ui` (`scripts/build-tool-catalog.ts` → `lib/tools/catalog.generated.ts`,
+checked current by `tests/tools-catalog.test.ts`) beside the kit's own entries,
+and reaches the MCP SDK, the builder, the Workbench and the `tool_design` guide.
 
 ### Error card
 
@@ -1005,6 +1125,9 @@ pnpm --filter @visvine/web verify:tools:escape    # adversarial: undeclared read
                                                   # Bearer and phone-minted sessions at every Tool door
 pnpm --filter @visvine/web verify:tools:desktop   # the hostile Tool in the real Electron shell: its self-navigation refused
                                                   # before the request leaves (needs `pnpm --filter @visvine/desktop build`)
+pnpm --filter @visvine/web verify:tools:bindings  # manifest 2: a Tool bound into a room that files deals in another folder under
+                                                  # another type — install, bind_tool, the bridge v2 families, kit 2 in the
+                                                  # browser beside a kit-1 Tool, share-down binding what the room has
 ```
 
 `verify:tools:escape`'s first step asks the running app for its
@@ -1039,7 +1162,9 @@ leaving the shared dev DB as they found it. The demo seed ships no Tools.
 `lib/tools/{config,perimeter,protocol,compile,builds,hooks,service,target,bridge,
 dataRun,limits,state,requirements,registry,installs,origin,csp,frameToken,
 frameDocument,vendorBundle,sdkDocs,screenshot,changes,verdicts,draftAuthors,
-configReach,incidents}.ts`, the change bus `lib/notes/changes.ts`, runtime
+configReach,incidents,indexFacts,toolFacts,bindable,actionAllowlist,toolActions,
+toolResources,toolAi,catalog}.ts`, the pure contract in `packages/tool-protocol`
+(`protocol`, `perimeter`, `manifest`, `bindings`, `reach`, `dependencies`), the change bus `lib/notes/changes.ts`, runtime
 routes under `app/api/tools/runtime/*` (the report sink included) and
 `app/api/tools/{bridge,frame-token,changes,status,incidents}/route.ts`, REST
 routes under `app/api/tools/{registry,review}/*` and

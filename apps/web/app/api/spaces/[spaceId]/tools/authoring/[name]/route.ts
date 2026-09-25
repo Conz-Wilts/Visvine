@@ -45,7 +45,7 @@ export async function GET(
     // Null when the config doesn't parse: there is no declared reach to check,
     // and an empty checklist would read as "nothing missing".
     tool.config
-      ? toolRequirementsInSpace(ctx.principal, ctx.resolved, tool.config.perimeter)
+      ? toolRequirementsInSpace(ctx.principal, ctx.resolved, tool.config)
       : null,
     // Keyed on the RESOLVED space, which is what publish stamps on the row —
     // the URL segment may be a spelling of it that never reaches the registry.

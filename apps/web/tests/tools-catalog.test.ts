@@ -15,6 +15,7 @@ import { insertSnippet, renderCatalog, snippetImports, TOOL_CATALOG } from '@/li
 import { compileToolUi } from '@/lib/tools/compile'
 import { guideById } from '@/lib/actions/shared/guides'
 import { allActions } from '@/lib/actions/registry'
+import { generateUiCatalog } from '../scripts/build-tool-catalog'
 
 const KIT = join(__dirname, '..', 'features', 'tools', 'kit')
 
@@ -34,7 +35,7 @@ function valueExports(source: string): string[] {
 /** What a Tool author can use: every component and every hook, not constants or the provider. */
 function kitSurface(): string[] {
   const components = valueExports(readFileSync(join(KIT, 'components', 'index.ts'), 'utf8'))
-  const root = valueExports(readFileSync(join(KIT, 'index.ts'), 'utf8'))
+  const root = valueExports(readFileSync(join(KIT, 'api.ts'), 'utf8'))
   const hooks = root.filter((name) => name.startsWith('use'))
   return [...components, ...hooks].filter((name) => /^[A-Z][a-z]|^use[A-Z]/.test(name)).sort()
 }
@@ -118,4 +119,9 @@ test('with no caret, a component lands inside the root element, indented, and st
   // A file with no JSX has nowhere inside to go: it goes at the end.
   const hookOnly = insertSnippet('export const x = 1\n', null, chip)
   assert.ok(hookOnly.source.endsWith(chip.snippet))
+})
+
+test('the app-component half of the catalog is generated from packages/ui, and committed current', () => {
+  const committed = readFileSync(join(__dirname, '..', 'lib', 'tools', 'catalog.generated.ts'), 'utf8')
+  assert.equal(committed, generateUiCatalog(), 'run scripts/build-tool-catalog.ts')
 })

@@ -4,6 +4,7 @@ import { parseBody } from '@/lib/api/route'
 import {
   applyUpgrade,
   refreshRequirements,
+  setInstallBindings,
   setInstallEnabled,
   setTypeClaims,
   uninstall,
@@ -22,13 +23,20 @@ const patchSchema = z
     applyUpgrade: z.literal(true).optional(),
     /** Re-check requirements against the space as it stands now. */
     recheck: z.literal(true).optional(),
+    /** Bind slots and set settings: named ones change, the rest keep their values. */
+    bind: z
+      .object({
+        bindings: z.record(z.string(), z.string()).optional(),
+        settings: z.record(z.string(), z.unknown()).optional(),
+      })
+      .optional(),
   })
   .refine((body) => Object.values(body).filter((value) => value !== undefined).length === 1, {
-    message: 'Send exactly one of enabled, typeClaims, applyUpgrade or recheck.',
+    message: 'Send exactly one of enabled, typeClaims, applyUpgrade, recheck or bind.',
   })
 
 /**
- * The four things an admin does to an install, one per request.
+ * The five things an admin does to an install, one per request.
  *
  * One action at a time on purpose: each of these is a separate decision with its
  * own refusals (a claim conflict, a vanished upgrade offer), and a request that
@@ -66,6 +74,8 @@ export async function PATCH(
     result = await setInstallEnabled(spaceId, installId, actor, body.enabled)
   } else if (body.typeClaims) {
     result = await setTypeClaims(spaceId, installId, actor, body.typeClaims)
+  } else if (body.bind) {
+    result = await setInstallBindings(spaceId, installId, actor, body.bind)
   } else {
     result = await applyUpgrade(spaceId, installId, actor)
   }

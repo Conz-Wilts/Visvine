@@ -5,8 +5,9 @@ import { isVendorFileName, vendorFile } from '@/lib/tools/vendorBundle'
 import { logger } from '@/lib/logger'
 
 /**
- * The four vendor ESM modules the frame's import map points at: React, the JSX
- * runtime, the DOM client and `@visvine/tool-kit`.
+ * The vendor files a Tool frame loads (lib/tools/vendorBundle.ts#VENDOR_FILES):
+ * React, its JSX runtime and DOM, `@visvine/tool-kit` and its stylesheet, and
+ * the curated dependencies.
  *
  * Deliberately PUBLIC — no token. There is nothing here that a `<script>` tag
  * on any page could not already fetch from npm, and gating it would mean every
@@ -54,6 +55,7 @@ export async function GET(
   const versioned = req.nextUrl.searchParams.get('v') === built.etag
   const headers = {
     ...bundleHeaders({ immutable: versioned }),
+    ...(name.endsWith('.css') ? { 'Content-Type': 'text/css; charset=utf-8' } : {}),
     ETag: `"${built.etag}"`,
   }
   if (ifNoneMatchSatisfied(req.headers.get('if-none-match'), built.etag)) {

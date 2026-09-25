@@ -34,18 +34,13 @@ import ToolPreview, { NotBuilding, RunGate } from '../ToolPreview';
 import ComponentsPanel from './ComponentsPanel';
 import SourceEditor from './SourceEditor';
 
-const FILES = ['ui.tsx', 'data.js', 'index.md'] as const;
-type SourceFile = (typeof FILES)[number];
-const isFile = (id: string): id is SourceFile => (FILES as readonly string[]).includes(id);
+/** A file of the working copy: the three fixed ones, or a module under src/. */
+type SourceFile = string;
 
-const VIEWS = [
-  { id: 'builder', label: 'Builder' },
-  { id: 'ui.tsx', label: 'ui.tsx' },
-  { id: 'data.js', label: 'data.js' },
-  { id: 'index.md', label: 'index.md' },
-  { id: 'checks', label: 'Checks' },
-  { id: 'components', label: 'Components' },
-] as const;
+/** The files in the order they are read: the interface, its modules, the data layer, the index. */
+function filesOf(modules: Record<string, string> | undefined): SourceFile[] {
+  return ['ui.tsx', ...Object.keys(modules ?? {}).sort(), 'data.js', 'index.md'];
+}
 
 const HANDOFF_KEY = 'pane-top';
 
@@ -75,7 +70,15 @@ export default function Workbench({ name }: { name: string | null }) {
   const [attempt, setAttempt] = useState(0);
   const [runRequested, setRunRequested] = useState(false);
 
-  const views = toolName ? VIEWS : VIEWS.filter((v) => v.id === 'builder');
+  const files = useMemo(() => filesOf(view?.tool.modules), [view]);
+  const isFile = (id: string): id is SourceFile => files.includes(id);
+  const allViews = [
+    { id: 'builder', label: 'Builder' },
+    ...files.map((file) => ({ id: file, label: file })),
+    { id: 'checks', label: 'Checks' },
+    { id: 'components', label: 'Components' },
+  ];
+  const views = toolName ? allViews : allViews.filter((v) => v.id === 'builder');
   const requested = searchParams.get('view');
   const active = views.find((v) => v.id === requested)?.id ?? 'builder';
   const select = (id: string) => {
@@ -93,13 +96,14 @@ export default function Workbench({ name }: { name: string | null }) {
         setView(next);
         setLoadError(null);
         const sources: Partial<Record<SourceFile, string>> = {};
-        for (const file of FILES) sources[file] = next.tool.sources[file] ?? '';
+        const every: Record<string, string | null> = { ...next.tool.sources, ...next.tool.modules };
+        for (const file of filesOf(next.tool.modules)) sources[file] = every[file] ?? '';
         const prev = storedRef.current;
         storedRef.current = sources;
         setStored(sources);
         setDrafts((current) => {
           const merged = { ...current };
-          for (const file of FILES) {
+          for (const file of filesOf(next.tool.modules)) {
             const untouched = current[file] === undefined || current[file] === prev[file];
             if (untouched) merged[file] = sources[file];
           }
@@ -137,8 +141,8 @@ export default function Workbench({ name }: { name: string | null }) {
   );
 
   const dirtyFiles = useMemo(
-    () => FILES.filter((file) => drafts[file] !== undefined && drafts[file] !== stored[file]),
-    [drafts, stored],
+    () => files.filter((file) => drafts[file] !== undefined && drafts[file] !== stored[file]),
+    [files, drafts, stored],
   );
 
   const save = async (file: SourceFile) => {

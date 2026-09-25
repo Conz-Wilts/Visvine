@@ -88,6 +88,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     vendorBase: `${selfOrigin}/api/tools/runtime/vendor`,
     vendorVersions: versions,
     nonce,
+    kit: bundle.kit,
   })
   // Violations go to the sink on this same origin, carrying the token that
   // says which install they came from (app/api/tools/runtime/report).

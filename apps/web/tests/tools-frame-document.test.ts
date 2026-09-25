@@ -18,6 +18,7 @@ import { renderFrameDocument, renderFrameErrorDocument } from '@/lib/tools/frame
 import { EXTERNALS } from '@/lib/tools/compile'
 import { frameCsp } from '@/lib/tools/csp'
 import { VENDOR_FILES } from '@/lib/tools/vendorBundle'
+import { CURATED_DEPENDENCIES } from '@visvine/tool-protocol/dependencies'
 
 const SELF = 'https://tools.visvine.com'
 const APP = 'https://visvine.com'
@@ -48,9 +49,13 @@ test('the import map names every specifier a Tool may import, pointed at vendorB
   const imports = importMap(renderFrameDocument(BASE))
   assert.deepEqual(Object.keys(imports).sort(), [
     '@visvine/tool-kit',
+    'clsx',
+    'date-fns',
     'react',
+    'react-dom',
     'react-dom/client',
     'react/jsx-runtime',
+    'zod',
   ])
   for (const url of Object.values(imports)) {
     assert.ok(url.startsWith(`${BASE.vendorBase}/`), `${url} is under vendorBase`)
@@ -65,14 +70,14 @@ test('the import map names every specifier a Tool may import, pointed at vendorB
 test('every external the compiler allows has an import-map entry, and vice versa', () => {
   const imports = importMap(renderFrameDocument(BASE))
   // The two lists must agree exactly: an external without a map entry compiles
-  // clean and then fails to resolve in the browser (the old `react-dom` bug),
+  // clean and then fails to resolve in the browser,
   // and a map entry without an external is dead weight nobody can import.
   for (const specifier of EXTERNALS) {
     assert.ok(specifier in imports, `${specifier} is in the import map`)
   }
-  assert.deepEqual(Object.keys(imports).sort(), [...EXTERNALS].sort())
-  assert.ok(!('react-dom' in imports))
-  assert.ok(!(EXTERNALS as readonly string[]).includes('react-dom'))
+  // …and the curated dependencies, which a Tool imports once its manifest declares them.
+  assert.deepEqual(Object.keys(imports).sort(), [...EXTERNALS, ...Object.keys(CURATED_DEPENDENCIES)].sort())
+  assert.ok('react-dom' in imports)
 })
 
 test('vendor versions become ?v= cache busters, and are optional', () => {

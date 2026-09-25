@@ -1,3 +1,9 @@
+/**
+ * Kit 2's components — the app's own (@visvine/ui), and the data-bound pieces
+ * @visvine/ui has no need of (tables over rows, boards, charts, markdown).
+ * The names and props a kit-1 Tool used are kept, so porting one is a change
+ * of `sdk:` and nothing else.
+ */
 export { Banner } from './Banner';
 export type { BannerProps, BannerTone } from './Banner';
 export { Button } from './Button';
@@ -38,3 +44,21 @@ export { Markdown } from './Markdown';
 export type { MarkdownProps } from './Markdown';
 export { KanbanBoard, KanbanCard, KanbanColumn } from './Kanban';
 export type { KanbanBoardProps, KanbanCardProps, KanbanColumnProps, KanbanMove } from './Kanban';
+
+// ── the app's own components (@visvine/ui) ──
+export {
+  Alert,
+  Avatar,
+  Checkbox,
+  ConfirmDialog,
+  IconButton,
+  LoadingText,
+  Menu,
+  Modal,
+  Row,
+  SearchInput,
+  SettingsSection,
+  Skeleton,
+  Toggle,
+} from '@visvine/ui';
+export type { MenuItem } from '@visvine/ui';

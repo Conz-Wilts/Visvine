@@ -11,6 +11,7 @@ const GROUPS: ReadonlyArray<readonly [key: keyof ToolDegraded['missing'], label:
   ['connectors', 'Connectors'],
   ['types', 'Node types'],
   ['agents', 'Agents'],
+  ['bindings', 'Unbound'],
 ];
 
 /**
@@ -32,7 +33,7 @@ export default function DegradedBanner({
   isAdmin: boolean;
   className?: string;
 }) {
-  const groups = GROUPS.filter(([key]) => degraded.missing[key].length > 0);
+  const groups = GROUPS.filter(([key]) => (degraded.missing[key] ?? []).length > 0);
   if (groups.length === 0) return null;
 
   return (
@@ -46,7 +47,7 @@ export default function DegradedBanner({
       {groups.map(([key, label]) => (
         <span key={key} className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs uppercase tracking-wide text-warning">{label}</span>
-          {degraded.missing[key].map((name) => (
+          {(degraded.missing[key] ?? []).map((name) => (
             <Chip key={name} tone="solid" size="sm" color={color.warning.default}>
               {name}
             </Chip>

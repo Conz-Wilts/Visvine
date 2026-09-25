@@ -28,6 +28,7 @@ export async function POST(
     index: tool.sources['index.md'],
     ui: tool.sources['ui.tsx'],
     data: tool.sources['data.js'],
+    modules: tool.modules,
     config: tool.config,
     build: {
       ok: tool.build.ok,

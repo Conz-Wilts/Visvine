@@ -29,6 +29,7 @@
  */
 import type { Prisma, AppToolBuild } from '@prisma/client'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { composeToolIndex } from './indexFacts'
 import {
   compileToolData,
   compileToolUi,
@@ -37,9 +38,13 @@ import {
   type CompileResult,
 } from './compile'
 import {
+  MAX_TOOL_MODULES,
   TOOL_CUSTOM_RAIL_ICON,
+  TOOL_MODULE_DIR,
   TOOL_SOURCE_FILES,
+  manifestOf,
   parseToolConfig,
+  toolModuleFileOf,
   toolDataPath,
   toolFolderPath,
   toolIconPath,
@@ -74,6 +79,8 @@ export interface ToolSources {
   data: string | null
   /** `icon.md`, when the author shipped their own rail glyph. */
   icon: string | null
+  /** The module notes under `src/`, by their path relative to the folder (`src/chart.md`). */
+  modules?: Record<string, string>
   /** Where they were read from. Not part of the source hash. */
   folder?: string
 }
@@ -98,9 +105,16 @@ export interface ToolBuildInput {
 /** The read / compile / persist steps, injectable for tests. */
 export interface ToolBuildDeps {
   readSource(spaceId: string, path: string): Promise<string | null>
+  /** Every note directly under `<folder>/src/`, by its full path. Absent: a Tool has no modules. */
+  listModules?(spaceId: string, folder: string): Promise<Array<{ path: string; content: string }>>
+  /** The Tool's facts row (toolFacts.ts); absent reads the index note alone. */
+  readFacts?(spaceId: string, name: string): Promise<Record<string, unknown> | null>
   /** Where the Tool's folder is — `tools/<name>` unless the space filed it elsewhere. Absent: `tools/<name>`. */
   toolFolder?(spaceId: string, name: string): Promise<string>
-  compileUi(source: string): Promise<CompileResult>
+  compileUi(
+    source: string,
+    opts?: { modules?: Readonly<Record<string, string>>; dependencies?: readonly string[] },
+  ): Promise<CompileResult>
   compileData(source: string): Promise<CompileResult>
   loadBuild(spaceId: string, name: string): Promise<AppToolBuild | null>
   saveBuild(input: ToolBuildInput): Promise<AppToolBuild>
@@ -145,6 +159,21 @@ const liveDeps: ToolBuildDeps = {
   async toolFolder(spaceId, name) {
     const { toolFolderIn } = await import('./location')
     return toolFolderIn(spaceId, name)
+  },
+  async listModules(spaceId, folder) {
+    const { default: prisma } = await import('@/lib/prisma')
+    const prefix = `${folder}/${TOOL_MODULE_DIR}/`
+    const rows = await prisma.contextNote.findMany({
+      where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: prefix, endsWith: '.md' } },
+      select: { path: true, content: true },
+      orderBy: { path: 'asc' },
+      take: MAX_TOOL_MODULES + 8,
+    })
+    return rows.filter((row) => !row.path.slice(prefix.length).includes('/') && !row.path.endsWith('/index.md'))
+  },
+  async readFacts(spaceId, name) {
+    const { readToolFacts } = await import('./toolFacts')
+    return readToolFacts(spaceId, name)
   },
   compileUi: compileToolUi,
   compileData: compileToolData,
@@ -193,6 +222,9 @@ export function toolSourceHash(sources: ToolSources): string {
     sources.data ?? '',
     sources.icon === null ? '-' : '+',
     sources.icon ?? '',
+    ...Object.entries(sources.modules ?? {})
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .flatMap(([path, content]) => [path, content]),
   ])
 }
 
@@ -215,24 +247,30 @@ export async function readToolSources(
   deps: ToolBuildDeps = liveDeps,
 ): Promise<ToolSources> {
   const folder = deps.toolFolder ? await deps.toolFolder(spaceId, name) : toolFolderPath(name)
-  const [index, ui, data, icon] = await Promise.all([
+  const [note, ui, data, icon, facts, moduleRows] = await Promise.all([
     deps.readSource(spaceId, toolIndexPath(name, folder)),
     deps.readSource(spaceId, toolUiPath(name, folder)),
     deps.readSource(spaceId, toolDataPath(name, folder)),
     deps.readSource(spaceId, toolIconPath(name, folder)),
+    deps.readFacts ? deps.readFacts(spaceId, name) : Promise.resolve(null),
+    deps.listModules ? deps.listModules(spaceId, folder) : Promise.resolve([]),
   ])
-  return { index, ui, data, icon, folder }
+  // The index as every reader parses it: the note with the facts row rendered
+  // into its frontmatter — so the hash, the config and publish all cover both.
+  const index = note === null ? null : composeToolIndex(note, facts)
+  const modules = Object.fromEntries(moduleRows.map((row) => [row.path.slice(folder.length + 1), row.content]))
+  return { index, ui, data, icon, folder, ...(moduleRows.length ? { modules } : {}) }
 }
 
 // ── the rebuild ───────────────────────────────────────────────────────────────
 
 function diagnosticsOf(result: CompileResult, file: string): BuildDiagnostic[] {
   const messages = result.ok ? [] : result.errors
-  return messages.map((d) => ({ ...d, file }))
+  return messages.map((d) => ({ ...d, file: d.file ?? file }))
 }
 
 function warningsOf(result: CompileResult, file: string): BuildDiagnostic[] {
-  return result.warnings.map((d) => ({ ...d, file }))
+  return result.warnings.map((d) => ({ ...d, file: d.file ?? file }))
 }
 
 function missingSource(file: string, path: string): BuildDiagnostic {
@@ -289,6 +327,24 @@ export async function rebuildTool(
     else configError = parsed.error
   }
 
+  // src/ — the Tool's own modules, unwrapped and handed to the ui compile.
+  const modules: Record<string, string> = {}
+  for (const [relative, note] of Object.entries(sources.modules ?? {})) {
+    const unwrapped = unwrapSource(note)
+    const file = unwrapped ? toolModuleFileOf(relative, unwrapped.lang) : null
+    if (!unwrapped || !file) {
+      errors.push({
+        file: relative.replace(/\.md$/, '.tsx'),
+        message: `${relative} is not a module — a module is src/<name>.tsx or .ts, written through the tool service`,
+        line: null,
+        column: null,
+        text: null,
+      })
+      continue
+    }
+    modules[file] = unwrapped.code
+  }
+
   // ui.tsx — required: the runtime mounts its default export.
   let uiBundle: string | null = null
   let sizeBytes = 0
@@ -300,7 +356,10 @@ export async function rebuildTool(
     if (!unwrapped || unwrapped.lang !== ui.lang) {
       errors.push(unreadableSource(ui.authorName, toolUiPath(name, sources.folder)))
     } else {
-      const result = await deps.compileUi(unwrapped.code)
+      const result = await deps.compileUi(unwrapped.code, {
+        modules,
+        dependencies: config ? Object.keys(manifestOf(config).dependencies) : [],
+      })
       errors.push(...diagnosticsOf(result, ui.authorName))
       warnings.push(...warningsOf(result, ui.authorName))
       if (result.ok) {

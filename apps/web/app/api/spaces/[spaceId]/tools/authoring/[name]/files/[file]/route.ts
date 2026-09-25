@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { parseBody } from '@/lib/api/route'
 import { writeToolFile } from '@/lib/tools/service'
-import { TOOL_SOURCE_FILES } from '@/lib/tools/config'
+import { TOOL_MODULE_RE, TOOL_SOURCE_FILES } from '@/lib/tools/config'
+import type { ToolFileName } from '@/lib/tools/service'
 import { bad, requireToolsAccess } from '@/lib/tools/route'
 import type { WriteFileResponse } from '@/lib/tools/api'
 
@@ -24,11 +25,14 @@ export async function PUT(
   const file = decodeURIComponent(rawFile)
   const ctx = await requireToolsAccess(spaceId)
   if (ctx instanceof Response) return ctx
-  if (!(FILES as readonly string[]).includes(file)) return bad(`A tool's files are ${FILES.join(', ')}.`, 404)
+  // A module under src/ arrives encoded as one segment (`src%2Fchart.tsx`).
+  if (!(FILES as readonly string[]).includes(file) && !TOOL_MODULE_RE.test(file)) {
+    return bad(`A tool's files are ${FILES.join(', ')} and its modules, src/<name>.tsx.`, 404)
+  }
   const body = await parseBody(req, bodySchema)
   if (body instanceof NextResponse) return body
 
-  const result = await writeToolFile(ctx.principal, ctx.resolved, name, file as (typeof FILES)[number], body.content)
+  const result = await writeToolFile(ctx.principal, ctx.resolved, name, file as ToolFileName, body.content)
   if (!result.ok) return bad(result.error, result.status)
   const answer: WriteFileResponse = { build: result.build }
   return NextResponse.json(answer)

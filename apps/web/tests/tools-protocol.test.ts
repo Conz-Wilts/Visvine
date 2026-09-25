@@ -47,6 +47,17 @@ test('BRIDGE_METHODS lists every method exactly once', () => {
     'state.get': true,
     'state.set': true,
     'subject.get': true,
+    'context.links': true,
+    'records.query': true,
+    'records.get': true,
+    'records.update': true,
+    'resources.list': true,
+    'resources.get': true,
+    'resources.read': true,
+    'resources.blob': true,
+    'actions.run': true,
+    'ai.complete': true,
+    'ai.decide': true,
   }
   assert.deepEqual([...BRIDGE_METHODS].sort(), Object.keys(everyMethod).sort())
   assert.equal(new Set(BRIDGE_METHODS).size, BRIDGE_METHODS.length)
@@ -171,6 +182,10 @@ test('BRIDGE_LIMITS are the numbers the SDK documents', () => {
     maxParamsBytes: 64_000,
     callsPerMinute: 120,
     dataCallTimeoutMs: 20_000,
+    maxBlobBytes: 2_000_000,
+    maxResourceReadChars: 20_000,
+    aiMaxOutputTokens: 1_024,
+    aiMaxDecideItems: 100,
   })
   // A write that would not survive a read back is a trap for authors.
   assert.ok(BRIDGE_LIMITS.maxWriteBytes <= BRIDGE_LIMITS.maxReadBytes)

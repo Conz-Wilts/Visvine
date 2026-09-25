@@ -39,7 +39,15 @@ import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { entityKindOf } from '@/lib/notes/entities'
 import { namespaceOf } from '@/lib/notes/shared/namespaces'
-import { parseToolPerimeter, type ToolPerimeter } from './perimeter'
+import type { ToolPerimeter } from './perimeter'
+import {
+  factsFromPerimeter,
+  factsFromV1,
+  MANIFEST_FACT_KEYS,
+  parseManifestFacts,
+  perimeterOfFacts,
+  type ToolManifestFacts,
+} from '@visvine/tool-protocol/manifest'
 
 /** The context namespace every Tool lives under. */
 export const TOOLS_DIR = 'tools'
@@ -136,7 +144,7 @@ export function declaresTool(content: string | null | undefined): boolean {
 }
 
 /** What a path is inside the Tool folder `folder` — the same roles as {@link toolFileKindOfPath}. */
-export function toolFileKindIn(folder: string, path: string): 'index' | 'ui' | 'data' | 'icon' | 'other' | null {
+export function toolFileKindIn(folder: string, path: string): 'index' | 'ui' | 'data' | 'icon' | 'module' | 'other' | null {
   const raw = normalizePath(path)
   if (!raw.startsWith(`${folder}/`)) return null
   const basename = raw.slice(folder.length + 1)
@@ -144,6 +152,7 @@ export function toolFileKindIn(folder: string, path: string): 'index' | 'ui' | '
   if (basename === TOOL_SOURCE_FILES.ui.path) return 'ui'
   if (basename === TOOL_SOURCE_FILES.data.path) return 'data'
   if (basename === TOOL_SOURCE_FILES.icon.path) return 'icon'
+  if (MODULE_NOTE_RE.test(basename)) return 'module'
   return 'other'
 }
 
@@ -173,7 +182,7 @@ export function toolNameOfPath(path: string): string | null {
  * path is not under `tools/` at all — that is the "not my business" answer the
  * store hooks branch on.
  */
-export function toolFileKindOfPath(path: string): 'index' | 'ui' | 'data' | 'icon' | 'other' | null {
+export function toolFileKindOfPath(path: string): 'index' | 'ui' | 'data' | 'icon' | 'module' | 'other' | null {
   const raw = normalizePath(path)
   if (raw !== TOOLS_DIR && !raw.startsWith(`${TOOLS_DIR}/`)) return null
   const name = toolNameOfPath(raw)
@@ -205,14 +214,39 @@ export const TOOL_SOURCE_FILES = {
   icon: { path: 'icon.md', authorName: 'icon.svg', lang: 'svg' },
 } as const
 
-type ToolSourceLang = (typeof TOOL_SOURCE_FILES)[keyof typeof TOOL_SOURCE_FILES]['lang']
+type ToolSourceLang = (typeof TOOL_SOURCE_FILES)[keyof typeof TOOL_SOURCE_FILES]['lang'] | 'ts'
 
 const SOURCE_TYPE = 'tool-source'
 const SOURCE_LANGS: readonly ToolSourceLang[] = [
   TOOL_SOURCE_FILES.ui.lang,
   TOOL_SOURCE_FILES.data.lang,
   TOOL_SOURCE_FILES.icon.lang,
+  'ts',
 ]
+
+/**
+ * A Tool's own modules beside ui.tsx: `src/<name>.tsx` or `.ts`, imported as
+ * `./src/<name>` (lib/tools/compile.ts resolves them in memory). Each is the
+ * note `<folder>/src/<name>.md`, wrapped like the sources, its language in
+ * its frontmatter — so a module's name is unique whatever its extension.
+ */
+export const TOOL_MODULE_RE = /^src\/[a-z][a-z0-9-]{0,39}\.(?:tsx|ts)$/
+export const MAX_TOOL_MODULES = 24
+export const TOOL_MODULE_DIR = 'src'
+const MODULE_NOTE_RE = /^src\/([a-z][a-z0-9-]{0,39})\.md$/
+
+/** `src/chart.tsx` → `<folder>/src/chart.md`, or null for a name that is not a module's. */
+export function toolModuleNotePath(folder: string, file: string): string | null {
+  if (!TOOL_MODULE_RE.test(file)) return null
+  return `${folder}/${file.replace(/\.(?:tsx|ts)$/, '.md')}`
+}
+
+/** A module note (relative to its Tool's folder) and its language → the author's file name. */
+export function toolModuleFileOf(relative: string, lang: string): string | null {
+  const match = MODULE_NOTE_RE.exec(relative)
+  if (!match || (lang !== 'tsx' && lang !== 'ts')) return null
+  return `src/${match[1]}.${lang}`
+}
 
 /** The longest run of consecutive backticks anywhere in the code. */
 function longestBacktickRun(code: string): number {
@@ -321,7 +355,19 @@ export interface ToolConfig {
     /** At most {@link TOOL_BAND_ACTIONS_MAX} band buttons; absent for none. */
     actions?: ToolBandAction[]
   }
+  /**
+   * The five v1 reach lists every gate reads — context globs, types,
+   * connectors, agents — as the manifest's permissions amount to. May hold
+   * `$binding` references: the bridge enforces them bound (bindings.ts).
+   */
   perimeter: ToolPerimeter
+  /**
+   * The v2 manifest's facts: permissions, bindings, settings, platforms, sdk,
+   * dependencies, collections, release, license. A v1 Tool reads as v2 with no
+   * bindings. Absent on a config decoded from an older snapshot — ask
+   * {@link manifestOf}.
+   */
+  manifest?: ToolManifestFacts
   /**
    * Marketplace tags from `tags:` — at most {@link TOOL_TAGS_MAX}, each
    * matching {@link TOOL_TAG_RE}, lower-cased and de-duplicated. Snapshotted
@@ -678,8 +724,16 @@ export function parseToolConfig(fm: NoteFrontmatter, name: string): ParseToolCon
     actions = parsedActions.actions
   }
 
-  const perimeter = parseToolPerimeter(fm.perimeter)
-  if (!perimeter.ok) return { ok: false, error: perimeter.error }
+  // Reach is declared once: v2's `permissions` (with bindings, settings and
+  // the rest of the manifest's facts) or v1's `perimeter`, never both.
+  const record = fm as Record<string, unknown>
+  const v2 = MANIFEST_FACT_KEYS.some((key) => record[key] !== undefined)
+  if (v2 && record.perimeter !== undefined) {
+    return { ok: false, error: 'Declare reach once — `permissions` (manifest 2) or `perimeter` (manifest 1), not both' }
+  }
+  const facts = v2 ? parseManifestFacts(record) : factsFromV1(record.perimeter)
+  if (!facts.ok) return { ok: false, error: facts.error }
+  const perimeter = { perimeter: perimeterOfFacts(facts.value) }
 
   const tags = parseToolTags(fm.tags)
   if (!tags.ok) return tags
@@ -695,6 +749,7 @@ export function parseToolConfig(fm: NoteFrontmatter, name: string): ParseToolCon
       version: version.version,
       surfaces: { rail, types, nav, actions },
       perimeter: perimeter.perimeter,
+      manifest: facts.value,
       tags: tags.tags,
       previewUrl: preview.previewUrl,
     },
@@ -754,4 +809,9 @@ export function newToolIndexNote(input: {
     `in that block, and the bridge refuses anything it does not name.`,
   ]
   return `---\n${front.join('\n')}\n---\n\n${body.join('\n')}\n`
+}
+
+/** A config's manifest facts: its own, or — for a snapshot from before v2 — read off its perimeter. */
+export function manifestOf(config: Pick<ToolConfig, 'perimeter' | 'manifest'>): ToolManifestFacts {
+  return config.manifest ?? factsFromPerimeter(config.perimeter)
 }

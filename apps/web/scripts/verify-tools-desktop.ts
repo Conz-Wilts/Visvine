@@ -25,11 +25,13 @@ import type { ActionCaller } from '../lib/actions/types';
 import { appToolHandlers } from '../lib/actions/defs/apps';
 import { toolFolderPath, toolIndexPath } from '../lib/tools/config';
 import { listInstalls, uninstall } from '../lib/tools/installs';
-import { toolKey } from '../lib/tools/registry';
+import { publishTool as publishToolPastChecks, toolKey } from '../lib/tools/registry';
 import { readSpaceConfig, updateSpaceConfig } from '../lib/spaces/spaceConfig';
 import { toolRailKey } from '../lib/featureAccess';
 import type { SpaceFeatureConfig } from '../lib/types/space';
 import { SPACE_ID } from './seed/space';
+import { runStaticChecks } from '../lib/tools/checks/analyze';
+import { principalOf, resolveContext } from '../lib/notes/resolve';
 
 const SPACE = process.argv[2] ?? SPACE_ID;
 const TOOL = 'hostile';
@@ -114,8 +116,22 @@ async function main(): Promise<void> {
     for (const file of ['ui.tsx', 'data.js', 'index.md'] as const) {
       await appToolHandlers.writeTool(ctx, { space_id: SPACE, name: TOOL, file, content: fixture(file) });
     }
-    const version = await appToolHandlers.publishTool(ctx, { space_id: SPACE, name: TOOL });
-    await appToolHandlers.installTool(ctx, { space_id: SPACE, version_id: version.version_id });
+    // The checks refuse this Tool outright; the shell is the control under
+    // test, so it is published past them, as the escape suite does.
+    const resolved = await resolveContext({ userId: owner.id, name: owner.name ?? '', email: owner.email ?? '' }, SPACE);
+    if (resolved instanceof Response) throw new Error(`resolveContext: ${resolved.status}`);
+    const published = await publishToolPastChecks(await principalOf(resolved), resolved, TOOL, {
+      note: 'verify-tools-desktop',
+      checks: async (input) => {
+        const report = await runStaticChecks(input);
+        return {
+          compatibility: { ...report.compatibility, status: 'passed', findings: [] },
+          security: { ...report.security, status: 'passed', findings: [] },
+        };
+      },
+    });
+    if (!published.ok) throw new Error(`publish past the checks: ${published.error}`);
+    await appToolHandlers.installTool(ctx, { space_id: SPACE, version_id: published.version.id });
     const install = (await listInstalls(SPACE)).find((row) => row.key === toolKey(SPACE, TOOL));
     if (!install) throw new Error('no install');
 

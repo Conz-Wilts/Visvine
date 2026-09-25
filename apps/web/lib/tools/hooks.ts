@@ -46,8 +46,14 @@ import type { ToolAt } from './location'
 // eval-time cycle.
 const SHARED_OWNER_KEY = 'shared'
 
-/** The notes that make a Tool, by basename — what a filed Tool's folder may hold. */
-const TOOL_FILE_RE = /\/(index|ui|data|icon)\.md$/
+/** The notes that make a Tool, by basename — what a filed Tool's folder may hold, its `src/` modules included. */
+const TOOL_FILE_RE = /\/(?:index|ui|data|icon|src\/[a-z][a-z0-9-]*)\.md$/
+
+/** The folder a Tool's file sits in: its own, one up from a module under `src/`. */
+function folderOfToolFile(path: string): string {
+  const dir = path.slice(0, path.lastIndexOf('/'))
+  return dir.endsWith('/src') && /\/src\/[^/]+\.md$/.test(path) ? dir.slice(0, -'/src'.length) : dir
+}
 
 function isSharedContext(context: Context): boolean {
   return context.ownerKey === SHARED_OWNER_KEY
@@ -120,8 +126,37 @@ export async function toolNoteWritten(context: Context, path: string): Promise<v
   publishChange({ spaceId: context.spaceId, ownerKey: context.ownerKey, path, kind: 'write' })
   const at = await toolOf(context, path)
   if (!at) return
+  // Facts written straight into the index note — a seed, a script, a person in
+  // the note editor — are adopted into the row and taken out of the note; that
+  // second write lands back here and rebuilds.
+  if (at.kind === 'index' && isSharedContext(context) && (await adoptIndexFacts(context, path, at.name))) return
   await rebuild(context.spaceId, at.name)
   if (at.kind === 'index') await syncShare(context.spaceId, at.name)
+}
+
+/**
+ * Move the fact keys an index note carries into the Tool's facts row, merged
+ * over what the row holds — the note names only what it declares — and write
+ * the note back without them. True when it did, so the caller leaves the
+ * rebuild to the write it caused.
+ */
+async function adoptIndexFacts(context: Context, path: string, name: string): Promise<boolean> {
+  try {
+    const store = await import('@/lib/notes/store')
+    const { splitToolIndex } = await import('./indexFacts')
+    const content = await store.readNoteOrNull(context, path)
+    if (content === null) return false
+    const split = splitToolIndex(content)
+    if (!split.facts) return false
+    const { readToolFacts, writeToolFacts } = await import('./toolFacts')
+    const current = (await readToolFacts(context.spaceId, name)) ?? {}
+    await writeToolFacts(context.spaceId, name, { ...current, ...split.facts }, 'System')
+    await store.writeNote(context, path, split.note, { id: 'system', name: 'System', email: null }, 'maintenance', 'tools')
+    return true
+  } catch (err) {
+    logger.warn('tools.facts.adopt_failed', { err, spaceId: context.spaceId, path })
+    return false
+  }
 }
 
 /**
@@ -137,7 +172,7 @@ export async function toolNoteRenamed(context: Context, from: string, to: string
   // Where it came from is no longer there to read, so the old name is the
   // path's own (`tools/<name>/…`) or the folder's: settleRenamedFrom asks the
   // Tool's sources, wherever they now are, before it drops anything.
-  const fromName = isToolPath(from) ? toolNameOfPath(from) : TOOL_FILE_RE.test(from) ? toolNameOfFolder(from.slice(0, from.lastIndexOf('/'))) : null
+  const fromName = isToolPath(from) ? toolNameOfPath(from) : TOOL_FILE_RE.test(from) ? toolNameOfFolder(folderOfToolFile(from)) : null
   if (fromName && fromName !== toName) await settleRenamedFrom(context.spaceId, fromName)
   if (toName) await rebuild(context.spaceId, toName)
   if (fromName && fromName !== toName) await syncShare(context.spaceId, fromName)

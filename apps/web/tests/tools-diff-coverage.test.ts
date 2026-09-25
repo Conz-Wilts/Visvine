@@ -14,7 +14,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseToolConfig, type ToolConfig } from '@/lib/tools/config'
+import { manifestOf, parseToolConfig, type ToolConfig } from '@/lib/tools/config'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { DESCRIPTIVE_FIELDS, diffManifest, REVIEWED_FIELDS, type ReviewedField } from '@/lib/tools/manifestDiff'
 import { shouldAutoApprove } from '@/lib/tools/registry'
@@ -51,6 +51,43 @@ function fullest(): ToolConfig {
   return parsed.config
 }
 
+/** The fullest manifest-2 Tool the parser knows. */
+function fullestV2(): ToolConfig {
+  const raw = [
+    '---',
+    'type: tool',
+    'title: Deals',
+    'release: 1.3.0',
+    'license: MIT',
+    'sdk: ^2.0.0',
+    'platforms: [web, desktop]',
+    'dependencies: { date-fns: 3.6.0 }',
+    'surfaces:',
+    '  rail: { label: Deals, icon: kanban }',
+    'settings:',
+    '  currency: { type: string, label: Currency, enum: [NZD, USD], default: NZD }',
+    'bindings:',
+    '  deal: { kind: type, label: Deal type, suggest: deal, fields: [stage] }',
+    '  notes: { kind: folder, label: Deal notes, suggest: deals/ }',
+    '  crm: { kind: connector, label: CRM, recipe: hubspot, optional: true }',
+    'permissions:',
+    '  context: { read: ["$notes/**"], write: ["$notes/**"] }',
+    '  records: { read: [$deal], write: [{ type: $deal, fields: [stage] }] }',
+    '  resources: { read: ["resources/deals/**"] }',
+    '  connectors: [{ use: $crm, actions: [search_deals] }]',
+    '  actions: [list_events]',
+    '  ai: { complete: true }',
+    '  ui: { download: true }',
+    'collections:',
+    '  votes: { schema: { type: object }, read: all, write: own, maxRows: 500 }',
+    '---',
+    '',
+  ].join('\n')
+  const parsed = parseToolConfig(parseFrontmatter(raw), 'deals')
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
+  return parsed.config
+}
+
 /** One widening per reviewed field — each a change a reviewer must read. */
 const WIDEN: Record<ReviewedField, (c: ToolConfig) => ToolConfig> = {
   'perimeter.read': (c) => ({ ...c, perimeter: { ...c.perimeter, read: [...c.perimeter.read, '**'] } }),
@@ -65,6 +102,19 @@ const WIDEN: Record<ReviewedField, (c: ToolConfig) => ToolConfig> = {
     surfaces: { ...c.surfaces, nav: { style: 'tabs', sections: [...(c.surfaces.nav?.sections ?? []), { id: 'admin', label: 'Admin' }] } },
   }),
   'surfaces.actions': (c) => ({ ...c, surfaces: { ...c.surfaces, actions: [...(c.surfaces.actions ?? []), { id: 'export', label: 'Export' }] } }),
+  'manifest.permissions': (c) => ({
+    ...c,
+    manifest: { ...manifestOf(c), permissions: { ...manifestOf(c).permissions, ai: { complete: true, decide: true } } },
+  }),
+  'manifest.bindings': (c) => ({
+    ...c,
+    manifest: { ...manifestOf(c), bindings: { ...manifestOf(c).bindings, extra: { kind: 'folder', label: 'Extra' } } },
+  }),
+  'manifest.dependencies': (c) => ({ ...c, manifest: { ...manifestOf(c), dependencies: { ...manifestOf(c).dependencies, zod: '4.1.0' } } }),
+  'manifest.collections': (c) => ({
+    ...c,
+    manifest: { ...manifestOf(c), collections: { log: { schema: {}, read: 'all', write: 'own', maxRows: 10 } } },
+  }),
 }
 
 test('every key a manifest carries is reviewed or named descriptive', () => {
@@ -74,10 +124,11 @@ test('every key a manifest carries is reviewed or named descriptive', () => {
   const unclassified: string[] = []
   for (const [key, value] of Object.entries(config)) {
     if (descriptive.has(key)) continue
-    // A container of reviewed fields: each of its keys must be reviewed itself.
+    // A container: each of its keys is reviewed or named descriptive itself.
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       for (const inner of Object.keys(value)) {
-        if (!reviewed.has(`${key}.${inner}`)) unclassified.push(`${key}.${inner}`)
+        const path = `${key}.${inner}`
+        if (!reviewed.has(path) && !descriptive.has(path)) unclassified.push(path)
       }
       continue
     }
@@ -92,10 +143,21 @@ test('every key a manifest carries is reviewed or named descriptive', () => {
 })
 
 test('every reviewed field exists on a parsed manifest — none is reviewing nothing', () => {
-  const config = fullest() as unknown as Record<string, Record<string, unknown>>
-  for (const field of Object.keys(REVIEWED_FIELDS)) {
-    const [container, key] = field.split('.')
-    assert.ok(key in (config[container] ?? {}), `${field} is reviewed but the parser never produces it`)
+  for (const config of [fullest(), fullestV2()] as unknown as Array<Record<string, Record<string, unknown>>>) {
+    for (const field of Object.keys(REVIEWED_FIELDS)) {
+      const [container, key] = field.split('.')
+      assert.ok(key in (config[container] ?? {}), `${field} is reviewed but the parser never produces it`)
+    }
+  }
+})
+
+test('a manifest-2 Tool is walked the same way — its bindings, dependencies and collections are reviewed', () => {
+  const config = fullestV2()
+  const reviewed = new Set<string>(Object.keys(REVIEWED_FIELDS))
+  const descriptive = new Set<string>(DESCRIPTIVE_FIELDS)
+  for (const inner of Object.keys(config.manifest!)) {
+    const path = `manifest.${inner}`
+    assert.ok(reviewed.has(path) || descriptive.has(path), `${path} is neither reviewed nor descriptive`)
   }
 })
 

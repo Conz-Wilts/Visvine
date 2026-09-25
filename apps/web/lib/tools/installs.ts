@@ -43,8 +43,17 @@ import {
 } from '@/lib/featureAccess'
 import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
 import type { SpaceFeatureConfig } from '@/lib/types/space'
-import { TOOL_NAME_RE, type ToolBandAction, type ToolNav, type ToolTypeSurface } from './config'
+import { manifestOf, TOOL_NAME_RE, type ToolBandAction, type ToolNav, type ToolTypeSurface } from './config'
 import { diffPerimeter, type PerimeterDiff } from './perimeter'
+import {
+  boundTypeClaims,
+  defaultBindings,
+  planBindings,
+  planSettings,
+  type BindingValues,
+} from '@visvine/tool-protocol/bindings'
+import type { BindingSlot, SettingSpec } from '@visvine/tool-protocol/manifest'
+import { bindableSpace } from './bindable'
 import {
   decodeToolConfig,
   decodeToolPerimeter,
@@ -55,7 +64,7 @@ import {
 } from './registry'
 import { decodeListingState, listingHoldFor, runDenial, type ListingHold } from './verdicts'
 import {
-  computeRequirements,
+  boundRequirements,
   isDegraded,
   parseRequirements,
   requirementsEqual,
@@ -94,6 +103,12 @@ export interface InstallSummary {
   sharedFrom?: { id: string; name: string } | null
   /** Why it no longer runs — withdrawn, or its listing held (lib/tools/verdicts.ts). */
   stopped?: string | null
+  /** The slots the version declares, and what each is bound to here. */
+  slots: Record<string, BindingSlot>
+  bindings: BindingValues
+  /** The settings the version declares, and the values set here (unset = the default). */
+  settingSpecs: Record<string, SettingSpec>
+  settings: Record<string, unknown>
 }
 
 /**
@@ -370,6 +385,52 @@ export function featureConfigWithoutRail(config: SpaceFeatureConfig, key: string
   })
 }
 
+// ── bindings ─────────────────────────────────────────────────────────────────
+
+/** A stored binding map, string values only. */
+function bindingValuesOf(raw: unknown): BindingValues {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+}
+
+/**
+ * A version as an install of it runs: its config, its manifest, its binding
+ * values, and its type claims BOUND to them — a `$deal` claim is a claim on
+ * whichever type this install bound it to.
+ */
+function boundVersion(rawConfig: unknown, name: string, rawBindings: unknown) {
+  const config = decodeToolConfig(rawConfig, name)
+  const manifest = manifestOf(config)
+  const values = bindingValuesOf(rawBindings)
+  const claims = boundTypeClaims(config.surfaces.types, manifest, values).map((claim) => ({ ...claim, type: claim.type.toLowerCase() }))
+  return { config, manifest, values, claims }
+}
+
+/** The stored settings that are still declared: a setting a version dropped is not carried into the next write. */
+function declaredSettings(raw: unknown, manifest: ReturnType<typeof manifestOf>): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  return Object.fromEntries(Object.entries(raw).filter(([key]) => key in manifest.settings))
+}
+
+/**
+ * The stored claims with each `$type` claim moved to the type it is bound to
+ * now — a Deal page follows the slot to Opportunity when the slot is re-bound.
+ */
+function followRebound(
+  stored: TypeClaims,
+  before: readonly ToolTypeSurface[],
+  after: readonly ToolTypeSurface[],
+): TypeClaims {
+  const out: TypeClaims = { ...stored }
+  before.forEach((claim, i) => {
+    const next = after[i]
+    if (!next || next.type === claim.type || !(claim.type in stored)) return
+    out[next.type] = stored[claim.type]
+    delete out[claim.type]
+  })
+  return out
+}
+
 // ── row → DTO ────────────────────────────────────────────────────────────────
 
 const INSTALL_SELECT = {
@@ -380,6 +441,8 @@ const INSTALL_SELECT = {
   enabled: true,
   requirements: true,
   typeClaims: true,
+  bindings: true,
+  settings: true,
   pendingVersionId: true,
   sharedFromSpaceId: true,
   sharedFromSpace: { select: { id: true, name: true } },
@@ -408,6 +471,8 @@ interface InstallRow {
   enabled: boolean
   requirements: unknown
   typeClaims: unknown
+  bindings: unknown
+  settings: unknown
   pendingVersionId: string | null
   sharedFromSpaceId: string | null
   sharedFromSpace: { id: string; name: string } | null
@@ -455,7 +520,7 @@ function stoppedOf(row: InstallRow, holds: HoldLookup): string | null {
 type PendingLookup = ReadonlyMap<string, { id: string; version: number; perimeter: unknown }>
 
 function toSummary(row: InstallRow, pending: PendingLookup, holds: HoldLookup): InstallSummary {
-  const config = decodeToolConfig(row.version.config, row.version.name)
+  const { config, manifest, values } = boundVersion(row.version.config, row.version.name, row.bindings)
   const requirements = parseRequirements(row.requirements)
   const upgrade = row.pendingVersionId ? pending.get(row.pendingVersionId) : undefined
   return {
@@ -473,6 +538,10 @@ function toSummary(row: InstallRow, pending: PendingLookup, holds: HoldLookup): 
     types: config.surfaces.types,
     sharedFrom: row.sharedFromSpace,
     stopped: stoppedOf(row, holds),
+    slots: manifest.bindings,
+    bindings: values,
+    settingSpecs: manifest.settings,
+    settings: declaredSettings(row.settings, manifest),
     pendingVersion: upgrade
       ? {
           id: upgrade.id,
@@ -627,6 +696,10 @@ export async function installVersion(
     typeClaims?: Record<string, TypeClaimChoice>
     /** Where its rail row goes: on the rail (the default) or tucked into More. */
     placement?: 'rail' | 'more'
+    /** What each binding slot is bound to here. The source space's own default to their suggestions. */
+    bindings?: BindingValues
+    /** The install's settings; unset ones take their defaults. */
+    settings?: Record<string, unknown>
   } = {},
 ): Promise<InstallResult> {
   const refusal = await refuseNonAdmin(spaceId, actor, 'install a tool')
@@ -661,10 +734,23 @@ export async function installVersion(
   })
   if (!allowed.ok) return { ok: false, status: 403, error: allowed.error }
 
-  const config = decodeToolConfig(version.config, version.name)
   const facts = await spaceFactsForActor(spaceId, actor.userId)
   if (!facts) return { ok: false, status: 403, error: 'You are not a member of this space.' }
-  const requirements = computeRequirements(decodeToolPerimeter(version.perimeter), facts.available)
+  // Each slot bound to a thing of this space's own: what the admin chose, else
+  // the Tool's suggestion when this space has it — so in the space that wrote
+  // it, nobody binds anything. What is left runs degraded until bound.
+  const declared = manifestOf(decodeToolConfig(version.config, version.name))
+  let bindingValues: BindingValues = {}
+  if (Object.keys(declared.bindings).length > 0 || Object.keys(opts.bindings ?? {}).length > 0) {
+    const planned = planBindings(declared, opts.bindings ?? {}, await bindableSpace(spaceId))
+    if (!planned.ok) return { ok: false, status: 400, error: planned.error }
+    bindingValues = planned.value
+  }
+  const settings = planSettings(declared, opts.settings ?? {})
+  if (!settings.ok) return { ok: false, status: 400, error: settings.error }
+  const bound = boundVersion(version.config, version.name, bindingValues)
+  const config = bound.config
+  const requirements = boundRequirements(bound.manifest, bound.values, facts.available)
 
   const requestedSlug = opts.slug?.trim().toLowerCase() || version.name
   if (!TOOL_NAME_RE.test(requestedSlug)) {
@@ -688,7 +774,7 @@ export async function installVersion(
         throw new InstallRefusal(409, 'This tool is already installed in this space.')
       }
       const slug = uniqueSlug(requestedSlug, new Set(siblings.map((row) => row.slug)))
-      const resolution = resolveTypeClaims(requestedClaims(config.surfaces.types, opts.typeClaims), {
+      const resolution = resolveTypeClaims(requestedClaims(bound.claims, opts.typeClaims), {
         customTypes: facts.customTypes,
         pageOwners: pageOwnersOf(siblings),
       })
@@ -702,6 +788,8 @@ export async function installVersion(
           installedBy: actor.userId,
           requirements: requirements as unknown as object,
           typeClaims: resolution.claims as unknown as object,
+          bindings: bindingValues as unknown as object,
+          settings: settings.value as unknown as object,
         },
         select: INSTALL_SELECT,
       })
@@ -896,8 +984,8 @@ export async function setTypeClaims(
   const install = await loadInstall(spaceId, installId)
   if (!install) return { ok: false, status: 404, error: 'No such install.' }
 
-  const config = decodeToolConfig(install.version.config, install.version.name)
-  const declared = new Set(config.surfaces.types.map((claim) => claim.type))
+  const bound = boundVersion(install.version.config, install.version.name, install.bindings)
+  const declared = new Set(bound.claims.map((claim) => claim.type))
   const unknown = Object.keys(claims)
     .map((type) => type.trim().toLowerCase())
     .filter((type) => !declared.has(type))
@@ -922,7 +1010,7 @@ export async function setTypeClaims(
       })
       const resolution = resolveTypeClaims(
         // Only the types the admin named change; the rest keep the mode they have.
-        requestedClaims(config.surfaces.types, { ...parseTypeClaims(install.typeClaims), ...claims }),
+        requestedClaims(bound.claims, { ...parseTypeClaims(install.typeClaims), ...claims }),
         { customTypes: facts.customTypes, pageOwners: pageOwnersOf(siblings) },
       )
       if (resolution.conflicts.length > 0) {
@@ -951,6 +1039,80 @@ export async function setTypeClaims(
     detail: `type claims changed on ${install.slug}: ${Object.entries(claims)
       .map(([type, mode]) => `${type}=${mode}`)
       .join(', ')}`,
+  })
+  const [summary] = await summarise([out.updated])
+  return { ok: true, install: summary }
+}
+
+/**
+ * Bind an install's slots and set its settings — install data, an admin's,
+ * audited. A slot or setting named replaces its value, an empty one clears an
+ * optional slot, and the rest keep theirs. The reach is re-bound, so its
+ * requirements are re-checked and a `$type` page follows its slot.
+ */
+export async function setInstallBindings(
+  spaceId: string,
+  installId: string,
+  actor: { userId: string; email: string },
+  patch: { bindings?: BindingValues; settings?: Record<string, unknown> },
+): Promise<InstallUpdateResult> {
+  const refusal = await refuseNonAdmin(spaceId, actor, 'bind a tool')
+  if (refusal) return refusal
+  const install = await loadInstall(spaceId, installId)
+  if (!install) return { ok: false, status: 404, error: 'No such install.' }
+
+  const current = boundVersion(install.version.config, install.version.name, install.bindings)
+  const planned = planBindings(current.manifest, patch.bindings ?? {}, await bindableSpace(spaceId), current.values)
+  if (!planned.ok) return { ok: false, status: 400, error: planned.error }
+  const settings = planSettings(current.manifest, { ...declaredSettings(install.settings, current.manifest), ...(patch.settings ?? {}) })
+  if (!settings.ok) return { ok: false, status: 400, error: settings.error }
+  const facts = await spaceFactsForActor(spaceId, actor.userId)
+  if (!facts) return { ok: false, status: 403, error: 'You are not a member of this space.' }
+
+  const bound = boundVersion(install.version.config, install.version.name, planned.value)
+  const requirements = boundRequirements(bound.manifest, bound.values, facts.available)
+  const out: { updated?: InstallRow } = {}
+  try {
+    await updateSpaceConfig(spaceId, async (stored, tx) => {
+      void stored // bindings, settings and claims all live on the install row
+      const siblings = await tx.appToolInstall.findMany({
+        where: { spaceId, id: { not: installId } },
+        select: { slug: true, typeClaims: true },
+      })
+      const moved = followRebound(parseTypeClaims(install.typeClaims), current.claims, bound.claims)
+      // A shared-down install claims nothing (lib/tools/share.ts), so only a room's own is resolved again.
+      const typeClaims = install.sharedFromSpaceId
+        ? moved
+        : resolveTypeClaims(requestedClaims(bound.claims, moved), {
+            customTypes: facts.customTypes,
+            pageOwners: pageOwnersOf(siblings),
+          }).claims
+      out.updated = await tx.appToolInstall.update({
+        where: { id: installId },
+        data: {
+          bindings: planned.value as unknown as object,
+          settings: settings.value as unknown as object,
+          requirements: requirements as unknown as object,
+          typeClaims: typeClaims as unknown as object,
+        },
+        select: INSTALL_SELECT,
+      })
+      return {}
+    })
+  } catch (err) {
+    return refusalOf(err)
+  }
+  if (!out.updated) return { ok: false, status: 500, error: 'The binding change did not complete.' }
+  const changed = [
+    ...Object.keys(patch.bindings ?? {}).map((slot) => `${slot}=${planned.value[slot] ?? '(unbound)'}`),
+    ...Object.keys(patch.settings ?? {}).map((key) => `setting ${key}`),
+  ]
+  void logAudit(spaceId, {
+    userId: actor.userId,
+    name: actor.email,
+    action: 'tool',
+    path: `tools/${install.slug}`,
+    detail: `bound ${install.slug}${changed.length ? `: ${changed.join(', ')}` : ''}`,
   })
   const [summary] = await summarise([out.updated])
   return { ok: true, install: summary }
@@ -1022,10 +1184,18 @@ export async function applyUpgrade(
     return { ok: false, status: 409, error: 'That upgrade is no longer available.' }
   }
 
-  const config = decodeToolConfig(next.config, next.name)
+  // The install's bindings carry over while they still fit; a slot the new
+  // version adds takes its suggestion when this space has it, or runs
+  // degraded until an admin binds it.
+  const nextManifest = manifestOf(decodeToolConfig(next.config, next.name))
+  const bindingValues = Object.keys(nextManifest.bindings).length
+    ? defaultBindings(nextManifest, await bindableSpace(spaceId), bindingValuesOf(install.bindings))
+    : {}
+  const bound = boundVersion(next.config, next.name, bindingValues)
+  const config = bound.config
   const facts = await spaceFactsForActor(spaceId, actor.userId)
   if (!facts) return { ok: false, status: 403, error: 'You are not a member of this space.' }
-  const requirements = computeRequirements(decodeToolPerimeter(next.perimeter), facts.available)
+  const requirements = boundRequirements(bound.manifest, bound.values, facts.available)
 
   const out: { updated?: InstallRow } = {}
   try {
@@ -1035,7 +1205,7 @@ export async function applyUpgrade(
         select: { slug: true, typeClaims: true },
       })
       const resolution = resolveTypeClaims(
-        requestedClaims(config.surfaces.types, parseTypeClaims(install.typeClaims)),
+        requestedClaims(bound.claims, parseTypeClaims(install.typeClaims)),
         { customTypes: facts.customTypes, pageOwners: pageOwnersOf(siblings) },
       )
       out.updated = await tx.appToolInstall.update({
@@ -1044,6 +1214,7 @@ export async function applyUpgrade(
           versionId: next.id,
           requirements: requirements as unknown as object,
           typeClaims: resolution.claims as unknown as object,
+          bindings: bindingValues as unknown as object,
           pendingVersionId: null,
         },
         select: INSTALL_SELECT,
@@ -1104,7 +1275,8 @@ export async function refreshRequirements(
   })
   const fresh: InstallRow[] = []
   for (const row of rows) {
-    const requirements = computeRequirements(decodeToolPerimeter(row.version.perimeter), facts.available)
+    const bound = boundVersion(row.version.config, row.version.name, row.bindings)
+    const requirements = boundRequirements(bound.manifest, bound.values, facts.available)
     if (requirementsEqual(requirements, parseRequirements(row.requirements))) {
       fresh.push(row)
       continue
