@@ -69,8 +69,8 @@ const AGENT_QUESTIONS: readonly IntakeQuestion[] = [
     skipWhen: 'The request said "every Monday" AND the timezone is already known from the space or an earlier answer.',
   },
   {
-    ask: 'What may it read and use — which folders, and which of the space\'s connectors?',
-    decides: 'The brief\'s `connectors:` (its entire external reach) and `tools:`, and what the instructions tell it to read first.',
+    ask: 'What may it read and use — which folders, and which of the space\'s connectors? And is it yours alone, or for anyone who adds themselves?',
+    decides: 'The brief\'s `connectors:` (its entire external reach) and `tools:`, and what the instructions tell it to read first. A run acts as one person, on that person\'s accounts: if others will run it, whatever is theirs — the Slack channel it posts in, the inbox, the recipient — is an `inputs` entry the brief names as {{key}}, never a value written into the brief.',
     skipWhen: 'The space has no connectors, or the job is plainly context-only — then say what you assumed instead of asking. Declare a connector the job needs even when the space lacks it: create_agent reports it in `needs` with how to add it, which is better than a brief that quietly cannot do the job.',
   },
   {

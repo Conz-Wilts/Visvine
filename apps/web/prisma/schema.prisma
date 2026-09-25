@@ -476,6 +476,8 @@ model AgentState {
   shareAs             String     @default("use") @map("share_as") // use | run-in
   dryRun              Boolean    @default(false) @map("dry_run")
   maxTurns            Int        @default(40) @map("max_turns")
+  inputs              Json? // AgentInput[] (lib/agents/shared/inputs.ts): the values each person supplies for themselves
+  inputValues         Json?      @map("input_values") // the agent's own identity's values for those inputs
   configuredAt        DateTime?  @map("configured_at")
   updatedBy           String?    @map("updated_by")
   createdAt           DateTime   @default(now()) @map("created_at")
@@ -501,6 +503,7 @@ model AgentSubscription {
   at        String? // "HH:MM", their own time on a daily or weekly agent
   timezone  String?
   model     String? // their own model; null rides the agent's
+  inputs    Json? // their own values for the agent's inputs (lib/agents/shared/inputs.ts)
   createdAt DateTime @default(now()) @map("created_at")
   space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 

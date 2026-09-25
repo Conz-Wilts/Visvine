@@ -293,26 +293,22 @@ Deleting a Visvine account deletes that person's **personal** connections. Space
 
 ## Agents and connectors
 
-An agent is two notes: `agents/<name>.md` (the brief, member-writable) and `agents/live/<name>.md`
-(activation, **admin-only**). See `docs/agents.md`.
+An agent is its note (`agents/<name>/index.md`, the brief) and its record (`agent_state`, how it
+runs). See `docs/agents.md`.
 
-A scheduled run has no person of its own, so one is named for it:
-
-```yaml
-# agents/live/<name>.md — admin-only
-active: true
-schedule: daily
-at: "07:00"
-runs_as: <user id>        # optional
-```
+A scheduled run has no person of its own, so one is named for it: the record's `runs_as`, set with
+`configure_agent` or on the agent's Config screen.
 
 - **Default** — the brief's author. An agent reaches exactly what its author reaches, no more.
 - **`runs_as`** — an admin repoints it at somebody else, typically a service account.
 
-`runs_as` lives on the **live** note deliberately. Writing your own agent must not be a way to make
-it act as somebody with more access than you; activation is an admin's approval, and so is this.
-Repointing it does not reschedule the agent — whose credentials a run spends is not a scheduling
-fact.
+Naming someone else is admin-only (`configureAgent`). Writing your own agent must not be a way to
+make it act as somebody with more access than you. Repointing it does not reschedule the agent —
+whose credentials a run spends is not a scheduling fact.
+
+Every other person the agent runs for (the record's runs-for) gets their own run, on their own
+connections, with their own **inputs** — the channel, the inbox — rather than the author's
+(`docs/agents.md`, *One run is one person*). A run never mixes two people's accounts.
 
 **Two consequences worth stating plainly:**
 

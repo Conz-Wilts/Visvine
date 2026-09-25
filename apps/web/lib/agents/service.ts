@@ -6,7 +6,7 @@
 import prisma from '@/lib/prisma'
 import { defaultModelOf, noModelReason, runnableModels, spaceModels, type SpaceModel } from './spaceModels'
 import { connectorReadiness, listConnectors, type ConnectorReadiness } from '@/lib/connectors/service'
-import { agentNeeds, hardNeeds, type AgentNeeds } from './shared/needs'
+import { agentNeeds, hardNeeds, signInsOwed, type AgentNeeds } from './shared/needs'
 import { needsCatalog } from './needs'
 import { logAudit } from '@/lib/notes/audit'
 import { readVisible, visibleVault, writeDenial, writeDenialFull, writeGated } from '@/lib/notes/contextService'
@@ -32,9 +32,10 @@ import {
   type AgentSchedule,
   type AgentTriggers,
 } from './config'
-import { agentConfigOf, composeAgent, findAgentActivation, findAgentBrief, findOwnAgentBrief, type ComposedAgent } from './briefs'
-import { modelFor, parseRunsFor, runsForDenial, runsForFrontmatter, withRunsFor } from './shared/runsFor'
-import { applyConfigPatch, configOf, defaultAgentConfig, type AgentConfig, type AgentConfigPatch } from './shared/agentConfig'
+import { agentConfigOf, composeAgent, findAgentActivation, findAgentBrief, findOwnAgentBrief, readAgent, type ComposedAgent } from './briefs'
+import { modelFor, parseRunsFor, runsForDenial, withRunsFor } from './shared/runsFor'
+import { inputValuesDenial, inputValuesFor, missingInputs, type AgentInput, type InputValues } from './shared/inputs'
+import { applyConfigPatch, configOf, defaultAgentConfig, runsForColumns, type AgentConfig, type AgentConfigPatch } from './shared/agentConfig'
 import { listAgentConfigChanges, storeAgentConfig, withAgentRecord, type AgentConfigChangeRow } from './record'
 import { adoptNoteConfig, deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
@@ -70,6 +71,8 @@ export interface AgentSummary {
   model: string | null
   connectors: string[]
   tools: string[]
+  /** The values each person supplies for themselves (shared/inputs.ts). */
+  inputs: AgentInput[]
   /** The brief's parse error, or null. A broken brief still lists. */
   invalid: string | null
   authorUserId: string | null
@@ -274,6 +277,7 @@ async function summarise(
     description: brief?.description ?? (typeof fm.description === 'string' ? fm.description : null),
     model: brief?.model ?? (typeof fm.model === 'string' ? fm.model : null),
     connectors: brief?.connectors ?? [],
+    inputs: brief?.inputs ?? [],
     tools: brief?.tools ?? [],
     invalid: parsedBrief.ok ? null : parsedBrief.error,
     authorUserId: briefRow?.createdBy ?? null,
@@ -372,6 +376,8 @@ export interface AgentSubscriber {
   at: string | null
   timezone: string | null
   model: string | null
+  /** Their own values for the agent's inputs. */
+  inputs: InputValues
 }
 
 /**
@@ -431,8 +437,8 @@ export async function describeAgent(
     models: await spaceModels(context.spaceId),
   })
 
-  const forRows = runsForFrontmatter(composed.brief.ok ? composed.brief.brief.runsFor : []) ?? []
-  const subRows = forRows.map((r) => ({ userId: r.user, at: r.at ?? null, timezone: r.timezone ?? null, model: r.model ?? null }))
+  const runsFor = composed.brief.ok ? composed.brief.brief.runsFor : []
+  const subRows = runsForColumns(runsFor).map((r, i) => ({ ...r, inputs: runsFor[i].inputs }))
   const runAsUserId = summary.runAsUserId
   const userIds = [...new Set([...subRows.map((s) => s.userId), ...(runAsUserId ? [runAsUserId] : [])])]
   const users = userIds.length
@@ -447,10 +453,12 @@ export async function describeAgent(
 
   const memory = await readVisible(p, context, memoryPath(agentFolderOfBrief(summary.path, name)))
   const held = await listConnectors(p, context)
+  const viewerInputs = composed.brief.ok ? inputValuesFor(composed.brief.brief, p.userId, runAsUserId) : {}
   const needs = agentNeeds({
     declared: viewer,
     instructions: composed.body,
     modelProblem: summary.modelProblem,
+    missingInputs: composed.brief.ok ? missingInputs(composed.brief.brief.inputs, viewerInputs) : [],
     catalog: needsCatalog(),
     spaceConnectors: held.map((c) => ({ name: c.name, recipe: c.recipe })),
   })
@@ -488,6 +496,8 @@ export interface RunsForSettings {
   timezone?: string | null
   /** A model of the space's, or a `local/*` runtime. */
   model?: string | null
+  /** Their own values for the agent's inputs. */
+  inputs?: Record<string, string> | null
 }
 
 /**
@@ -505,7 +515,9 @@ export async function subscribeToAgent(p: ContextPrincipal, context: Context, na
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return { ok: false, status: 404, error: 'No such agent.' }
 
-  const parsed = parseRunsFor([{ user: p.userId, at: settings.at ?? undefined, timezone: settings.timezone ?? undefined, model: settings.model ?? undefined }])
+  const parsed = parseRunsFor([
+    { user: p.userId, at: settings.at ?? undefined, timezone: settings.timezone ?? undefined, model: settings.model ?? undefined, inputs: settings.inputs ?? undefined },
+  ])
   if (!parsed.ok) return { ok: false, status: 400, error: parsed.error }
   const [{ userId: _userId, ...entry }] = parsed.entries
   if (entry.model && !localRuntimeOf(entry.model)) {
@@ -523,7 +535,23 @@ export async function subscribeToAgent(p: ContextPrincipal, context: Context, na
   })
   if (!saved.ok) return saved
   await logAudit(context.spaceId, { userId: p.userId, name: p.name, action: 'agent', path: row.path, detail: 'runs for them' })
-  return { ok: true, warning: null }
+  return { ok: true, warning: await runsForWarning(p, context, name) }
+}
+
+/**
+ * What stands between a person on the list and a run that works for them —
+ * inputs left empty, accounts not connected — said once, when they put their
+ * name down, rather than by a failed run at 3am. Null when nothing does.
+ */
+async function runsForWarning(p: ContextPrincipal, context: Context, name: string): Promise<string | null> {
+  const agent = await readAgent(context.spaceId, name)
+  if (!agent?.brief.ok) return null
+  const brief = agent.brief.brief
+  const entry = brief.runsFor.find((e) => e.userId === p.userId)
+  const unset = missingInputs(brief.inputs, entry?.inputs ?? {})
+  const owed = brief.connectors.length ? signInsOwed(await connectorReadiness(p, context, brief.connectors, p.userId)) : null
+  const parts = [unset.length ? `Set ${unset.map((i) => i.label).join(', ')}` : null, owed].filter(Boolean)
+  return parts.length ? `Not ready to run for you yet: ${parts.join('; ')}.` : null
 }
 
 /** Take a name off the list: your own, or anyone's if you can edit the brief. */
@@ -604,6 +632,9 @@ export async function configureAgent(
   return withAgentRecord(context.spaceId, name, () => configureLocked(p, context, name, patch))
 }
 
+const sameValues = (a: InputValues, b: InputValues) =>
+  Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([k, v]) => b[k] === v)
+
 async function configureLocked(
   p: ContextPrincipal,
   context: Context,
@@ -615,6 +646,12 @@ async function configureLocked(
   const admin = principalIsSuperAdmin(p)
   if (patch.runsAs !== undefined && patch.runsAs !== null && patch.runsAs !== p.userId && patch.runsAs !== current.config.runsAs && !admin) {
     return { ok: false, status: 403, error: 'Only a space admin can make an agent run as someone else. Leave it as its author, or name yourself.' }
+  }
+  // The agent's own values are where the identity it runs as posts and reads;
+  // when that identity is someone else's, only an admin points them.
+  const ownId = current.config.runsAs
+  if (patch.inputValues !== undefined && ownId && ownId !== p.userId && !admin && !sameValues(patch.inputValues, current.config.inputValues)) {
+    return { ok: false, status: 403, error: 'This agent runs as someone else — only a space admin can change its own inputs.' }
   }
   if (patch.runsFor !== undefined) {
     const denied = runsForDenial(current.config.runsFor, patch.runsFor, { userId: p.userId, isAdmin: admin })
@@ -801,6 +838,8 @@ export async function createAgentBrief(
     connectors?: string[]
     tools?: string[]
     agents?: string[]
+    inputs?: AgentInput[]
+    inputValues?: InputValues
     body: string
   },
 ): Promise<CreateAgentResult> {
@@ -829,6 +868,8 @@ export async function createAgentBrief(
     ...(input.connectors ? { connectors: input.connectors } : {}),
     ...(input.tools ? { tools: input.tools as AgentConfig['tools'] } : {}),
     ...(input.agents ? { agents: input.agents } : {}),
+    ...(input.inputs ? { inputs: input.inputs } : {}),
+    ...(input.inputValues ? { inputValues: input.inputValues } : {}),
   })
   if (!config.ok) return { ok: false, status: 400, error: `That agent is not valid: ${config.error}` }
   const parsed = composeAgent(content, config.config).brief
@@ -847,4 +888,28 @@ export async function createAgentBrief(
     detail: `brief created: ${parsed.brief.title}`,
   })
   return { ok: true, name, path, brief: parsed.brief }
+}
+
+/**
+ * The values a manual run by `userId` would use, with what they gave at Run
+ * laid over their own — or the inputs still empty, which the Run door asks for
+ * rather than starting a run that can only fail.
+ */
+export async function manualRunInputs(
+  spaceId: string,
+  name: string,
+  userId: string,
+  given: Record<string, string>,
+): Promise<{ ok: true } | { ok: false; error: string; missing: AgentInput[] }> {
+  const [agent, state] = await Promise.all([
+    readAgent(spaceId, name),
+    prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } }, select: { runAsUserId: true } }),
+  ])
+  if (!agent?.brief.ok) return { ok: true }
+  const brief = agent.brief.brief
+  const values = { ...inputValuesFor(brief, userId, state?.runAsUserId ?? null), ...given }
+  const bad = inputValuesDenial(brief.inputs, values)
+  if (bad) return { ok: false, error: bad, missing: [] }
+  const missing = missingInputs(brief.inputs, values)
+  return missing.length ? { ok: false, error: `Set ${missing.map((i) => i.label).join(', ')} to run it.`, missing } : { ok: true }
 }

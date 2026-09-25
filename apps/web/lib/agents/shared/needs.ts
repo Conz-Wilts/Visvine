@@ -52,6 +52,8 @@ export interface NeedsInput {
    * service, and worded as the reading it is.
    */
   implied?: readonly string[]
+  /** The inputs the brief declares that this person has left empty (shared/inputs.ts). */
+  missingInputs?: readonly { key: string; label: string }[]
 }
 
 type NeedStatus =
@@ -63,6 +65,7 @@ type NeedStatus =
   | 'broken'
   | 'undeclared'
   | 'not_in_space'
+  | 'input'
 
 export interface AgentNeed {
   /** What is needed: `model`, or a connector name, or a catalogue id. */
@@ -278,6 +281,16 @@ export function agentNeeds(input: NeedsInput): AgentNeeds {
     if (need) needs.push(need)
   }
   needs.push(...undeclaredNeeds(input))
+  for (const i of input.missingInputs ?? []) {
+    needs.push({
+      need: i.key,
+      status: 'input',
+      why: `${i.label} is not set`,
+      fix: `Set ${i.label} (the brief's {{${i.key}}}) on the agent's page, under Share → Runs for, or pass it as run_agent's \`inputs\`.`,
+      href: null,
+      who: 'member',
+    })
+  }
 
   const plan = needs.map((n, i) => `${i + 1}. ${n.fix}${n.who === 'admin' ? ' (a space admin)' : ''}`)
   plan.push(
@@ -295,4 +308,24 @@ export function agentNeeds(input: NeedsInput): AgentNeeds {
  */
 export function hardNeeds(needs: AgentNeeds): AgentNeed[] {
   return needs.needs.filter((n) => n.status === 'missing' || n.status === 'disabled' || n.status === 'invalid')
+}
+
+/**
+ * Why a run for this person would stop at its first connector call, before a
+ * model is paid to find out — or null. A sign-in owed (their own account, or
+ * the space's, not yet connected or broken) is the runner's to skip on; a
+ * missing or broken NOTE is the brief's fault and fails the run as before.
+ */
+export function signInsOwed(
+  declared: readonly { connector: string; status: RehearsalConnector['status']; connectUrl?: string | null; accountService?: string | null }[],
+): string | null {
+  const owed = declared.filter((c) => c.status === 'needs_connection' || c.status === 'broken' || (c.status === 'missing' && c.accountService))
+  if (owed.length === 0) return null
+  return owed
+    .map((c) =>
+      c.status === 'missing'
+        ? `${c.accountService ?? c.connector} is not connected — connect it in Settings → Accounts: ${ACCOUNTS}`
+        : `${c.connector} is ${c.status === 'broken' ? 'disconnected' : 'not signed in'}${c.connectUrl ? ` — sign in: ${c.connectUrl}` : ''}`,
+    )
+    .join('; ')
 }

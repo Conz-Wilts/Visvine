@@ -8,6 +8,7 @@
 import { z } from 'zod'
 import { AGENT_TOOL_EXTRAS } from './config'
 import type { AgentConfigPatch } from './shared/agentConfig'
+import { MAX_AGENT_INPUTS, MAX_INPUT_VALUE } from './shared/inputs'
 
 export const agentConfigInput = z
   .object({
@@ -27,6 +28,25 @@ export const agentConfigInput = z
     dry_run: z.boolean().optional().describe('Record writes in the transcript instead of applying them.'),
     max_turns: z.number().int().min(1).max(200).optional(),
     runs_as: z.string().trim().min(1).max(80).nullable().optional().describe('Whose identity scheduled runs act as; null for its author. Only an admin names someone else.'),
+    inputs: z
+      .array(
+        z.object({
+          key: z.string().trim().min(1).max(40).describe('lowercase_with_underscores; the brief names it as {{key}}.'),
+          label: z.string().trim().max(60).optional(),
+          kind: z.enum(['text', 'select']).optional(),
+          options: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
+          required: z.boolean().optional(),
+        }),
+      )
+      .max(MAX_AGENT_INPUTS)
+      .optional()
+      .describe(
+        "Values that are each person's own — the Slack channel to post in, the address to send to. Each person the agent runs for sets theirs; the brief names one as {{key}}. Never write a person's channel or address into a brief others run.",
+      ),
+    input_values: z
+      .record(z.string(), z.string().max(MAX_INPUT_VALUE))
+      .optional()
+      .describe('The values for `inputs` when it runs as its own identity (its author, or `runs_as`).'),
   })
   .strict()
 
@@ -44,5 +64,17 @@ export function configPatchOf(input: AgentConfigInput): AgentConfigPatch {
   if (input.dry_run !== undefined) patch.dryRun = input.dry_run
   if (input.max_turns !== undefined) patch.maxTurns = input.max_turns
   if (input.runs_as !== undefined) patch.runsAs = input.runs_as
+  if (input.inputs !== undefined) {
+    patch.inputs = input.inputs.map((i) => ({
+      key: i.key,
+      label: i.label?.trim() || i.key,
+      kind: i.kind ?? 'text',
+      options: i.options ?? [],
+      required: i.required ?? true,
+    }))
+  }
+  if (input.input_values !== undefined) {
+    patch.inputValues = Object.fromEntries(Object.entries(input.input_values).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v))
+  }
   return patch
 }

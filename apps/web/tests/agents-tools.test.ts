@@ -37,6 +37,8 @@ function brief(over: Partial<AgentBrief> = {}): AgentBrief {
     share: 'none',
     shareAs: 'use',
     runsFor: [],
+    inputs: [],
+    inputValues: {},
     dryRun: false,
     maxTurns: 8,
     body: 'do the thing',

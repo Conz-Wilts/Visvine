@@ -326,6 +326,8 @@ export async function claimManualRun(
      * agent need not be switched on. Never set from inside a run.
      */
     allowInactive?: boolean
+    /** Input values the person gave for this one run (shared/inputs.ts). */
+    inputs?: Record<string, string>
   } = {},
 ): Promise<RunNowResult & { dispatch?: Promise<DispatchResult> }> {
   const row = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } })
@@ -350,7 +352,8 @@ export async function claimManualRun(
   const events = await claimEvents(spaceId, name, runId)
   const next = await nextClockOccurrence(spaceId, name, now)
   await prisma.agentState.updateMany({ where: { id: row.id, currentRunId: runId }, data: { nextRunAt: next } })
-  const input: RunInput | null = opts.chain ? { events: runInputOf(events)?.events ?? [], chain: opts.chain } : runInputOf(events)
+  const base: RunInput | null = opts.chain ? { events: runInputOf(events)?.events ?? [], chain: opts.chain } : runInputOf(events)
+  const input: RunInput | null = opts.inputs && Object.keys(opts.inputs).length ? { events: [], ...base, inputs: opts.inputs } : base
   // A manual run acts as WHOEVER PRESSED RUN, not as the brief's author — the
   // gate (canTriggerRun) already limits that to people who can edit the brief,
   // and it means a `mode: user` connector spends the presser's own linked

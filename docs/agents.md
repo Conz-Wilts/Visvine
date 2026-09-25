@@ -312,7 +312,7 @@ in `lib/agents/tools.ts`; side effects go through an injectable `AgentToolDeps` 
 | `page_snapshot {}`, `page_act {target, text?}` | whenever the space has a machine | the open page as a numbered table of its controls plus visible text, and one action on a row of it (`lib/vm/page.ts`, `shared/pageTable.ts`). Replaces hand-written CDP scripts for reading and clicking. A target is an index the snapshot gave — never a selector — and carries that snapshot's guard, so a page that moved presses nothing and hands back the current table. Password fields are never rows. A dry run reads and presses nothing |
 | `browse_task {goal, inputs?}` | a machine AND a judge | a whole goal on the open page in one call: the platform's judge picks operation + row per step (`lib/agents/browseTask.ts`, `docs/jev.md` § The browser), ~1 s a step, no turn of the space's model. Types only values from `inputs`. Ends `done` (a claim the model must check against the returned page), `blocked`, `needs_input`, `unsure`, `stalled`, `budget` or `no_judge` — every non-done ending hands the table back for `page_act`. Refused on a dry run |
 | `decide {items[], questions[]}` | whenever there is a judge | the agent's own yes/no, choice and scale questions put to the judge for up to 240 items at once — triage and routing without a turn per item. Numbers back, nothing else: no write, grant or gate reads them. Metered per space (`takeSpaceJudgeAllowance`) |
-| `run_agent {name}` | always | starts another agent of the space now via `claimManualRun` and returns its run id without waiting. `agents:` in the brief lists the ones it has in mind, it is not a fence: never itself, target must be active and idle (a chained run skips the one-run-per-space check — the parent holds that slot) and runs as ITS OWN author. Chains carry `input.chain = {parent, depth}`; a run at depth ≥ 5 may not chain further |
+| `run_agent {name}` | always | starts another agent of the space now via `claimManualRun` and returns its run id without waiting. `agents:` in the brief lists the ones it has in mind, it is not a fence: never itself, target must be active and idle (a chained run skips the one-run-per-space check — the parent holds that slot) and runs as the calling run's principal — as the parent brief's author only when it starts a parent's shared `use` agent from a room. Chains carry `input.chain = {parent, depth}`; a run at depth ≥ 5 may not chain further |
 | `create_node {type, name, description?, tags?, url?}` | `tools: [directory]` | `createEntity` (the same path as `POST /api/directory/entities` and MCP `add_context`): a person / space / resource / event node plus its context note, created by the author with the same `agent` / `agent:<name>` stamp as `write_context` (so it is held to Freeze-for-AI and never wakes this agent); duplicates are refused with the existing id |
 | `link_nodes {from, to, type?, note?}` | `tools: [directory]` | `upsertLink` (origin `manual`, `createdBy` author) between two node ids of the space, default relationship `related` |
 
@@ -478,6 +478,7 @@ deadline, UTC) was already correct and was left untouched.
       at: "07:30"
       timezone: Pacific/Auckland
       model: local/claude
+      inputs: { slack_channel: D0456 }
   ```
 
   Each fire runs as the author, then once per person under their own principal, on their own
@@ -489,6 +490,24 @@ deadline, UTC) was already correct and was left untouched.
   remove anyone and add or change only themselves, an admin anyone; a member who can only READ the
   brief adds themselves through `POST …/agents/<name>/subscribers`, and the platform writes that
   one entry.
+- **One run is one person, and what is theirs is an input.** A run acts as ONE principal and
+  spends that person's accounts — a `mode: user` connector, a Settings → Accounts connection —
+  never mixing in another's; a team-owned account is a `mode: space` connector an admin connects
+  once. What differs between the people it runs for beyond whose account — the channel it posts
+  in, the inbox, the recipient — is an **input** (`lib/agents/shared/inputs.ts`, pure): the
+  record declares `inputs` (`{ key, label, kind: text | select, options, required }`, on
+  `agent_state.inputs`), the agent's own identity holds `input_values`, and each runs-for entry
+  holds its own `inputs` (`agent_subscriptions.inputs`). The brief names one as `{{key}}`; the
+  runner substitutes the run's values and hands them over as a system message
+  (`inputValuesFor`, `applyInputs`, `inputsMessage`). A person's values are theirs to change
+  (`runsForDenial` compares them); the agent's own are its writers', an admin's when it runs as
+  someone else. Before a model is paid, a run whose person has a required input empty or a
+  declared connector not signed in (`needs.ts#signInsOwed`) fails `config` with the fix — not
+  counted against the agent when the run was for someone else on the list. Putting your name
+  down answers with the same `warning`; Run asks for any value the presser lacks (the run
+  route's 422 `needsInputs`, `run_agent`'s `inputs`), for that one run (`RunInput.inputs`). A chat
+  uses the chatting person's values. Declared on Config's **Inputs** row by label, or with
+  `create_agent` / `configure_agent`.
 - **The roster is the Directory's Agents table** — `/directory?view=table&type=agent`: the
   shared `DirectoryTable`, one row per agent, its columns the record and its live state —
   Status, On, Schedule, Next run, Last run, Model, Connectors, Tools, Runs for, Tags (Failures

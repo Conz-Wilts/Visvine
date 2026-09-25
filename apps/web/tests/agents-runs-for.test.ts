@@ -6,7 +6,7 @@ import { applyConfigPatch, defaultAgentConfig, effectiveFrontmatter } from '../l
 import { parseAgentBrief, type AgentSchedule } from '../lib/agents/config'
 import { parseFrontmatter, splitFrontmatter } from '../lib/notes/shared/markdown'
 
-const entry = (userId: string, over: Partial<RunsForEntry> = {}): RunsForEntry => ({ userId, at: null, timezone: null, model: null, ...over })
+const entry = (userId: string, over: Partial<RunsForEntry> = {}): RunsForEntry => ({ userId, at: null, timezone: null, model: null, inputs: {}, ...over })
 const daily: AgentSchedule = { kind: 'daily', hour: 7, minute: 0 }
 const utc = (iso: string) => new Date(`${iso}Z`)
 
@@ -45,7 +45,7 @@ describe('runsForDenial', () => {
 describe('the brief', () => {
   const note = '---\ntype: agent\ntitle: Digest\n---\n\nSummarise.\n'
   it('carries one person in and out of the record without touching the rest', () => {
-    const withMe = applyConfigPatch(defaultAgentConfig(), { runsFor: withRunsFor([], 'me', { at: { hour: 8, minute: 5 }, timezone: null, model: null }) })
+    const withMe = applyConfigPatch(defaultAgentConfig(), { runsFor: withRunsFor([], 'me', { at: { hour: 8, minute: 5 }, timezone: null, model: null, inputs: {} }) })
     assert.ok(withMe.ok)
     if (!withMe.ok) return
     const parsed = parseAgentBrief(effectiveFrontmatter(parseFrontmatter(note), withMe.config), splitFrontmatter(note).body)
@@ -53,7 +53,7 @@ describe('the brief', () => {
     assert.deepEqual(parsed.brief.runsFor, [entry('me', { at: { hour: 8, minute: 5 } })])
     assert.equal(parsed.brief.title, 'Digest')
     assert.deepEqual(withRunsFor(withMe.config.runsFor, 'me', null), [])
-    assert.deepEqual(withRunsFor([entry('a'), entry('b')], 'a', { at: null, timezone: null, model: 'x/y' }).map((e) => e.userId), ['a', 'b'])
+    assert.deepEqual(withRunsFor([entry('a'), entry('b')], 'a', { at: null, timezone: null, model: 'x/y', inputs: {} }).map((e) => e.userId), ['a', 'b'])
   })
   it('gives a person their own model, everyone else the brief’s', () => {
     const brief = { model: 'openai/gpt', runsFor: [entry('ana', { model: 'local/claude' }), entry('bo')] }

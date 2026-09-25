@@ -452,7 +452,7 @@ test('an older brief\'s run keys fold into a config, and strip out of the note',
   if (r.ok) {
     assert.equal(r.config.model, 'gemini/x')
     assert.deepEqual(r.config.connectors, ['hubspot'])
-    assert.deepEqual(r.config.runsFor, [{ userId: 'u1', at: { hour: 7, minute: 30 }, timezone: null, model: null }])
+    assert.deepEqual(r.config.runsFor, [{ userId: 'u1', at: { hour: 7, minute: 30 }, timezone: null, model: null, inputs: {} }])
     assert.equal(r.config.active, true)
   }
   assert.deepEqual(Object.keys(stripRunKeys(fm)).sort(), ['title', 'type'])

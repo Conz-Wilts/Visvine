@@ -25,6 +25,7 @@ import {
   type AgentTriggers,
 } from '../config'
 import { runsForFrontmatter, type RunsForEntry } from './runsFor'
+import { inputsFrontmatter, parseAgentInputs, parseInputValues, type AgentInput, type InputValues } from './inputs'
 
 /** Every frontmatter key the row owns. A brief note carries none of them. */
 const RUN_KEYS = [
@@ -38,6 +39,8 @@ const RUN_KEYS = [
   'dry_run',
   'max_turns',
   'for',
+  'inputs',
+  'input_values',
   'runs_as',
   'active',
   'schedule',
@@ -61,6 +64,8 @@ export interface AgentConfig {
   dryRun: boolean
   maxTurns: number
   runsFor: RunsForEntry[]
+  inputs: AgentInput[]
+  inputValues: InputValues
   active: boolean
   schedule: AgentSchedule | null
   on: AgentTriggers | null
@@ -98,6 +103,8 @@ export function configOf(brief: AgentBrief, activation: AgentActivation): AgentC
     dryRun: brief.dryRun,
     maxTurns: brief.maxTurns,
     runsFor: brief.runsFor,
+    inputs: brief.inputs,
+    inputValues: brief.inputValues,
     active: activation.active,
     schedule: activation.schedule,
     on: activation.on,
@@ -135,6 +142,9 @@ export function configFrontmatter(c: AgentConfig): NoteFrontmatter {
   fm.max_turns = c.maxTurns
   const forBlock = runsForFrontmatter(c.runsFor)
   if (forBlock) fm.for = forBlock
+  const inputsBlock = inputsFrontmatter(c.inputs)
+  if (inputsBlock) fm.inputs = inputsBlock
+  if (Object.keys(c.inputValues).length) fm.input_values = { ...c.inputValues }
   if (c.runsAs) fm.runs_as = c.runsAs
   Object.assign(fm, activationFrontmatter({ active: c.active, schedule: c.schedule, on: c.on, debounceMs: c.debounceMs, timezone: c.timezone }))
   return fm
@@ -196,6 +206,8 @@ export interface AgentConfigColumns {
   active: boolean
   triggersJson: unknown
   debounceMs: number
+  inputs: unknown
+  inputValues: unknown
 }
 
 /** The `agent_subscriptions` columns one runs-for entry is stored in. */
@@ -204,6 +216,7 @@ export interface RunsForColumns {
   at: string | null
   timezone: string | null
   model: string | null
+  inputs: unknown
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -226,6 +239,8 @@ export function configColumns(c: AgentConfig): AgentConfigColumns {
     active: c.active,
     triggersJson: c.on,
     debounceMs: c.debounceMs,
+    inputs: c.inputs.length ? c.inputs : null,
+    inputValues: Object.keys(c.inputValues).length ? c.inputValues : null,
   }
 }
 
@@ -235,6 +250,7 @@ export function runsForColumns(entries: RunsForEntry[]): RunsForColumns[] {
     at: e.at ? `${pad(e.at.hour)}:${pad(e.at.minute)}` : null,
     timezone: e.timezone,
     model: e.model,
+    inputs: Object.keys(e.inputs).length ? e.inputs : null,
   }))
 }
 
@@ -262,8 +278,17 @@ export function configFromColumns(row: AgentConfigColumns, subs: RunsForColumns[
     maxTurns: row.maxTurns,
     runsFor: subs.map((s) => {
       const m = s.at ? /^(\d{1,2}):(\d{2})$/.exec(s.at) : null
-      return { userId: s.userId, at: m ? { hour: Number(m[1]), minute: Number(m[2]) } : null, timezone: s.timezone, model: s.model }
+      const inputs = parseInputValues(s.inputs)
+      return {
+        userId: s.userId,
+        at: m ? { hour: Number(m[1]), minute: Number(m[2]) } : null,
+        timezone: s.timezone,
+        model: s.model,
+        inputs: inputs.ok ? inputs.value : {},
+      }
     }),
+    inputs: storedInputs(row.inputs),
+    inputValues: storedValues(row.inputValues),
     active: row.active,
     schedule: (row.schedule as AgentSchedule | null) ?? null,
     on,
@@ -271,6 +296,16 @@ export function configFromColumns(row: AgentConfigColumns, subs: RunsForColumns[
     timezone: row.timezone,
     runsAs: row.runsAs,
   }
+}
+
+const storedInputs = (raw: unknown): AgentInput[] => {
+  const r = parseAgentInputs(raw)
+  return r.ok ? r.value : []
+}
+
+const storedValues = (raw: unknown): InputValues => {
+  const r = parseInputValues(raw)
+  return r.ok ? r.value : {}
 }
 
 /** JSON with object keys in one order — a JSONB column hands keys back in its own. */

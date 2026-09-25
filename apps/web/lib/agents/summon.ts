@@ -39,6 +39,8 @@ export async function summonAgent(input: {
   text: string
   /** Start a run now when possible (default true). False is the old "read on its next run". */
   run?: boolean
+  /** Input values for the run it starts (shared/inputs.ts). */
+  inputs?: Record<string, string>
 }): Promise<SummonResult> {
   const { spaceId, name, principal } = input
   const body = clean(input.text, MAX_BODY)
@@ -62,7 +64,7 @@ export async function summonAgent(input: {
   }
   // A person said something to it: attended, as them, whether or not the agent
   // is switched on for unattended runs.
-  const claimed = await claimManualRun(spaceId, name, principal.userId, new Date(), { allowInactive: true })
+  const claimed = await claimManualRun(spaceId, name, principal.userId, new Date(), { allowInactive: true, inputs: input.inputs })
   if (!claimed.ok) {
     return { ok: true, eventId: delivered.eventId, runId: null, dispatch: null, waiting: claimed.code === 'busy' ? 'running' : 'claimed' }
   }

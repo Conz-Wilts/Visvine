@@ -8,6 +8,7 @@
  *       at: "07:30"
  *       timezone: Pacific/Auckland
  *       model: local/claude
+ *       inputs: { slack_channel: D0456 }
  *
  * An entry is a PRINCIPAL: each fire runs once more under that person's
  * standing, so a `mode: user` connector spends their account. That is why an
@@ -16,6 +17,7 @@
  * (`runsForDenial`, asked by service.ts#configureAgent beside `runs_as`).
  */
 import { MAX_FANOUT_SUBSCRIBERS } from '../limits'
+import { parseInputValues, type InputValues } from './inputs'
 
 export interface RunsForEntry {
   userId: string
@@ -25,6 +27,8 @@ export interface RunsForEntry {
   timezone: string | null
   /** The model their runs use, as written; null rides the brief's. */
   model: string | null
+  /** Their own values for the agent's inputs (shared/inputs.ts). */
+  inputs: InputValues
 }
 
 const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/
@@ -61,7 +65,9 @@ export function parseRunsFor(raw: unknown): { ok: true; entries: RunsForEntry[] 
       if (!validTimeZone(timezone)) return { ok: false, error: `"${timezone}" is not a time zone` }
     }
     const model = typeof row.model === 'string' && row.model.trim() ? row.model.trim() : null
-    entries.push({ userId, at, timezone, model })
+    const inputs = parseInputValues(row.inputs, `the inputs for ${userId}`)
+    if (!inputs.ok) return inputs
+    entries.push({ userId, at, timezone, model, inputs: inputs.value })
   }
   return { ok: true, entries }
 }
@@ -69,13 +75,14 @@ export function parseRunsFor(raw: unknown): { ok: true; entries: RunsForEntry[] 
 const pad = (n: number) => String(n).padStart(2, '0')
 
 /** The block as frontmatter writes it; undefined when nobody is listed. */
-export function runsForFrontmatter(entries: RunsForEntry[]): Record<string, string>[] | undefined {
+export function runsForFrontmatter(entries: RunsForEntry[]): Record<string, unknown>[] | undefined {
   if (entries.length === 0) return undefined
   return entries.map((e) => ({
     user: e.userId,
     ...(e.at ? { at: `${pad(e.at.hour)}:${pad(e.at.minute)}` } : {}),
     ...(e.timezone ? { timezone: e.timezone } : {}),
     ...(e.model ? { model: e.model } : {}),
+    ...(Object.keys(e.inputs).length ? { inputs: { ...e.inputs } } : {}),
   }))
 }
 
@@ -88,8 +95,11 @@ export function withRunsFor(entries: RunsForEntry[], userId: string, entry: Omit
   return index < 0 ? [...rest, next] : [...entries.slice(0, index), next, ...entries.slice(index + 1)]
 }
 
+const sameValues = (a: InputValues, b: InputValues) =>
+  Object.keys(a).length === Object.keys(b).length && Object.entries(a).every(([k, v]) => b[k] === v)
+
 const same = (a: RunsForEntry, b: RunsForEntry) =>
-  a.at?.hour === b.at?.hour && a.at?.minute === b.at?.minute && a.timezone === b.timezone && a.model === b.model
+  a.at?.hour === b.at?.hour && a.at?.minute === b.at?.minute && a.timezone === b.timezone && a.model === b.model && sameValues(a.inputs, b.inputs)
 
 /**
  * Why `writer` may not turn `before` into `after`, or null. Removing anyone is

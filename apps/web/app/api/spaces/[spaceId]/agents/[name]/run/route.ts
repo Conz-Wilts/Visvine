@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { bad, requireAgentsAccess } from '@/lib/agents/route'
-import { canTriggerRun } from '@/lib/agents/service'
+import { canTriggerRun, manualRunInputs } from '@/lib/agents/service'
 import { claimManualRun } from '@/lib/agents/schedule'
 import { dispatchMode, dispatchWithin } from '@/lib/agents/dispatch'
 
 // In `inline` dispatch (dev) the run happens inside this request.
 // Segment config must be a literal Next can read statically: MAX_RUN_MS (25 min) + 60s.
 export const maxDuration = 1560
+
+const Body = z.object({ inputs: z.record(z.string(), z.string().max(500)).optional() })
 
 /**
  * "Run now" — anyone who can edit the brief (author, admin, or a member whose
@@ -25,7 +28,7 @@ export const maxDuration = 1560
  * run endpoint's own request. A run still going answers `running: true`; the
  * UI has been polling the runs list since it sent this.
  */
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ spaceId: string; name: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ spaceId: string; name: string }> }) {
   const { spaceId, name: raw } = await params
   const name = decodeURIComponent(raw)
   const ctx = await requireAgentsAccess(spaceId)
@@ -33,7 +36,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ sp
   const { principal } = ctx
   if (!(await canTriggerRun(principal, spaceId, name))) return bad('Only someone who can edit this agent can run it.', 403)
 
-  const claimed = await claimManualRun(spaceId, name, principal.userId, new Date(), { allowInactive: true })
+  const body = Body.safeParse((await req.json().catch(() => null)) ?? {})
+  if (!body.success) return bad('Bad inputs.', 400)
+  const given = body.data.inputs ?? {}
+  // A run acts as whoever pressed Run, so it takes THEIR values; one they have
+  // not set is asked for here rather than discovered by a run that fails.
+  const inputs = await manualRunInputs(spaceId, name, principal.userId, given)
+  if (!inputs.ok) return NextResponse.json({ error: inputs.error, needsInputs: inputs.missing }, { status: 422 })
+
+  const claimed = await claimManualRun(spaceId, name, principal.userId, new Date(), { allowInactive: true, inputs: given })
   if (!claimed.ok) return bad(claimed.message, claimed.code === 'unknown' ? 404 : 409)
 
   const result = claimed.dispatch ? await dispatchWithin(claimed.dispatch) : null

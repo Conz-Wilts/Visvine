@@ -180,7 +180,7 @@ export async function seedAgents(): Promise<{ agents: number; runs: number }> {
     timezone: SPACE_TIMEZONE,
     on: { context: ['dealflow/**', 'spaces/**'], webhook: null },
     debounceMs: 120_000,
-    runsFor: [{ userId: MEMBER_USER, at: { hour: 7, minute: 30 }, timezone: null, model: null }],
+    runsFor: [{ userId: MEMBER_USER, at: { hour: 7, minute: 30 }, timezone: null, model: null, inputs: {} }],
   })
   await configureSeedAgent(DRAFTER, {
     tools: ['directory'],

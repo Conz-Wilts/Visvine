@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { PlayIcon } from '@/features/shared/icons';
-import { Alert, Skeleton, Toggle } from '@visvine/ui';
+import { Alert, Button, Skeleton, Toggle } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson } from '@/lib/fetchJson';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
@@ -80,6 +80,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [activating, setActivating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [asking, setAsking] = useState<Record<string, string> | null>(null);
   // A run on the member's own plan, in flight on this machine — keyed by the
   // press that started it, so each Run is its own pane.
   const [localRun, setLocalRun] = useState<number | null>(null);
@@ -205,13 +206,23 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     }
   };
 
-  const runNow = async () => {
+  // The inputs a run by the viewer would have no value for: pressing Run asks
+  // for them first, since the run acts as whoever pressed it.
+  const unsetKeys = new Set(agent.readiness.needs.needs.filter((n) => n.status === 'input').map((n) => n.need));
+  const unsetInputs = agent.config.inputs.filter((i) => unsetKeys.has(i.key));
+
+  const runNow = async (given?: Record<string, string>) => {
     if (!spaceId) return;
     if (localRuntime) {
       setNotice(null);
       setLocalRun(Date.now());
       return;
     }
+    if (!given && unsetInputs.length > 0) {
+      setAsking({});
+      return;
+    }
+    setAsking(null);
     setBusy(true);
     setNotice(null);
     // The run row exists before the executor starts, so the first reload puts
@@ -228,7 +239,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         error: string | null;
       }>(
         `/api/spaces/${spaceId}/agents/${encodeURIComponent(name)}/run`,
-        { method: 'POST' },
+        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ inputs: given ?? {} }) },
       );
       selectRun(res.runId);
       if (res.error) setNotice(res.error);
@@ -266,7 +277,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
             />
           )}
           {canManage && (
-            <button type="button" className={iconButton} disabled={!runnable || busy} onClick={runNow} aria-label="Run" title="Run">
+            <button type="button" className={iconButton} disabled={!runnable || busy} onClick={() => void runNow()} aria-label="Run" title="Run">
               <PlayIcon className="h-4 w-4" />
             </button>
           )}
@@ -283,6 +294,51 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
             </p>
           )}
         </div>
+        {asking && (
+          <form
+            className="flex flex-wrap items-center gap-2 pl-[18px]"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void runNow(asking);
+            }}
+          >
+            {unsetInputs.map((input) =>
+              input.kind === 'select' ? (
+                <select
+                  key={input.key}
+                  aria-label={input.label}
+                  required
+                  className="h-8 rounded-lg border border-line bg-surface px-2 text-[13px] text-fg"
+                  value={asking[input.key] ?? ''}
+                  onChange={(e) => setAsking({ ...asking, [input.key]: e.target.value })}
+                >
+                  <option value="">{input.label}</option>
+                  {input.options.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  key={input.key}
+                  aria-label={input.label}
+                  placeholder={input.label}
+                  required
+                  className="h-8 min-w-0 rounded-lg border border-line bg-surface px-2 text-[13px] text-fg"
+                  value={asking[input.key] ?? ''}
+                  onChange={(e) => setAsking({ ...asking, [input.key]: e.target.value })}
+                />
+              ),
+            )}
+            <Button type="submit" size="sm" disabled={busy}>
+              Run
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setAsking(null)}>
+              Cancel
+            </Button>
+          </form>
+        )}
         {blocker && <p className="pl-[18px] text-[13px] text-warning">{blocker.text}</p>}
         <div className="pl-[18px] empty:hidden">
           <AgentNeeds needs={needs} isAdmin={isAdmin} onEditSettings={() => go('config')} />
@@ -387,6 +443,8 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               canManage={canManage}
               models={models}
               daily={agent.activation.schedule?.kind === 'daily' || agent.activation.schedule?.kind === 'weekly'}
+              inputs={agent.config.inputs}
+              ownValues={agent.config.inputValues}
               onChanged={() => void reload()}
             />
           }

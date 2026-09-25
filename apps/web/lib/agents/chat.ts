@@ -64,6 +64,7 @@ import { memoryForPrompt, memoryPath } from './shared/memory'
 import { agentChatPreamble } from './shared/prompt'
 import { agentFolderOfBrief, agentHomeFolder } from './shared/folder'
 import { agentTools } from './tools'
+import { applyInputs, inputsMessage, inputValuesFor } from './shared/inputs'
 
 /** A person sends a message every few seconds at most; a loop does not. */
 const SEND_LIMIT = { capacity: 6, refillPerSec: 0.2 }
@@ -231,7 +232,7 @@ export async function sendChatMessage(
 
   // Budget before a token is spent: the agent's cap and the key's.
   const now = new Date()
-  const state = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name: agentName } }, select: { budgetMonthlyCents: true } })
+  const state = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name: agentName } }, select: { budgetMonthlyCents: true, runAsUserId: true } })
   const [spent, keySpent] = await Promise.all([
     ledgerSpendForAgent(spaceId, agentName, now),
     resolved.keyBudgetCents === null ? Promise.resolve(null) : ledgerSpendForMonth(spaceId, ref.provider.id, now),
@@ -309,6 +310,7 @@ export async function sendChatMessage(
       : Promise.resolve(undefined),
   ])
   const memoryText = memoryForPrompt(memoryNote)
+  const chatInputs = inputValuesFor(brief, p.userId, state?.runAsUserId ?? null)
   const tools = chatToolFilter(
     agentTools({
       principal: p,
@@ -335,7 +337,13 @@ export async function sendChatMessage(
   let turns = 0
   try {
     const result = await runChatTurn({
-      system: `${agentChatPreamble(agentName, folder)}\n\n---\n\n${brief.body}`,
+      // The person chatting is who the tools run as, so the values are theirs.
+      system: [
+        `${agentChatPreamble(agentName, folder)}\n\n---\n\n${applyInputs(brief.body, brief.inputs, chatInputs)}`,
+        inputsMessage(brief.inputs, chatInputs, p.name || null),
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
       memoryMessage: memoryText ? `Your memory (${memoryPath(folder)}), to read:\n\n${memoryText}` : null,
       history: historyMessages(history.reverse().map((r) => ({ role: r.role as ChatRole, text: r.text, status: r.status as ChatStatus }))),
       userTurn: chatUserTurn({ now: nowIso(startedAt, tz), personName: p.name, text }),

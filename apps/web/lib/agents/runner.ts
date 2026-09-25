@@ -20,7 +20,7 @@
  */
 import prisma from '@/lib/prisma'
 import { ModelError, type AgentMessage, type ChatConfig, type ChatUsage } from '@/lib/notes/ai'
-import { connectorReachFor } from '@/lib/connectors/service'
+import { connectorReachFor, connectorReadiness } from '@/lib/connectors/service'
 import { readVisible, writeGated } from '@/lib/notes/contextService'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { runToolLoop, type ChatFn } from '@/lib/notes/toolLoop'
@@ -39,6 +39,8 @@ import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
 import { dropRunsFor } from './service'
 import { modelFor } from './shared/runsFor'
+import { applyInputs, inputsMessage, inputValuesFor, missingInputs } from './shared/inputs'
+import { signInsOwed } from './shared/needs'
 import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, meterModelUsage, recordRunInput, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
 import { memoryForPrompt, memoryPath, setLastRun } from './shared/memory'
 import { agentPreamble } from './shared/prompt'
@@ -266,6 +268,22 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       return fail('author_gone', "The brief's author can no longer read the brief.", { deactivate: { reason: 'author_gone', detail: null } })
     }
 
+    // 2b. What is this person's own, and can they spend it? Their inputs (the
+    // channel, the recipient — shared/inputs.ts) and the connectors the brief
+    // declares, judged for THEM, before a model is paid to find out. A run for
+    // someone else on the list that cannot start is theirs to fix, not the
+    // agent's failure; one for the agent's own identity still counts.
+    const forOther = Boolean(run.runAsUserId && run.runAsUserId !== state.runAsUserId)
+    const inputValues = { ...inputValuesFor(brief, run.runAsUserId, state.runAsUserId), ...(runInput?.inputs ?? {}) }
+    const unset = missingInputs(brief.inputs, inputValues)
+    if (unset.length) {
+      return fail('config', `Not set for ${principal.name || 'this person'}: ${unset.map((i) => i.label).join(', ')}. Set it on the agent's page, under Share → Runs for.`, {
+        countsAsFailure: !forOther,
+      })
+    }
+    const owed = brief.connectors.length ? signInsOwed(await connectorReadiness(principal, context, brief.connectors, runAsUserId)) : null
+    if (owed) return fail('config', `Not connected for ${principal.name || 'this person'}: ${owed}.`, { countsAsFailure: !forOther })
+
     // 3. The model, on the space's key.
     const resolved = await resolveAgentChatConfig(spaceId, modelFor(brief, run.runAsUserId))
     if (!resolved.ok) {
@@ -319,7 +337,8 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
 
     // 5. The loop.
     const tz = await effectiveTimezone(spaceId, null)
-    const system = `${agentPreamble(name, folder)}\n\n---\n\n${brief.body}`
+    const system = `${agentPreamble(name, folder)}\n\n---\n\n${applyInputs(brief.body, brief.inputs, inputValues)}`
+    const inputsNote = inputsMessage(brief.inputs, inputValues, principal.name || null)
     const user =
       `It is ${nowIso(now, tz)}. This is a ${run.trigger} run of the agent "${brief.title || name}".` +
       (run.trigger === 'manual'
@@ -400,6 +419,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const seed: AgentMessage[] = [
       { role: 'system', content: system },
       ...(memoryMessage ? [{ role: 'system' as const, content: memoryMessage }] : []),
+      ...(inputsNote ? [{ role: 'system' as const, content: inputsNote }] : []),
       { role: 'user', content: user },
       ...(skillsPrompt ? [{ role: 'system' as const, content: skillsPrompt }] : []),
       ...(triggerMessage ? [{ role: 'user' as const, content: triggerMessage }] : []),

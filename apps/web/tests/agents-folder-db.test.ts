@@ -208,7 +208,7 @@ test('how it runs is the record: whoever can edit the brief turns it on, runs_as
     assert.ok((await configureAgent(member, CONTEXT, 'digest', { runsAs: AUTHOR })).ok)
     assert.ok((await configureAgent(principal(ADMIN, true), CONTEXT, 'digest', { runsAs: ADMIN })).ok, 'an admin may repoint it')
     // And only a person adds themselves to who it runs for.
-    const forOther = await configureAgent(member, CONTEXT, 'digest', { runsFor: [{ userId: ADMIN, at: null, timezone: null, model: null }] })
+    const forOther = await configureAgent(member, CONTEXT, 'digest', { runsFor: [{ userId: ADMIN, at: null, timezone: null, model: null, inputs: {} }] })
     assert.equal(forOther.ok, false)
 
     const on = await configureAgent(member, CONTEXT, 'digest', { active: true, schedule: { kind: 'hourly' }, timezone: 'UTC' })

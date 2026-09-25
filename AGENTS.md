@@ -552,7 +552,13 @@ has.
   (`dropRunsFor`). Capped by `MAX_FANOUT_SUBSCRIBERS`.
   A manual run acts as whoever pressed Run. Event payloads ride only the first
   run. `connectorReadiness` surfaces per-person readiness before a 3am run
-  discovers it.
+  discovers it. **One run is one person's accounts, and what is theirs is an
+  input**: the record declares `inputs`, the agent's own identity holds
+  `input_values`, each runs-for entry its own; the brief names one as
+  `{{key}}` (`lib/agents/shared/inputs.ts`, pure). A run for a person with a
+  required input empty or a declared connector not signed in fails `config`
+  before a model is paid (`needs.ts#signInsOwed`), uncounted when it was for
+  someone else; Run and `run_agent` ask for the presser's missing values.
 - **A brief says what it still needs.** `create_agent` and `rehearse_agent`
   answer with `needs` and `plan` (`lib/agents/shared/needs.ts`, pure;
   `lib/agents/needs.ts` gathers inputs): no model in the space, a declared

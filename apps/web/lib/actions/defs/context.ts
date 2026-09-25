@@ -85,7 +85,7 @@ import { createEventRecord, eventAuthorFor, updateEventRecord } from '@/lib/even
 import { coverUrlFromResource } from '@/lib/events/cover'
 import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
-import { activateAgent, canTriggerRun, configureAgent, createAgentBrief, describeAgent, listAgents, modelAdviceFor, switchOffAgent } from '@/lib/agents/service'
+import { activateAgent, canTriggerRun, configureAgent, createAgentBrief, describeAgent, listAgents, manualRunInputs, modelAdviceFor, switchOffAgent } from '@/lib/agents/service'
 import { agentConfigInput, configPatchOf } from '@/lib/agents/configInput'
 import { defaultModelOf, noModelReason, spaceModels } from '@/lib/agents/spaceModels'
 import {
@@ -1931,6 +1931,7 @@ export const CONTEXT_ACTIONS = [
             model: a.model,
             connectors: a.connectors,
             tools: a.tools,
+            inputs: a.inputs.map((i) => ({ key: i.key, label: i.label, ...(i.kind === 'select' ? { options: i.options } : {}), required: i.required })),
             runs_as: a.runAsUserId,
             invalid: a.invalid ?? a.activation.invalid,
             active: a.activation.active,
@@ -1975,6 +1976,12 @@ export const CONTEXT_ACTIONS = [
           .max(20_000)
           .optional()
           .describe('Something to say to it for this run — a question, an instruction, a thing to look at. Optional.'),
+        inputs: z
+          .record(z.string(), z.string().max(500))
+          .optional()
+          .describe(
+            "Values for the agent's declared inputs (list_agents shows them) for this one run, over your own. A run acts as you, so it needs YOUR values — ask the person for any it names as missing; never borrow another person's.",
+          ),
       },
       run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id)
@@ -2026,16 +2033,21 @@ export const CONTEXT_ACTIONS = [
             page: agentPageHref(agent.name, null, context.spaceId),
           }
         }
+        const inputs = await manualRunInputs(args.space_id, args.agent, principal.userId, args.inputs ?? {})
+        if (!inputs.ok) {
+          const named = inputs.missing.map((i) => `${i.key} (${i.label}${i.kind === 'select' ? `: ${i.options.join(' | ')}` : ''})`)
+          throw new ActionError(422, named.length ? `${inputs.error} Pass \`inputs\`: ${named.join(', ')}.` : inputs.error)
+        }
         let runId: string
         let dispatch: Promise<DispatchResult> | null
         if (args.message?.trim()) {
-          const summoned = await summonAgent({ spaceId: args.space_id, name: args.agent, principal, text: args.message })
+          const summoned = await summonAgent({ spaceId: args.space_id, name: args.agent, principal, text: args.message, inputs: args.inputs })
           if (!summoned.ok) throw new ActionError(summoned.status, summoned.message)
           if (!summoned.runId) throw new ActionError(409, 'The agent is already running; the message waits for its next run.')
           runId = summoned.runId
           dispatch = summoned.dispatch
         } else {
-          const claimed = await claimManualRun(args.space_id, args.agent, principal.userId, new Date(), { allowInactive: true })
+          const claimed = await claimManualRun(args.space_id, args.agent, principal.userId, new Date(), { allowInactive: true, inputs: args.inputs })
           if (!claimed.ok) throw new ActionError(claimed.code === 'unknown' ? 404 : 409, claimed.message)
           runId = claimed.runId
           dispatch = claimed.dispatch ?? null
@@ -2122,9 +2134,12 @@ export const CONTEXT_ACTIONS = [
               "that has one gets it, reaching only its declared connectors' hosts ('machine', 'sandbox' and 'messages' " +
               "are accepted for old briefs and add nothing)",
           ),
+        inputs: agentConfigInput.shape.inputs,
+        input_values: agentConfigInput.shape.input_values,
       },
       run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id)
+        const inputPatch = configPatchOf({ inputs: args.inputs, input_values: args.input_values })
         const r = await createAgentBrief(principal, context, {
           name: args.name,
           title: args.title,
@@ -2134,6 +2149,8 @@ export const CONTEXT_ACTIONS = [
           connectors: args.connectors,
           tools: args.tools,
           agents: args.agents,
+          inputs: inputPatch.inputs,
+          inputValues: inputPatch.inputValues,
           body: args.instructions,
         })
         if (!r.ok) throw new ActionError(r.status, r.error)

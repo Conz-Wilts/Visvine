@@ -67,6 +67,7 @@ import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { parseModelRef, type ModelRef } from './registry'
 import { parseRunsFor, type RunsForEntry } from './shared/runsFor'
+import { inputValuesDenial, parseAgentInputs, parseInputValues, type AgentInput, type InputValues } from './shared/inputs'
 
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 const AGENT_TYPE = 'agent'
@@ -199,6 +200,10 @@ export interface AgentBrief {
   body: string
   /** Who it runs for besides its author — the `for:` block (shared/runsFor.ts). */
   runsFor: RunsForEntry[]
+  /** The values each person supplies for themselves — `inputs:` (shared/inputs.ts). */
+  inputs: AgentInput[]
+  /** The agent's own identity's values — `input_values:`. */
+  inputValues: InputValues
 }
 
 export type ParseBriefResult = { ok: true; brief: AgentBrief } | { ok: false; error: string }
@@ -317,6 +322,15 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
     if (entry.model && !parseModelRef(entry.model).ok) return { ok: false, error: `the model for ${entry.userId} in \`for\` is not valid` }
   }
 
+  const inputs = parseAgentInputs(fm.inputs)
+  if (!inputs.ok) return inputs
+  const inputValues = parseInputValues(fm.input_values)
+  if (!inputValues.ok) return inputValues
+  for (const values of [inputValues.value, ...runsFor.entries.map((e) => e.inputs)]) {
+    const denial = inputValuesDenial(inputs.value, values)
+    if (denial) return { ok: false, error: denial }
+  }
+
   let dryRun = false
   if (fm.dry_run !== undefined && fm.dry_run !== null && fm.dry_run !== '') {
     const raw = typeof fm.dry_run === 'string' ? fm.dry_run.trim().toLowerCase() : fm.dry_run
@@ -350,6 +364,8 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
       share,
       shareAs,
       runsFor: runsFor.entries,
+      inputs: inputs.value,
+      inputValues: inputValues.value,
       dryRun,
       maxTurns,
       tags: [...new Set(tags.list.map((t) => t.trim()).filter(Boolean))],

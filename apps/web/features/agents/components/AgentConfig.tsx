@@ -8,6 +8,7 @@ import { LOCAL_RUNTIMES, localModelRef } from '@/lib/agents/local';
 import { briefTags, withBriefTags } from '@/lib/agents/briefEdit';
 import type { AgentConfigInput } from '@/lib/agents/configInput';
 import type { AgentConfig as AgentRecordConfig } from '@/lib/agents/shared/agentConfig';
+import { inputsFromLabels } from '@/lib/agents/shared/inputs';
 import type { AgentSummary } from '@/lib/agents/service';
 import type { ModelAdvice } from '@/lib/agents/shared/advice';
 import { useAgentOptions } from '../lib/useAgentOptions';
@@ -26,7 +27,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /**
  * What the agent runs on and reaches, one row each: when, model, tools,
- * connectors, group, cap. Each is saved as it is changed — there is no Save.
+ * connectors, inputs, group, cap. Inputs are named by label here; a select
+ * with options is declared over MCP (`configure_agent`). Each is saved as it is changed — there is no Save.
  * Model, tools and connectors are the agent's RECORD (`PUT …/config`, gated
  * per field on the server); Group is the brief's `tags:`, written to the note
  * through the ordinary notes API; the cap is the budget route's. Anything a
@@ -53,6 +55,7 @@ export default function AgentConfig({
   const [value, setValue] = useState<AgentRecordConfig>(agent.config);
   const [tags, setTags] = useState<string[]>(() => briefTags(agent.brief));
   const [group, setGroup] = useState(tags.join(', '));
+  const [inputLabels, setInputLabels] = useState(agent.config.inputs.map((i) => i.label).join(', '));
   const [cap, setCap] = useState(agent.spend?.budgetMonthlyCents != null ? (agent.spend.budgetMonthlyCents / 100).toFixed(2) : '');
   const [error, setError] = useState<string | null>(null);
   // Saves are chained so two quick presses write in the order they were made.
@@ -213,6 +216,23 @@ export default function AgentConfig({
             </div>
           </Row>
         )}
+        <Row label="Inputs">
+          <div className="max-w-xs">
+          <Input
+            className="text-sm"
+            value={inputLabels}
+            placeholder="None"
+            aria-label="Inputs"
+            onChange={(e) => setInputLabels(e.target.value)}
+            onBlur={() => {
+              const next = inputsFromLabels(inputLabels.split(','), value.inputs);
+              if (next.map((i) => i.key).join(',') === value.inputs.map((i) => i.key).join(',')) return;
+              save({ inputs: next }, { inputs: next });
+              setInputLabels(next.map((i) => i.label).join(', '));
+            }}
+          />
+          </div>
+        </Row>
         <Row label="Group">
           <div className="max-w-xs">
           <Input

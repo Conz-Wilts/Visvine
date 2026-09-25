@@ -29,6 +29,8 @@ export interface RunInput {
   dryRun?: boolean
   /** A write this run made was refused as a trigger (chain deeper than MAX_EVENT_CHAIN_DEPTH); audited once. */
   loopCut?: boolean
+  /** Values a person gave at Run for this one run, over their own (shared/inputs.ts). */
+  inputs?: Record<string, string>
 }
 
 /** Merge run-end facts (writes, dryRun) into agent_runs.input without clobbering what dispatch stored. */
@@ -38,7 +40,7 @@ export async function recordRunInput(runId: string, patch: Pick<RunInput, 'write
   const next: RunInput = { events: current?.events ?? [], ...(current ?? {}), ...patch }
   if (!patch.writes?.length) delete next.writes
   if (!patch.dryRun) delete next.dryRun
-  if (!next.chain && !next.writes && !next.dryRun && next.events.length === 0) return
+  if (!next.chain && !next.writes && !next.dryRun && !next.inputs && next.events.length === 0) return
   await prisma.agentRun.update({ where: { id: runId }, data: { input: next as unknown as object } })
 }
 export type RunStatus = 'running' | 'succeeded' | 'failed'

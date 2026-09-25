@@ -42,6 +42,8 @@ export async function storeAgentConfig(
     ...cols,
     schedule: json(cols.schedule),
     triggersJson: json(cols.triggersJson),
+    inputs: json(cols.inputs),
+    inputValues: json(cols.inputValues),
     configuredAt: new Date(),
     updatedBy: by.userId,
   }
@@ -57,8 +59,8 @@ export async function storeAgentConfig(
     ...subs.map((s) =>
       prisma.agentSubscription.upsert({
         where: { agent_subscription_identity: { spaceId, name, userId: s.userId } },
-        create: { spaceId, name, ...s },
-        update: { at: s.at, timezone: s.timezone, model: s.model },
+        create: { spaceId, name, ...s, inputs: json(s.inputs) },
+        update: { at: s.at, timezone: s.timezone, model: s.model, inputs: json(s.inputs) },
       }),
     ),
     ...(Object.keys(diff).length
