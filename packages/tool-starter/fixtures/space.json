@@ -1,5 +1,8 @@
 {
-  "viewer": { "name": "Ada", "isAdmin": true },
+  "viewers": [
+    { "id": "ada", "name": "Ada", "isAdmin": true },
+    { "id": "sam", "name": "Sam", "isAdmin": false }
+  ],
   "bindings": { "notes": "board" },
   "settings": {}
 }

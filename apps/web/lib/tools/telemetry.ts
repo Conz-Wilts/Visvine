@@ -46,9 +46,23 @@ interface Bucket {
   viewers: Set<string>
 }
 
-const buckets = new Map<string, Bucket>()
-let lastFlush = Date.now()
-let flushing: Promise<number> | null = null
+interface TelemetryState {
+  buckets: Map<string, Bucket>
+  lastFlush: number
+  flushing: Promise<number> | null
+}
+
+declare global {
+  var __vvToolTelemetry: TelemetryState | undefined
+}
+
+/**
+ * This process's counts, on `globalThis` like the change and verdict buses:
+ * a route that counts and a route that flushes must add to one Map, however
+ * many times the module was evaluated.
+ */
+const telemetry: TelemetryState = (globalThis.__vvToolTelemetry ??= { buckets: new Map(), lastFlush: Date.now(), flushing: null })
+const buckets = telemetry.buckets
 
 function dayOf(at: Date): string {
   return at.toISOString().slice(0, 10)
@@ -139,7 +153,7 @@ function methodsOf(raw: unknown): Record<string, MethodCounts> {
 async function flushNow(): Promise<number> {
   const pending = [...buckets.values()]
   buckets.clear()
-  lastFlush = Date.now()
+  telemetry.lastFlush = Date.now()
   let written = 0
   for (const bucket of pending) {
     const where = { app_tool_telemetry_identity: { installId: bucket.installId, day: new Date(`${bucket.day}T00:00:00Z`), instance: INSTANCE } }
@@ -182,18 +196,18 @@ async function flushNow(): Promise<number> {
 
 /** Flush when a minute has passed since the last — called on the request path. */
 export async function maybeFlushTelemetry(now: number = Date.now()): Promise<void> {
-  if (flushing || now - lastFlush < FLUSH_MS || buckets.size === 0) return
-  flushing = flushNow()
+  if (telemetry.flushing || now - telemetry.lastFlush < FLUSH_MS || buckets.size === 0) return
+  telemetry.flushing = flushNow()
   try {
-    await flushing
+    await telemetry.flushing
   } finally {
-    flushing = null
+    telemetry.flushing = null
   }
 }
 
 /** Flush whatever this instance holds now — the tick, and tests. */
 export async function flushTelemetry(): Promise<number> {
-  if (flushing) await flushing
+  if (telemetry.flushing) await telemetry.flushing
   return flushNow()
 }
 

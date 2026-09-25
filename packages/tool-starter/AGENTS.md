@@ -33,8 +33,9 @@ every space, and a new name is a new Tool.
    offline, in the same sandboxed frame and on the same kit it will run on in
    Visvine, answered from `fixtures/`. The page lists every call the Tool makes
    and how it was answered: a `perimeter` refusal means the manifest does not
-   declare that reach — declare it, do not work around it. Switch between
-   Admin and Member to see both.
+   declare that reach — declare it, do not work around it. Switch who is
+   looking — each person `fixtures/space.json` names, or Admin and Member. `npx visvine-tool dev --space <id>` is the
+   live form: every save is pushed and the space's own preview shows it.
 3. **Ship.** `npx visvine-tool push` sends it to a space as its working copy
    and prints where to preview it there (`--space <id>`; `npx visvine-tool
    spaces` lists them); `npx visvine-tool publish` publishes a version into
@@ -44,6 +45,25 @@ every space, and a new name is a new Tool.
 
 With the Visvine MCP server connected (`.mcp.json`), the same acts are the
 actions `check_package`, `push_tool` and `publish_tool`.
+
+### Without a browser
+
+Everything the `dev` page does is plain HTTP on its port, so an agent that
+cannot click can drive the Tool's data layer itself:
+
+| Request | Answers |
+| --- | --- |
+| `GET /__state` | The build — `ok`, `errors`, `warnings` — and what the frame is told: `install`, `viewer`, `degraded`. |
+| `POST /__bridge` `{"method": "…", "params": {…}}` | One bridge call, answered by the offline space exactly as the Tool's own call would be. |
+| `POST /__viewer` `{"id": "…"}` or `{"isAdmin": false}` | Look as another person `space.json` names, or as a member. |
+
+The two POSTs need the header `X-Visvine-Dev: 1`. For example, what
+`visvine.collections.list('votes')` gets:
+
+```sh
+curl -s localhost:4800/__bridge -H 'X-Visvine-Dev: 1' \
+  -d '{"method":"collections.list","params":{"collection":"votes"}}'
+```
 
 ## Rules that matter
 
@@ -71,7 +91,7 @@ actions `check_package`, `push_tool` and `publish_tool`.
 
 | Path | What it holds |
 | --- | --- |
-| `space.json` | `viewer` (`name`, `isAdmin`), the install's `bindings` and `settings`, and what the outside answers offline: `connectors.<name>.<action>`, `actions.<name>`, `ai.complete`. |
+| `space.json` | Who is looking — `viewer` (`id`, `name`, `isAdmin`), or several as `viewers`, the first looking first, so a Tool that shows everyone's rows can be seen as each of them — the install's `bindings` and `settings`, and what the outside answers offline: `connectors.<name>.<action>`, `actions.<name>`, `ai.complete`. |
 | `notes/<path>.md` | The space's notes — `notes/board/kickoff.md` is the note `board/kickoff.md`. A note with a `type:` is a record of that type. |
 | `resources/<path>` | Its files — `resources/contracts/msa.pdf` is a file under `resources/contracts/`. |
 
@@ -236,6 +256,9 @@ different data, and that is correct.
 | `actions` | names tools may run: `list_events`, `update_event`, `share_resource` | `actions.run` |
 | `ai` | `{ complete, decide }` | `ai.complete`, `ai.decide` |
 | `ui` | `{ download }` | `ui.download` |
+
+A Tool's own data — a collection — is not a permission: it is declared under
+`collections`, with its own read and write rules (see Collections).
 
 **`tools/`, `agents/`, `connectors/` and `models/` are sealed against Tool writes**,
 whatever you declare — they hold configuration that runs — and a read of them
@@ -479,7 +502,8 @@ A collection is the Tool's own store — votes, sign-ups, check-ins — kept per
 install, not in the space's notes. Declare it under `collections` with a JSON
 Schema (`type`, `properties`, `required`, `additionalProperties`, `enum`,
 `const`, `minimum`/`maximum`, `minLength`/`maxLength`, `items`,
-`minItems`/`maxItems`; no `pattern`), and who reads and writes it:
+`minItems`/`maxItems`; `title`, `description`, `default` and `format` are
+accepted and check nothing; no `pattern`), and who reads and writes it:
 
 | Rule | all | own | admin |
 | --- | --- | --- | --- |

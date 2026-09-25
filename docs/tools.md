@@ -806,6 +806,13 @@ through its MCP endpoint, as the named action tools.
   from `space.json` or its suggestion; `data.js` runs in `node:vm`. Writes
   stay in memory and are announced like the change stream. Beside the Tool:
   the kit's components drawn from the catalog, and every call with its answer.
+  The page is plain HTTP an agent can drive without a browser — `GET /__state`,
+  `POST /__bridge` (one bridge call), `POST /__viewer` (look as another of
+  `space.json`'s `viewers`, or as a member), the POSTs behind a custom
+  `X-Visvine-Dev` header no other site can send without a preflight.
+  `dev --space <id>` is the live form: every save is pushed and the space's
+  own preview shows it, so live data is only ever read through the server,
+  under the author's own grants.
 - `login` is OAuth 2.1 + PKCE as a native client: dynamic registration, the
   consent page, a loopback listener (`http://127.0.0.1:<port>/callback`,
   RFC 8252 — the consent page's `form-action` allows loopback for exactly

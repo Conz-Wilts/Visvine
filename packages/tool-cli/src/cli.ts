@@ -14,7 +14,8 @@
  * its MCP endpoint (./remote.ts), as the signed-in person, as a deploy key
  * (CI), or — against a local development server — as its dev user.
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bold, dim, done, fail, green, line, list, red, yellow } from './print'
@@ -69,6 +70,7 @@ const HELP = `${bold('visvine-tool')} ${dim(CLI_VERSION)} — build a Visvine To
 
   ${bold('init')} <folder>     a new Tool from the starter
   ${bold('dev')}               run it offline against fixtures/        --port 4800
+                    or live in a space, pushed on every save  --space <id>
   ${bold('check')}             build and check it with Visvine's rules  --remote asks the server too
   ${bold('pack')}              write <name>.vvtool                       --out <file>
   ${bold('login')}             sign in                                   --no-browser
@@ -165,7 +167,51 @@ async function cmdPack(args: Args): Promise<number> {
   return 0
 }
 
+/**
+ * `dev --space <id>`: live against a real space instead of fixtures — every
+ * save is pushed, and the space's own preview shows it, reading the space's
+ * data through the server under the author's own grants.
+ */
+async function devLive(args: Args): Promise<number> {
+  const dir = dirOf(args)
+  const remote = await connect(serverOf(args), flag(args, 'key'))
+  const first = await push(args, remote)
+  if (first && !args.flags['no-browser']) openLink(first.answer.preview_url)
+  let timer: NodeJS.Timeout | null = null
+  let running = Promise.resolve()
+  const watcher = watch(dir, { recursive: true }, (_event, file) => {
+    const path = String(file ?? '').split('\\').join('/')
+    if (!(path === 'visvine-tool.json' || path.startsWith('src/') || ['README.md', 'CHANGELOG.md', 'icon.svg'].includes(path))) return
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      running = running.then(() => push(args, remote).then(() => undefined, (err: Error) => fail(err.message)))
+    }, 300)
+  })
+  done(`Pushing ${bold(dir)} on every save. Ctrl-C to stop.`)
+  await new Promise<void>((resolveStop) => {
+    const stop = () => {
+      watcher.close()
+      resolveStop()
+    }
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
+  })
+  await running
+  await remote.close()
+  return 0
+}
+
+function openLink(url: string): void {
+  const [command, args] = process.platform === 'darwin' ? ['open', [url]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]] : ['xdg-open', [url]]
+  try {
+    spawn(command, args, { stdio: 'ignore', detached: true }).unref()
+  } catch {
+    // The link was printed with the push.
+  }
+}
+
 async function cmdDev(args: Args): Promise<number> {
+  if (flag(args, 'space')) return devLive(args)
   const dir = dirOf(args)
   const port = Number(flag(args, 'port') ?? 4800)
   const dev = await startDev(dir, { port, print: (text) => line(dim(text)) })

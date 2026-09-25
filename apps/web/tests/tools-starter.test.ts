@@ -142,3 +142,18 @@ handlers.peek = async (args, visvine) => visvine.context.read('hr/pay.md')`
   const missing = await bridge.call('data.call', { fn: 'nope', args: null })
   assert.equal(!missing.ok && missing.error.code, 'not_found')
 })
+
+test('fixtures may name several viewers — the first looks first, and a row is mine only to its writer', async () => {
+  const dir = fixtures()
+  writeFileSync(join(dir, 'space.json'), JSON.stringify({ viewers: [{ id: 'ada', name: 'Ada', isAdmin: true }, { id: 'sam', name: 'Sam' }] }))
+  const space = loadFixtures(dir)
+  assert.deepEqual(space.viewers.map((v) => [v.id, v.isAdmin]), [['ada', true], ['sam', false]])
+  assert.equal(space.viewer.id, 'ada')
+  const bridge = createMockBridge({ tool: { name: 't', title: 'T', facts: facts(), dataBundle: '' }, space })
+  await bridge.call('collections.insert', { collection: 'votes', data: { choice: 'a' } })
+  bridge.setViewer(space.viewers[1])
+  const seen = await bridge.call('collections.list', { collection: 'votes' })
+  assert.deepEqual(seen.ok && (seen.value as { rows: Array<{ mine: boolean }> }).rows.map((r) => r.mine), [false])
+  assert.equal(bridge.init().viewer.name, 'Sam')
+})
+

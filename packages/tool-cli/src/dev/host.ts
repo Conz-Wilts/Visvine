@@ -19,6 +19,7 @@ interface DevState {
   init: { install: ToolInstallInfo; viewer: ToolViewer; degraded: ToolDegraded | null; subject: unknown } | null
   nav: { style: 'tabs' | 'side'; sections: Array<{ id: string; label: string; admin?: boolean }> } | null
   mayDownload: boolean
+  viewers: Array<{ id: string; name: string; isAdmin: boolean }>
   frameUrl: string
   galleryUrl: string | null
 }
@@ -108,7 +109,7 @@ function mount(): void {
   $('title').textContent = state.title
   const status = $('status')
   const broken = state.problem ?? (state.build && !state.build.ok ? [state.build.configError, ...state.build.errors].filter(Boolean).join('\n') : null)
-  status.textContent = broken ? 'does not build' : `built · ${state.init?.viewer.isAdmin ? 'admin' : 'member'}`
+  status.textContent = broken ? 'does not build' : `built · ${state.init?.viewer.name} · ${state.init?.viewer.isAdmin ? 'admin' : 'member'}`
   status.className = broken ? 'status bad' : 'status'
   const missing = state.init?.degraded?.missing
   $('degraded').textContent = missing ? `Unbound: ${[...(missing.bindings ?? []), ...missing.connectors, ...missing.types, ...missing.agents].join(', ')}` : ''
@@ -162,8 +163,36 @@ function mount(): void {
   })
 }
 
+async function lookAs(body: { id: string } | { isAdmin: boolean }): Promise<void> {
+  await fetch('/__viewer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Visvine-Dev': '1' },
+    body: JSON.stringify(body),
+  })
+  await refresh()
+}
+
+/** Who is looking: the people fixtures/space.json names, or Admin and Member for the one it names. */
+function drawViewers(): void {
+  const seg = $('viewers')
+  seg.replaceChildren()
+  const current = state.init?.viewer
+  const options =
+    state.viewers.length > 1
+      ? state.viewers.map((v) => ({ label: v.name, selected: v.id === current?.id, body: { id: v.id } as { id: string } | { isAdmin: boolean } }))
+      : [true, false].map((isAdmin) => ({ label: isAdmin ? 'Admin' : 'Member', selected: current?.isAdmin === isAdmin, body: { isAdmin } }))
+  for (const option of options) {
+    const button = document.createElement('button')
+    button.textContent = option.label
+    button.setAttribute('aria-selected', String(option.selected))
+    button.onclick = () => void lookAs(option.body)
+    seg.append(button)
+  }
+}
+
 async function refresh(): Promise<void> {
   state = (await (await fetch('/__state', { cache: 'no-store' })).json()) as DevState
+  drawViewers()
   mount()
 }
 
@@ -172,17 +201,6 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-view]')
     view = button.dataset.view === 'gallery' ? 'gallery' : 'tool'
     for (const b of document.querySelectorAll('[data-view]')) b.setAttribute('aria-selected', String(b === button))
     mount()
-  }
-}
-for (const button of document.querySelectorAll<HTMLButtonElement>('[data-admin]')) {
-  button.onclick = async () => {
-    await fetch('/__viewer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Visvine-Dev': '1' },
-      body: JSON.stringify({ isAdmin: button.dataset.admin === 'true' }),
-    })
-    for (const b of document.querySelectorAll('[data-admin]')) b.setAttribute('aria-selected', String(b === button))
-    await refresh()
   }
 }
 

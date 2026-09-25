@@ -9,6 +9,8 @@ export interface FixtureViewer {
 
 export interface FixtureSpace {
   viewer: FixtureViewer
+  /** Everyone the space may be looked at as — `viewer` first. */
+  viewers: FixtureViewer[]
   bindings: Record<string, string>
   settings: Record<string, unknown>
   subject: unknown

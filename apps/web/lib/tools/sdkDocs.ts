@@ -227,7 +227,7 @@ declare module '@visvine/tool-kit' {
     }
     collections: {
       /** Add a row to a collection this Tool declares; checked against its schema, 16 KB at most. */
-      insert<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, data: T): Promise<CollectionRow<T>>
+      insert<T extends object = Record<string, unknown>>(collection: string, data: T): Promise<CollectionRow<T>>
       /** Rows, oldest first unless order is 'desc', ${LIST_LIMIT_MAX} a page at most; mine for the viewer's own. */
       list<T = Record<string, unknown>>(
         collection: string,
@@ -235,7 +235,7 @@ declare module '@visvine/tool-kit' {
       ): Promise<{ rows: CollectionRow<T>[]; nextCursor: string | null }>
       get<T = Record<string, unknown>>(collection: string, id: string): Promise<CollectionRow<T>>
       /** Replace a row's data (write: own — only the viewer's rows, unless they are an admin). */
-      update<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, id: string, data: T): Promise<CollectionRow<T>>
+      update<T extends object = Record<string, unknown>>(collection: string, id: string, data: T): Promise<CollectionRow<T>>
       delete(collection: string, id: string): Promise<{ id: string }>
       /** How many rows match; with groupBy, how many per value of that field. */
       count(
@@ -818,6 +818,9 @@ different data, and that is correct.
 | \`ai\` | \`{ complete, decide }\` | \`ai.complete\`, \`ai.decide\` |
 | \`ui\` | \`{ download }\` | \`ui.download\` |
 
+A Tool's own data — a collection — is not a permission: it is declared under
+\`collections\`, with its own read and write rules (see Collections).
+
 **\`tools/\`, \`agents/\`, \`connectors/\` and \`models/\` are sealed against Tool writes**,
 whatever you declare — they hold configuration that runs — and a read of them
 needs a glob that names them (\`**\` never reaches configuration). One exception: a
@@ -1058,7 +1061,8 @@ A collection is the Tool's own store — votes, sign-ups, check-ins — kept per
 install, not in the space's notes. Declare it under \`collections\` with a JSON
 Schema (\`type\`, \`properties\`, \`required\`, \`additionalProperties\`, \`enum\`,
 \`const\`, \`minimum\`/\`maximum\`, \`minLength\`/\`maxLength\`, \`items\`,
-\`minItems\`/\`maxItems\`; no \`pattern\`), and who reads and writes it:
+\`minItems\`/\`maxItems\`; \`title\`, \`description\`, \`default\` and \`format\` are
+accepted and check nothing; no \`pattern\`), and who reads and writes it:
 
 | Rule | all | own | admin |
 | --- | --- | --- | --- |

@@ -11,7 +11,8 @@
  *   /                 the host page — the Tool, the kit's components, the calls
  *   /__state          what the host needs: the build, the handshake, the theme
  *   /__bridge         a bridge call, answered from fixtures (host only)
- *   /__viewer         look as an admin or a member
+ *   /__viewer         look as another person — `{ id }` of one space.json
+ *                     names — or as an admin or not (`{ isAdmin }`)
  *   /__events         rebuilds, changed paths and calls, as they happen
  *   /__frame          the frame document                     (frame origin)
  *   /__bundle.js      the compiled Tool, or the gallery       (frame origin)
@@ -115,11 +116,13 @@ export async function startDev(dir: string, opts: { port: number; print: (line: 
     send('build', { version: current.version })
   }
 
+  let viewers: Array<{ id: string; name: string; isAdmin: boolean }> = []
   const startSpace = (): void => {
     const space = loadFixtures(join(dir, 'fixtures'))
     const viewer = bridge?.init().viewer
+    viewers = space.viewers
     bridge = createMockBridge({ tool: toolOf(current), space, onChange: (paths) => send('changed', { paths }) })
-    if (viewer) bridge.setViewer(viewer)
+    if (viewer && viewers.some((v) => v.id === viewer.id)) bridge.setViewer(viewer)
   }
 
   await rebuild()
@@ -192,6 +195,7 @@ export async function startDev(dir: string, opts: { port: number; print: (line: 
               ? { ok: current.build.ok, errors: current.build.errors.map(toolDiagnosticLine), warnings: current.build.warnings.map(toolDiagnosticLine), configError: current.build.configError }
               : null,
             init: bridge?.init() ?? null,
+            viewers,
             nav: current.build?.config?.surfaces.nav ?? null,
             mayDownload: current.build?.config ? manifestOf(current.build.config).permissions.ui.download : false,
             frameUrl: `${frameOrigin}/__frame?kind=tool&v=${current.version}`,
@@ -215,10 +219,13 @@ export async function startDev(dir: string, opts: { port: number; print: (line: 
         // Only this page's own scripts: a custom header no other site can send without a preflight.
         const origin = req.headers.origin
         if (req.headers['x-visvine-dev'] !== '1' || (origin && origin !== hostOrigin)) return void res.writeHead(403).end()
-        const body = (await readBody(req)) as { method?: string; params?: unknown; isAdmin?: boolean; name?: string }
+        const body = (await readBody(req)) as { method?: string; params?: unknown; id?: string; isAdmin?: boolean; name?: string }
         if (!bridge) return void res.writeHead(503).end()
         if (url.pathname === '/__viewer') {
-          bridge.setViewer({ ...(typeof body.isAdmin === 'boolean' ? { isAdmin: body.isAdmin } : {}), ...(typeof body.name === 'string' ? { name: body.name } : {}) })
+          // One of the people fixtures/space.json names, or the one looking now as an admin or not.
+          const named = typeof body.id === 'string' ? viewers.find((v) => v.id === body.id) : undefined
+          if (typeof body.id === 'string' && !named) return void res.writeHead(404, { 'Content-Type': 'text/plain' }).end(`No viewer "${body.id}" in fixtures/space.json`)
+          bridge.setViewer(named ?? { ...(typeof body.isAdmin === 'boolean' ? { isAdmin: body.isAdmin } : {}), ...(typeof body.name === 'string' ? { name: body.name } : {}) })
           res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(bridge.init()))
           return
         }

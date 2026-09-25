@@ -199,7 +199,7 @@ export interface VisvineApi {
   }
   collections: {
     /** Add a row to a collection this Tool declares; checked against its schema, 16 KB at most. */
-    insert<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, data: T): Promise<CollectionRow<T>>
+    insert<T extends object = Record<string, unknown>>(collection: string, data: T): Promise<CollectionRow<T>>
     /** Rows, oldest first unless order is 'desc', 200 a page at most; mine for the viewer's own. */
     list<T = Record<string, unknown>>(
       collection: string,
@@ -207,7 +207,7 @@ export interface VisvineApi {
     ): Promise<{ rows: CollectionRow<T>[]; nextCursor: string | null }>
     get<T = Record<string, unknown>>(collection: string, id: string): Promise<CollectionRow<T>>
     /** Replace a row's data (write: own — only the viewer's rows, unless they are an admin). */
-    update<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, id: string, data: T): Promise<CollectionRow<T>>
+    update<T extends object = Record<string, unknown>>(collection: string, id: string, data: T): Promise<CollectionRow<T>>
     delete(collection: string, id: string): Promise<{ id: string }>
     /** How many rows match; with groupBy, how many per value of that field. */
     count(

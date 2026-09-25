@@ -71,7 +71,7 @@ export interface VisvineApi {
   };
   collections: {
     /** Add a row to one of this Tool's collections (`collections` in the manifest). */
-    insert<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, data: T): Promise<CollectionRow<T>>;
+    insert<T extends object = Record<string, unknown>>(collection: string, data: T): Promise<CollectionRow<T>>;
     /** Rows, oldest first unless `order: 'desc'`, a page at a time; `mine` for the viewer's own. */
     list<T = Record<string, unknown>>(
       collection: string,
@@ -79,7 +79,7 @@ export interface VisvineApi {
     ): Promise<{ rows: CollectionRow<T>[]; nextCursor: string | null }>;
     get<T = Record<string, unknown>>(collection: string, id: string): Promise<CollectionRow<T>>;
     /** Replace a row's data. */
-    update<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, id: string, data: T): Promise<CollectionRow<T>>;
+    update<T extends object = Record<string, unknown>>(collection: string, id: string, data: T): Promise<CollectionRow<T>>;
     delete(collection: string, id: string): Promise<{ id: string }>;
     /** How many rows match — per value of `groupBy` when it is given. */
     count(
@@ -247,7 +247,7 @@ export function VisvineProvider({
         blob: (id, rendition) => client.call('resources.blob', rendition ? { id, rendition } : { id }),
       },
       collections: {
-        insert: (collection, data) => client.call('collections.insert', { collection, data }) as never,
+        insert: (collection, data) => client.call('collections.insert', { collection, data: data as Record<string, unknown> }) as never,
         list: (collection, opts) =>
           client.call('collections.list', {
             collection,
@@ -258,7 +258,7 @@ export function VisvineProvider({
             ...(opts?.cursor ? { cursor: opts.cursor } : {}),
           }) as never,
         get: (collection, id) => client.call('collections.get', { collection, id }) as never,
-        update: (collection, id, data) => client.call('collections.update', { collection, id, data }) as never,
+        update: (collection, id, data) => client.call('collections.update', { collection, id, data: data as Record<string, unknown> }) as never,
         delete: (collection, id) => client.call('collections.delete', { collection, id }),
         count: (collection, opts) =>
           client.call('collections.count', {
