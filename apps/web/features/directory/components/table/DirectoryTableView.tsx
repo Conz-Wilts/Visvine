@@ -26,6 +26,9 @@ import { useConnectorCount } from '@/features/connectors/hooks/useConnectorCount
 import { useAgentsRoster } from '@/features/agents/lib/useAgentsRoster';
 import { useTableView } from '@/features/directory/hooks/useTableView';
 import { useTrackedFields } from '@/features/directory/hooks/useTrackedFields';
+import { useRecords, useRecordTypes } from '@/features/directory/hooks/useRecords';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
+import { noteHref } from '@/lib/notes/entities';
 import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { entityKindOf } from '@/lib/notes/entities';
@@ -73,6 +76,9 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   const isConnectors = type?.toLowerCase() === 'connector';
   const connectorCount = useConnectorCount(space?.id ?? null);
   const [connectorView, setConnectorView] = useState<'mine' | 'catalog'>('mine');
+  // The space's own types have no nodes: their records are the notes that
+  // declare them (lib/records/), read from the records route.
+  const recordTypeList = useRecordTypes(space?.id ?? null);
   const types = useMemo(
     () => menuTypes(
       presentTypes,
@@ -80,10 +86,11 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       [
         { id: 'agent', name: 'Agent', count: roster.data?.agents.length ?? 0 },
         { id: 'connector', name: 'Connector', count: connectorCount, always: true },
+        ...recordTypeList.map((t) => ({ id: t.name.toLowerCase(), name: t.name, count: t.count })),
       ],
       space?.aliases as SpaceAlias[] | undefined,
     ),
-    [presentTypes, nodes, roster.data, connectorCount, space?.aliases],
+    [presentTypes, nodes, roster.data, connectorCount, recordTypeList, space?.aliases],
   );
 
   // The `?type=` is usually a type's own name, but crossing from a context note
@@ -110,10 +117,18 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
     () => (activeName && !isAll ? findNodeTypeConfig(activeName, space?.nodeTypes) : null),
     [activeName, isAll, space?.nodeTypes],
   );
-  const columns = useMemo(
-    () => (activeKey ? columnsForType(activeKey, typeConfig, { agent: agentChoices }) : []),
-    [activeKey, typeConfig, agentChoices],
-  );
+  const isRecordType = typeConfig?.scope === 'note';
+  const records = useRecords(space?.id ?? null, isRecordType ? activeName : null);
+  const columns = useMemo(() => {
+    if (!activeKey) return [];
+    const all = columnsForType(activeKey, typeConfig, { agent: agentChoices });
+    if (!isRecordType) return all;
+    // A note record has a title, tags, fields and when it was saved — no
+    // alias, no node history. Only its fields edit here; the rest is its note's.
+    return all
+      .filter((c) => !['alias', 'editedBy', 'created', 'addedBy'].includes(c.key))
+      .map((c) => (c.origin === 'tracked' ? c : { ...c, editable: false }));
+  }, [activeKey, typeConfig, agentChoices, isRecordType]);
 
   const table = useTableView(space?.id ?? null, activeKey ?? '', columns);
   const tracked = useTrackedFields();
@@ -125,12 +140,13 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
             saving: tracked.saving,
             error: tracked.error,
             clearError: tracked.clearError,
-            add: (input: Parameters<typeof tracked.add>[1]) => tracked.add(activeName, input),
-            update: (key: string, patch: Parameters<typeof tracked.update>[2]) => tracked.update(activeName, key, patch),
-            remove: (key: string) => tracked.remove(activeName, key),
+            // A field change re-reads the type's records on the server; read them again here.
+            add: (input: Parameters<typeof tracked.add>[1]) => tracked.add(activeName, input).finally(records.refresh),
+            update: (key: string, patch: Parameters<typeof tracked.update>[2]) => tracked.update(activeName, key, patch).finally(records.refresh),
+            remove: (key: string) => tracked.remove(activeName, key).finally(records.refresh),
           }
         : undefined,
-    [tracked, activeName, isAll, isAgents],
+    [tracked, activeName, isAll, isAgents, records.refresh],
   );
 
   // The rows: the toolbar's search/alias/tag result, narrowed to the table's
@@ -157,12 +173,22 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       })
       .map((a) => agentTableItem(a, roster.now));
   }, [isAgents, roster.data, roster.now, browse.searchTerm, browse.filterTags]);
+  const recordItems = useMemo((): DirectoryItem[] => {
+    if (!isRecordType || !records.data) return [];
+    const q = browse.searchTerm.trim().toLowerCase();
+    return records.data.rows
+      .filter((r) => {
+        for (const want of browse.filterTags) if (!r.tags.some((t) => t.toLowerCase() === want.toLowerCase())) return false;
+        return !q || [r.title, r.path, ...r.tags, ...Object.values(r.fields).map(String)].some((v) => v.toLowerCase().includes(q));
+      })
+      .map((r) => ({ id: `record:${r.path}`, name: r.title, type: r.type, tags: r.tags, metadata: r.fields, updatedAt: r.updatedAt, invalid: r.invalid }));
+  }, [isRecordType, records.data, browse.searchTerm, browse.filterTags]);
   const items = useMemo(() => {
     if (!activeKey) return [];
-    const rows = (isAgents ? agentItems : filteredItems.filter((i) => isAll || i.type.toLowerCase() === activeKey))
+    const rows = (isAgents ? agentItems : isRecordType ? recordItems : filteredItems.filter((i) => isAll || i.type.toLowerCase() === activeKey))
       .map((i) => (overrides.get(i.id) ?? []).reduce(applyCellPatch, i));
     return sortItems(withKnownAliases(rows, aliasNames), columns, table.view.sort);
-  }, [filteredItems, agentItems, isAgents, activeKey, isAll, aliasNames, overrides, columns, table.view.sort]);
+  }, [filteredItems, agentItems, recordItems, isAgents, isRecordType, activeKey, isAll, aliasNames, overrides, columns, table.view.sort]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const spaceId = space?.id ?? null;
@@ -186,6 +212,12 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       if (!patch || !spaceId) return;
       setSaveError(null);
       try {
+        // A note record's cell is a field in its note's frontmatter, written
+        // through the records door as the viewer.
+        if (item.id.startsWith('record:')) {
+          await records.save(item.id.slice('record:'.length), { [column.key]: value ?? null });
+          return;
+        }
         // An agent's cell is its record, saved where every setting of it is:
         // the switch through activation, the rest through its config.
         if (item.type === 'agent') {
@@ -218,7 +250,15 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       if (item.type === 'agent') refreshRoster();
       else handleDataChanged();
     },
-    [spaceId, handleDataChanged, rosterData, refreshRoster],
+    [spaceId, handleDataChanged, rosterData, refreshRoster, records],
+  );
+  const router = useSpaceRouter();
+  const openItem = useCallback(
+    (item: DirectoryItem) => {
+      if (item.id.startsWith('record:')) router.push(noteHref(item.id.slice('record:'.length)));
+      else handleItemClick(item);
+    },
+    [router, handleItemClick],
   );
 
   const aliases = (space?.aliases ?? []) as SpaceAlias[];
@@ -277,10 +317,10 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           }
         />
 
-        {(error || saveError || (isAgents && roster.error)) && (
+        {(error || saveError || (isAgents && roster.error) || (isRecordType && records.error)) && (
           <div className="py-2">
             <Alert variant="error" onDismiss={saveError ? () => setSaveError(null) : undefined}>
-              {saveError ?? error ?? roster.error}
+              {saveError ?? error ?? roster.error ?? records.error}
             </Alert>
           </div>
         )}
@@ -320,7 +360,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
                 typeName={activeName}
                 sort={table.view.sort}
                 widths={table.view.widths}
-                loading={isAgents ? !roster.data : loading}
+                loading={isAgents ? !roster.data : isRecordType ? !records.data : loading}
                 nodeTypes={space?.nodeTypes}
                 aliases={aliases}
                 tagColors={tagColors}
@@ -333,7 +373,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
                 onShowColumn={table.toggle}
                 onHideColumn={table.toggle}
                 onResetColumns={table.reset}
-                onOpen={handleItemClick}
+                onOpen={openItem}
                 onSaveCell={spaceId ? saveCell : undefined}
                 onSuggestCell={spaceId && !isAgents ? suggestCell : undefined}
               />

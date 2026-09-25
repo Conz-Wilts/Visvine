@@ -47,6 +47,7 @@ import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
 import { agentNoteDeleted, agentNoteRenamed, agentNoteWritten } from '@/lib/agents/hooks'
 import { toolNoteDeleted, toolNoteRenamed, toolNoteWritten } from '@/lib/tools/hooks'
 import { globalNoteWritten } from '@/lib/global/hooks'
+import { dropRecord, projectRecord } from '@/lib/records/projection'
 import {
   syncPublicationsOnDelete,
   syncPublicationsOnRename,
@@ -202,6 +203,7 @@ async function applyProjections(input: ProjectionInput): Promise<void> {
     await agentNoteDeleted(context, path)
     await toolNoteDeleted(context, path)
     await dropEmbedding(context, path)
+    await dropRecord(context, path)
     return
   }
 
@@ -219,6 +221,8 @@ async function applyProjections(input: ProjectionInput): Promise<void> {
     await agentNoteRenamed(context, from, path, actor, { origin, model })
     await toolNoteRenamed(context, from, path)
     await dropEmbedding(context, from)
+    await dropRecord(context, from)
+    await projectRecord(context, path, content)
     return
   }
 
@@ -229,6 +233,7 @@ async function applyProjections(input: ProjectionInput): Promise<void> {
   if (content === null) return
 
   await syncContextLinks(context, path, content)
+  await projectRecord(context, path, content)
   await agentNoteWritten(context, path, actor, { changed, origin, model })
   await toolNoteWritten(context, path)
   // Origin 'publish' IS a replica write; skipping it is what stops replication

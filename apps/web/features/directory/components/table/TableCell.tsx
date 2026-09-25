@@ -40,6 +40,8 @@ interface TableCellProps {
   autoEdit?: boolean;
   /** The editor closed — by a save or an escape. */
   onDone?: () => void;
+  /** The record says something here its field's kind cannot read (lib/records/): shown as written, marked wrong. */
+  invalid?: boolean;
 }
 
 // The editor fills the cell it opens in, with the text where the value was,
@@ -48,7 +50,7 @@ interface TableCellProps {
 const INPUT_CLASS =
   'h-full w-full bg-surface px-4 text-sm text-fg outline-none ring-1 ring-inset ring-[var(--vv-color-accent)]';
 
-export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, tagPool, onCreateTag, onSave, suggest, autoEdit = false, onDone }: TableCellProps) {
+export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, tagPool, onCreateTag, onSave, suggest, autoEdit = false, onDone, invalid = false }: TableCellProps) {
   const [draft, setDraft] = useState<string | null>(autoEdit ? editValue(value, column) : null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -181,7 +183,13 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
   const href = cellHref(value, column);
 
   let body: React.ReactNode;
-  if (column.kind === 'alias') {
+  if (invalid) {
+    body = (
+      <span className="truncate text-danger-strong underline decoration-danger-bright decoration-wavy underline-offset-4">
+        {String(value ?? '')}
+      </span>
+    );
+  } else if (column.kind === 'alias') {
     // The alias the space gave the row — Founder, Portfolio Company — or, for
     // a row wearing none, what its type is called. The column is Type either
     // way, so it is never blank.

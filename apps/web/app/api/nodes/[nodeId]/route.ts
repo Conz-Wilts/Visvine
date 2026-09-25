@@ -9,20 +9,13 @@ import { isEntityHidden } from '@/lib/notes/shared/entityVisibility';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { spaceMemberForbidden } from '@/lib/auth';
-import { isSuperAdmin } from '@/lib/session';
-import { isGlobalSpace } from '@/lib/spaces/globalSpace';
-import { GLOBAL_MODE_KEY, syncGlobalRecordSafe } from '@/lib/global/record';
+import { syncGlobalRecordSafe } from '@/lib/global/record';
 import { requireApiSession } from '@/lib/api/route';
 import { syncEntityNoteFrontmatter } from '@/lib/notes/context/entityNodes';
 import { samePersonRecords } from '@/lib/directory/samePerson';
 import { planMetadataWrite, writableColumns } from '@/lib/directory/fieldWrite';
+import { gateNodeWrite } from '@/lib/directory/nodeWrite';
 import { findNodeTypeConfig } from '@/lib/types/context';
-import { canonicalType } from '@/lib/types/typeFields';
-import { entityNotePath } from '@/lib/notes/entities';
-import { principalOf, resolveContext } from '@/lib/notes/resolve';
-import { writeDenialFull } from '@/lib/notes/contextService';
-import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth';
-import type { NBEvent } from '@/lib/types';
 import type { NodeTypeConfig } from '@/lib/types';
 
 const MAX_NAME_LEN = 120;
@@ -250,59 +243,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
   const tags = hasTags ? cleanTags(body.tags) : null;
 
-  const node = await prisma.node.findUnique({
-    where: { id: nodeId },
-    select: { id: true, spaceId: true, metadata: true, type: true, identityId: true, name: true, alias: true },
-  });
-  if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
-
-  // The note (and thus its tags) live in the node's own space context; a
-  // mismatched space would edit a misbound entity.
-  if (node.spaceId !== spaceId) {
-    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
-  }
-  // Active membership (or admin) of the node's own space is the first gate.
-  if (await spaceMemberForbidden(session.userId, spaceId, session.email)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-  const metadataNow = (node.metadata as Record<string, unknown> | null) ?? {};
-  // A record the viewer cannot see reads as absent, exactly as GET answers.
-  const lens = await entityLensFor(spaceId, session.userId, session.email);
-  if (lens && isEntityHidden({ ...node, metadata: metadataNow }, lens)) {
-    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
-  }
-  // A global record's fields are gathered, not typed (lib/global/record.ts);
-  // a follower's are pushed from the record. Neither takes a local edit.
-  if (isGlobalSpace(spaceId) && !isSuperAdmin(session.email)) {
-    return NextResponse.json(
-      { error: 'Visvine records are built from public spaces and profiles. Edit your profile to change yours.' },
-      { status: 403 },
-    );
-  }
-  if (metadataNow[GLOBAL_MODE_KEY] === 'follow') {
-    return NextResponse.json(
-      { error: 'This context follows its Visvine record — detach it to edit here.' },
-      { status: 409 },
-    );
-  }
-
-  // The record is its note: whoever may not write the note may not change it.
-  const notePath = entityNotePath({ ...node, metadata: metadataNow });
-  if (notePath) {
-    const resolved = await resolveContext(session, spaceId);
-    if (resolved instanceof Response) return resolved;
-    const denial = await writeDenialFull(await principalOf(resolved), resolved, notePath);
-    if (denial) return NextResponse.json({ error: denial }, { status: 403 });
-  }
-
-  // An event's name, date, place and the rest are its managers' to change.
   const touchesFields = hasName || hasMetadata || columnKeys.length > 0;
-  if (touchesFields && canonicalType(node.type) === 'event') {
-    const hosts = Array.isArray(metadataNow.hosts) ? (metadataNow.hosts as string[]) : [];
-    if (!(await isEventManager(session, spaceId, { hosts } as unknown as NBEvent))) {
-      return NextResponse.json({ error: EVENT_MANAGER_DENIAL }, { status: 403 });
-    }
-  }
+  const gate = await gateNodeWrite(session, spaceId, nodeId, { touchesFields });
+  if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
+  const { node } = gate;
+  const metadataNow = node.metadata;
 
   const columns = writableColumns(node.type);
   for (const key of columnKeys) {

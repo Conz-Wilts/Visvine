@@ -18,6 +18,7 @@
     "eval:retrieval": "tsx scripts/eval-retrieval.ts",
     "eval:judge": "tsx scripts/eval-judge.ts",
     "db:projections:rebuild": "tsx scripts/rebuild-projections.ts",
+    "db:records:project": "tsx scripts/project-records.ts",
     "db:resources:reindex": "tsx scripts/reindex-resources.ts",
     "db:resources:link": "tsx scripts/link-resource-files.ts",
     "db:resources:reshape": "tsx scripts/reshape-resources.ts",
@@ -70,6 +71,7 @@
     "verify:tools:desktop": "tsx scripts/verify-tools-desktop.ts",
     "verify:tools:shell": "tsx scripts/verify-tools-shell.ts",
     "verify:tools:builder": "tsx scripts/verify-tools-builder.ts",
+    "verify:records": "tsx scripts/verify-records.ts",
     "vm:redteam": "tsx scripts/vm-redteam.ts"
   },
   "dependencies": {

@@ -27,4 +27,6 @@ export interface DirectoryItem {
   updatedAt?: string
   editedBy?: string
   addedBy?: string
+  /** A note record's field keys whose written value does not read as the field's kind (lib/records/). */
+  invalid?: string[]
 }

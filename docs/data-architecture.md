@@ -46,7 +46,10 @@ range, order or aggregate. Two distinct kinds, and the distinction matters:
 **Projections** are *derived from tier 1* and rebuildable by replaying it.
 `AgentState.triggersJson` (parsed from the live note), `AppToolBuild` (esbuild
 output of `tools/<name>/*.md`), `ContextNoteEmbedding`, `Link` rows from
-mentions, `ContextSourceChunk` rows extracted from an uploaded file. Dropping a
+mentions, `ContextSourceChunk` rows extracted from an uploaded file,
+`ContextRecord` / `ContextRecordField` — an invented type's records and their
+typed field values, read off the notes that declare it (`lib/records/`) so a
+type's records can be queried by predicate, range and order. Dropping a
 projection loses nothing but compute. A projection must never be the only copy of
 a decision — if it is, someone put a declaration in tier 2 by mistake.
 

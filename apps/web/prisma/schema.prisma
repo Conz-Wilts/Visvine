@@ -107,6 +107,8 @@ model Space {
 
   appToolBuilds      AppToolBuild[]
   appToolCheckRuns   AppToolCheckRun[]
+  contextRecords     ContextRecord[]
+  contextRecordFields ContextRecordField[]
   appToolInstalls    AppToolInstall[]
   sharedToolInstalls AppToolInstall[]      @relation("SharedToolInstalls")
   resources          Resource[]
@@ -236,6 +238,53 @@ model NoteProjectionJob {
 /// a restricted folder cuts ContextGrant inheritance at its boundary (only grants on
 /// or inside it reach its notes); a locked folder is frozen for AI maintenance.
 /// Flagging a folder that only exists implicitly upserts its row first.
+/// A note that declares one of the space's member-invented types (a
+/// `NodeTypeConfig` with `scope: note`) — a record the Directory's table
+/// lists and a query searches. Derived from the note on every write
+/// (lib/records/projection.ts) and dropped with it; the note is the truth.
+model ContextRecord {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  ownerKey  String   @map("owner_key")
+  path      String
+  /// The type's name as the space spells it.
+  type      String
+  title     String
+  tags      String[] @default([])
+  /// When the note itself was last saved.
+  updatedAt DateTime @map("updated_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, ownerKey, path], name: "context_record_identity")
+  @@index([spaceId, ownerKey, type])
+  @@map("context_records")
+}
+
+/// One field value of a record: what its note's frontmatter says under a key
+/// its type declares, typed by the field's kind into one of the value columns
+/// — or `invalid` when it does not read as that kind. Any note writer can set
+/// frontmatter, so a value is judged here rather than refused at the write;
+/// `raw` keeps what was written so a table can show it as wrong.
+model ContextRecordField {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId     String    @map("space_id")
+  ownerKey    String    @map("owner_key")
+  path        String
+  type        String
+  key         String
+  textValue   String?   @map("text_value")
+  numberValue Float?    @map("number_value")
+  dateValue   DateTime? @map("date_value")
+  boolValue   Boolean?  @map("bool_value")
+  raw         String?
+  invalid     Boolean   @default(false)
+  space       Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, ownerKey, path, key], name: "context_record_field_identity")
+  @@index([spaceId, ownerKey, type, key])
+  @@map("context_record_fields")
+}
+
 model ContextFolder {
   id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId    String   @map("space_id")

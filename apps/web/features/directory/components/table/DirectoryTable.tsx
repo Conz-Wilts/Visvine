@@ -605,6 +605,7 @@ export default function DirectoryTable({
                         <TableCell
                           column={column}
                           value={value}
+                          invalid={item.invalid?.includes(column.key)}
                           aliasColor={alias?.color ?? typeColor}
                           typeLabel={typeLabel}
                           tagColors={tagColors}

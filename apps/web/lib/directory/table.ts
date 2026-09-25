@@ -204,7 +204,7 @@ export function columnsForType(type: string, config?: NodeTypeConfig | null, opt
     // A stored field that collides with a platform column or key is skipped
     // rather than shown twice or handed the platform's value — addTrackedField
     // refuses these, but a stored config predates any one rule.
-    if (seen.has(field.key) || platform.has(field.key)) continue
+    if (seen.has(field.key) || platform.has(field.key) || NOTE_RESERVED_KEYS.includes(field.key)) continue
     seen.add(field.key)
     tracked.push({
       key: field.key,
@@ -698,6 +698,19 @@ const RESERVED_METADATA_KEYS = new Set([
   'email', 'companyName', 'founded', 'memberCount',
 ])
 
+/**
+ * Frontmatter keys the platform already reads on ANY note — a folder's index
+ * layout, sharing, lifecycle. A field's value lands in frontmatter (an
+ * invented type's on its notes, lib/records/; a node type's mirrored into its
+ * entity note), so a field named after one would steer the platform: a Deal
+ * field `status: rejected` down-ranks the note in search and flags it to
+ * agents (lib/notes/shared/lifecycle.ts).
+ */
+export const NOTE_RESERVED_KEYS: readonly string[] = [
+  'type', 'title', 'node', 'description', 'tags', 'status', 'share', 'share_as',
+  'home', 'holds', 'hidden', 'version', 'supersedes', 'superseded_by', 'expires', 'confidence',
+]
+
 /** `Deal stage` → `deal_stage`. Never empty; never starts with a digit. */
 export function fieldKeyFor(label: string): string {
   const slug = label
@@ -734,6 +747,12 @@ export function addTrackedField(
   const fold = (k: string) => k.toLowerCase().replace(/_/g, '')
   if ([...RESERVED_METADATA_KEYS, ...platformMetadataKeys(config.name)].some((k) => fold(k) === fold(key))) {
     return { ok: false, error: `"${label}" is a field the platform already keeps` }
+  }
+  // A field lands in frontmatter — an invented type's on its notes, a node
+  // type's mirrored into its entity note — so the keys every note already
+  // means something by are not free either.
+  if (NOTE_RESERVED_KEYS.some((k) => fold(k) === fold(key))) {
+    return { ok: false, error: `"${label}" is a key every note already uses` }
   }
   const existing = columnsForType(config.name, config)
   if (existing.some((c) => fold(c.key) === fold(key) || c.label.toLowerCase() === label.toLowerCase())) {

@@ -147,14 +147,20 @@ export async function updateSpaceConfig(
       ? await tx.space.update({ where: { id: spaceId }, data })
       : row;
 
-    return { config: { ...stored, ...patch }, space };
+    return { config: { ...stored, ...patch }, space, typesBefore: stored.nodeTypes };
   });
+
+  // A type's fields changed, or an invented type came or went: its records are
+  // re-read from their notes (no note was written, so no projection ran).
+  const { changedNoteTypes, reprojectTypes } = await import('@/lib/records/projection');
+  const changed = changedNoteTypes(result.typesBefore, result.config.nodeTypes);
+  if (changed.length) await reprojectTypes(spaceId, changed);
 
   if (!options.skipRevalidate) bustSpaceConfigCache();
   // The auth gates read this row once per request; a handler that changed it
   // and then reads again in the same request must see the new aliases/config.
   await loadSpaceGate.forget(spaceId);
-  return result;
+  return { config: result.config, space: result.space };
 }
 
 /** The config columns as stored, without taking a lock — for readers that want

@@ -695,7 +695,20 @@ only).
   into the entity note's frontmatter** (`entityNodes.ts#mirroredFields`). Adding
   a field touches no node; removing one leaves values in place, unlisted. Admins
   only (`useTrackedFields`); the key is minted from the label and may never
-  collide with a platform key.
+  collide with a platform key — nor with a frontmatter key every note already
+  means something by (`table.ts#NOTE_RESERVED_KEYS`: `status`, `title`,
+  `share`, `expires`…), since a field's value lands in frontmatter.
+- **An invented type's records are its notes** (`lib/records/`). A `scope:
+  'note'` type's fields are frontmatter keys on the notes that declare it,
+  projected into `context_records` / `context_record_fields` by the outbox
+  (`projection.ts`): typed by kind, a value its kind cannot read kept and
+  flagged `invalid`, re-read when the type's fields change
+  (`updateSpaceConfig`). The Directory's Table lists them beside node types;
+  `list_records` queries them by field. **`setFields` is the one write door for
+  a record's fields** — `set_fields`, a note record's cell and (M6) a Tool's
+  `records.update` — through the node door (`directory/nodeWrite.ts`) for a
+  node and the note write gate for a note, only declared fields, each parsed by
+  the table's own rule.
 - **A member-made type can be deleted; a built-in cannot.** The whole-record PUT
   merges type lists additively (`mergeNodeTypeList`), so shortening needs
   `DELETE /api/spaces/<id>/node-types` — admin-only, and `removeNodeType`
