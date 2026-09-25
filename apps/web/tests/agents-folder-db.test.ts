@@ -322,3 +322,51 @@ test('an agent filed in a folder of the space’s own is the same agent, found w
     await teardown()
   }
 })
+
+test('a landing folder moves into a folder of the space’s own, and new things land there', async (t) => {
+  const reason = await probe()
+  if (reason) return t.skip(reason)
+  const store = await import('@/lib/notes/store')
+  const { landingFolderOf } = await import('@/lib/notes/landing')
+  const { agentFolderIn } = await import('@/lib/agents/location')
+  const { createAgentBrief } = await import('@/lib/agents/service')
+  const { writeGated } = await import('@/lib/notes/contextService')
+  const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
+  await setup()
+  try {
+    await store.createNote(CONTEXT, 'agents/digest/index.md', BRIEF, ACTOR)
+    await store.createNote(CONTEXT, 'teams/index.md', '---\ntitle: Teams\n---\n', ACTOR)
+
+    // The whole folder goes; the agent in it keeps its name and its row.
+    await store.renameFolder(CONTEXT, 'agents', 'teams/agents', ACTOR)
+    assert.equal(await landingFolderOf(CONTEXT, 'agents'), 'teams/agents')
+    assert.equal(parseFrontmatter((await store.readNoteOrNull(CONTEXT, 'teams/agents/index.md')) ?? '').home, 'agents')
+    assert.equal(await agentFolderIn(SPACE, 'digest'), 'teams/agents/digest')
+
+    // A new agent lands there, and so does a note addressed to the built-in name.
+    const made = await createAgentBrief(principal(ADMIN, true), CONTEXT, { name: 'weekly', title: 'Weekly', body: 'Write the week up.' })
+    assert.ok(made.ok, made.ok ? '' : made.error)
+    assert.equal(await agentFolderIn(SPACE, 'weekly'), 'teams/agents/weekly')
+    const aliased = await writeGated(principal(ADMIN, true), CONTEXT, 'agents/notes.md', '# Notes\n')
+    assert.equal(aliased.status === 'applied' ? aliased.path : null, 'teams/agents/notes.md')
+
+    // Never into another built-in folder, and nothing else takes the name.
+    await assert.rejects(store.renameFolder(CONTEXT, 'teams/agents', 'people/agents', ACTOR), /built-in/)
+
+    // Back to its own name: the index stops saying it moved.
+    await store.renameFolder(CONTEXT, 'teams/agents', 'agents', ACTOR)
+    assert.equal(await landingFolderOf(CONTEXT, 'agents'), 'agents')
+    assert.equal(parseFrontmatter((await store.readNoteOrNull(CONTEXT, 'agents/index.md')) ?? '').home, undefined)
+
+    // Deleted only while it holds nothing; then the root index remembers.
+    await assert.rejects(store.deleteFolder(CONTEXT, 'agents'), /holds/)
+    await store.createNote(CONTEXT, 'index.md', '---\ntitle: Space\n---\n', ACTOR).catch(() => undefined)
+    await store.deleteFolder(CONTEXT, 'agents/digest')
+    await store.deleteFolder(CONTEXT, 'agents/weekly')
+    await store.deleteNote(CONTEXT, 'agents/notes.md')
+    await store.deleteFolder(CONTEXT, 'agents')
+    assert.deepEqual(parseFrontmatter((await store.readNoteOrNull(CONTEXT, 'index.md')) ?? '').hidden, ['agents'])
+  } finally {
+    await teardown()
+  }
+})

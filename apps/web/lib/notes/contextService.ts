@@ -37,7 +37,8 @@ import { isUnderResources } from '@/lib/resources/shared/resourceTree'
 import { isRestrictedPath, isLockedPath } from './shared/authz'
 import { replicaDenial } from './publications'
 import { isGlobalSpace } from '@/lib/spaces/globalSpace'
-import { namespaceFeatureRefusal, reservedWriteDenial, togglableNamespaceFeature } from './shared/namespaces'
+import { isLandingDir, namespaceFeatureRefusal, reservedWriteDenial, togglableNamespaceFeature } from './shared/namespaces'
+import { landingFolderOf } from './landing'
 import { getFeatureConfig } from '@/lib/auth'
 import { federatedWriteDenial } from '@/lib/spaces/subspaces'
 import { globalSelfRecordDenial } from '@/lib/global/gate'
@@ -609,6 +610,24 @@ export async function folderConfigKindDenial(p: ContextPrincipal, context: Conte
 }
 
 /**
+ * Where a NEW note addressed to a landing folder is written. `agents/`,
+ * `tools/`, `connectors/` and `models/` may have been moved into a folder of
+ * the space's own (lib/notes/landing.ts); the built-in name then stands for
+ * wherever it went, so `connectors/hubspot.md` written by an AI following a
+ * recipe lands beside the space's other connectors. A note that already
+ * exists at the path is written where it is.
+ */
+async function landingPath(context: Context, path: string): Promise<string> {
+  if (!isShared(context)) return path
+  const clean = path.replace(/^\/+/, '')
+  const dir = clean.split('/')[0]
+  if (!isLandingDir(dir) || clean === dir) return path
+  const home = await landingFolderOf(context, dir)
+  if (home === dir || (await store.readNoteOrNull(context, clean)) !== null) return path
+  return `${home}${clean.slice(dir.length)}`
+}
+
+/**
  * A resource lives under `resources/` (lib/resources/shared/resourceTree.ts):
  * a note declaring `type: Resource` anywhere else is refused, unless the note
  * already there declared it (older data keeps saving).
@@ -629,6 +648,7 @@ export async function writeGated(
   origin: Parameters<typeof store.writeNote>[4] = 'edit',
   model?: string,
 ): Promise<WriteResult> {
+  path = await landingPath(context, path)
   const denial =
     (await writeDenialFull(p, context, path)) ??
     lockedDenial(p, context, path, origin, model) ??

@@ -8,6 +8,7 @@
 // Tool?" question the hooks and the gates ask.
 
 import prisma from '@/lib/prisma'
+import { landingFolderOf } from '@/lib/notes/landing'
 import {
   declaresTool,
   TOOLS_DIR,
@@ -31,7 +32,8 @@ export interface ToolAt {
 /**
  * The folder of the Tool `name` in `spaceId`: `tools/<name>` when its index is
  * there, else the folder named `name` whose index declares `type: tool`, else
- * `tools/<name>` — where a Tool that does not exist yet would be written.
+ * where a Tool that does not exist yet would be written — `tools/<name>`, or
+ * under wherever the space moved `tools/` (lib/notes/landing.ts).
  */
 export async function toolFolderIn(spaceId: string, name: string, ownerKey: string = SHARED_OWNER_KEY): Promise<string> {
   const home = toolFolderPath(name)
@@ -49,7 +51,7 @@ export async function toolFolderIn(spaceId: string, name: string, ownerKey: stri
     const folder = toolFolderOfIndex(row.path, declaresTool(row.content))
     if (folder && toolNameOfFolder(folder) === name) return folder
   }
-  return home
+  return `${await landingFolderOf({ spaceId, ownerKey }, TOOLS_DIR)}/${name}`
 }
 
 /** Every folder above `path`, nearest first. */
@@ -83,17 +85,23 @@ export async function toolContaining(
   if (clean === TOOLS_DIR || clean.startsWith(`${TOOLS_DIR}/`)) return null
   const folders = ancestors(clean).filter((f) => !toolFolderDenial(f))
   if (folders.length === 0) return null
+  // A trashed note keeps its old path in `deletedPath` (its own is a trash key).
+  const indexes = folders.map((f) => `${f}/${INDEX}`)
   const rows = await prisma.contextNote.findMany({
     where: {
       spaceId,
       ownerKey: opts.ownerKey ?? SHARED_OWNER_KEY,
-      ...(opts.deleted ? {} : { deletedAt: null }),
-      path: { in: folders.map((f) => `${f}/${INDEX}`) },
       content: { contains: 'tool', mode: 'insensitive' },
+      OR: [
+        { deletedAt: null, path: { in: indexes } },
+        ...(opts.deleted ? [{ deletedAt: { not: null }, deletedPath: { in: indexes } }] : []),
+      ],
     },
-    select: { path: true, content: true },
+    select: { path: true, deletedPath: true, deletedAt: true, content: true },
   })
-  const tools = new Set(rows.filter((r) => declaresTool(r.content)).map((r) => r.path.slice(0, -(INDEX.length + 1))))
+  const tools = new Set(
+    rows.filter((r) => declaresTool(r.content)).map((r) => ((r.deletedAt && r.deletedPath) || r.path).slice(0, -(INDEX.length + 1))),
+  )
   const folder = folders.find((f) => tools.has(f))
   if (!folder) return null
   return { name: toolNameOfFolder(folder), folder, kind: toolFileKindIn(folder, clean) ?? 'other' }

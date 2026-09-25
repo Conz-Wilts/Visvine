@@ -21,6 +21,7 @@ import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { configHomeDenial, connectorHomeDenial, declaredConfigKind } from '@/lib/notes/shared/configKinds'
 import { agentFolderDenial } from '@/lib/agents/shared/folder'
 import { toolFolderDenial } from '@/lib/tools/config'
+import { isLandingDir, namespaceOf } from '@/lib/notes/shared/namespaces'
 import { drawnParentOf, placementDenial } from '@/lib/notes/shared/placedFolders'
 import {
   SUBSPACE_FOLDER,
@@ -122,6 +123,13 @@ export function moveDenial(
     return null
   }
   if (!from) return 'The context root can’t be moved.'
+  // A landing folder moves into a folder of the space's own — its kind is
+  // found by what each note declares, so only where new things land changes.
+  if (isLandingDir(from)) {
+    if (!destFolder) return null
+    if (destFolder === from || destFolder.startsWith(`${from}/`)) return 'A folder can’t be moved inside itself.'
+    return namespaceOf(destFolder) ? `“${from}” moves into a folder of your own, not into another built-in one.` : null
+  }
   if (isEntityNamespaceDir(from)) {
     return `“${from}” is a managed folder of entity notes — it can’t be moved.`
   }
@@ -143,7 +151,11 @@ export function moveDenial(
  * tree doesn't offer a Delete that is going to come back as an error — the
  * built-in folders simply don't show one, exactly as the root doesn't.
  */
-export function deleteFolderDenial(path: string): string | null {
+export function deleteFolderDenial(
+  path: string,
+  /** How many things the folder holds, besides its own index — a landing folder goes only while it holds none. */
+  holds?: number,
+): string | null {
   if (!path) return 'The context root can’t be deleted.'
   // parent/ is read-only; a sub-space's root is the sub-space; a folder
   // inside a sub-space is judged as that sub-space's own (its built-in
@@ -152,7 +164,11 @@ export function deleteFolderDenial(path: string): string | null {
   if (path === SUBSPACE_FOLDER) return subspaceWriteDenial(path)
   const sub = parseSubspacePath(path)
   if (sub && !sub.path) return subspaceWriteDenial(path)
-  return namespaceFolderDenial(sub ? sub.path : path)
+  const inner = sub ? sub.path : path
+  // A landing folder (agents/, tools/, connectors/, models/) may go while it
+  // is empty: nothing is lost, and new things land in it again when made.
+  if (isLandingDir(inner)) return holds === 0 ? null : `“${inner}” is where new ${inner} land — it can go once it is empty.`
+  return namespaceFolderDenial(inner)
 }
 
 /** Whether a drop on `destFolder` would do anything (legal AND a real change). */
@@ -426,7 +442,10 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
       if (!spaceId) return
       // The menu already withholds Delete on a built-in folder; this is here so
       // no other caller can route around it into a request the server refuses.
-      const denial = deleteFolderDenial(folderPath)
+      const denial = deleteFolderDenial(
+        folderPath,
+        notes.filter((n) => n.path.startsWith(`${folderPath}/`) && n.path !== `${folderPath}/index.md`).length,
+      )
       if (denial) {
         window.alert(denial)
         return

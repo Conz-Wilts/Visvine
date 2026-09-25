@@ -80,11 +80,13 @@ export function placeableOf(path: string): Placeable | null {
   if (sub) {
     if (!sub.path) return { space: null, folder: path }
     const ns = namespaceOf(sub.path)
-    if (!ns || ns.dir !== sub.path || ns.dir === PARENT_FOLDER || ns.dir === SUBSPACE_FOLDER) return null
+    if (!ns || ns.dir !== sub.path || ns.dir === PARENT_FOLDER || ns.dir === SUBSPACE_FOLDER || ns.landing) return null
     return { space: sub.spaceId, folder: sub.path }
   }
   const ns = namespaceOf(path)
-  return ns && ns.dir === path && ns.dir !== PARENT_FOLDER ? { space: null, folder: path } : null
+  // A landing folder moves for real (lib/notes/landing.ts); only the fixed
+  // ones are placed.
+  return ns && ns.dir === path && ns.dir !== PARENT_FOLDER && !ns.landing ? { space: null, folder: path } : null
 }
 
 /** The drawn path of each node's parent — the tree as the sidebar shows it. */

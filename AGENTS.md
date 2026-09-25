@@ -366,10 +366,20 @@ has.
   of one row. A space RECORD lives in `spaces/`; the sub-space graft is
   `subspaces/`. A note path is link identity, so a namespace is renamed only by
   moving every note and rewriting every link — `db:rename:spaces` is the one
-  that did it. A namespace folder is **placed, never moved**
-  (`lib/notes/shared/placedFolders.ts`): the tree draws it under a folder of
-  the space's own when that folder's index note says `holds: [agents]`, the
-  path stays, and the row's `icon` marks it as a tool's shape. Sub-spaces sit
+  that did it. **Two kinds of namespace folder.** A LANDING folder —
+  `agents/`, `tools/`, `connectors/`, `models/` (`landing: true` on the row) —
+  is only where a new thing of its kind is written, because each of those is
+  found by what its note declares (`lib/agents/location.ts`,
+  `lib/tools/location.ts`, `lib/connectors/locate.ts`,
+  `lib/models/locate.ts`). It may be MOVED into a folder of the space's own —
+  the index of wherever it went says `home: agents`, new things land there,
+  and a new note addressed `agents/…` is written there (`lib/notes/landing.ts`,
+  `contextService#landingPath`) — and DELETED while empty, which the root
+  index records as `hidden: [agents]` so it stops standing. The rest are
+  FIXED: their paths are identity or another space's context, and they are
+  **placed, never moved** (`lib/notes/shared/placedFolders.ts`): the tree
+  draws one under a folder of the space's own when that folder's index note
+  says `holds: [events]`, and the path stays. Sub-spaces sit
   in one `Sub-spaces` folder (`subspaces/`) and are placed the same way;
   `POST /api/notes/folders/place` is the one door.
 - **A folder appears because there is something in it**, and a new space holds

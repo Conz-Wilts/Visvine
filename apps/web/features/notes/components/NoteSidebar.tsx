@@ -1118,7 +1118,7 @@ function FolderRow(props: {
             // built-in folder: agents/, connectors/, tools/, people/ and the
             // rest are structure the runtime resolves against, so the row
             // offers no way to remove one (deleteFolderDenial).
-            ...(props.onDeleteFolder && !readOnly && !drawnOnly && !deleteFolderDenial(props.node.path)
+            ...(props.onDeleteFolder && !readOnly && !drawnOnly && !deleteFolderDenial(props.node.path, (props.node.children ?? []).filter((c) => !(c.kind === 'note' && c.path.endsWith('/index.md'))).length)
               ? [
                   {
                     label: 'Delete',

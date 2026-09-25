@@ -534,7 +534,7 @@ async function agentDeletedAt(spaceId: string, path: string): Promise<AgentAt | 
   const file = agentFileIn(folder, path)
   if (file === 'brief') {
     const trashed = await prisma.contextNote.findFirst({
-      where: { spaceId, ownerKey: SHARED_OWNER_KEY, path, deletedAt: { not: null } },
+      where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedPath: path, deletedAt: { not: null } },
       select: { id: true },
       orderBy: { deletedAt: 'desc' },
     })

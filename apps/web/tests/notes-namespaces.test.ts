@@ -187,3 +187,21 @@ test('freeze, do not strand: the refusal is for a namespace holding nothing', ()
   assert.equal(namespaceFeatureRefusal('agents/digest/index.md', off, false), null);
   assert.equal(namespaceFeatureRefusal('notes/q3/plan.md', off, false), null);
 });
+
+test('a landing folder stands where the space moved it, and not at all once deleted', async () => {
+  const { landingHomesFrom, hiddenLandingsOf, isLandingDir, standingFolders } = await import('../lib/notes/shared/namespaces')
+  assert.deepEqual(['agents', 'tools', 'connectors', 'models', 'people', 'resources'].map(isLandingDir), [true, true, true, true, false, false])
+  const homes = landingHomesFrom([
+    { path: 'teams/agents/index.md', frontmatter: { home: 'agents' } },
+    { path: 'people/agents/index.md', frontmatter: { home: 'tools' } },
+    { path: 'zz/agents/index.md', frontmatter: { home: 'agents' } },
+    { path: 'ops/index.md', frontmatter: { home: 'people' } },
+  ])
+  assert.deepEqual([...homes], [['agents', 'teams/agents']], 'the first claim wins; never inside a built-in folder; only landing folders')
+  const hidden = hiddenLandingsOf({ hidden: ['models', 'people'] })
+  assert.deepEqual(hidden, ['models'])
+  const standing = standingFolders(null, { isAdmin: true, homes, hidden })
+  assert.ok(!standing.includes('agents'), 'a moved one stands where it went')
+  assert.ok(!standing.includes('models'), 'a deleted one stands only while something is in it')
+  assert.ok(standing.includes('tools') && standing.includes('people'))
+})

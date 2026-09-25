@@ -21,6 +21,8 @@ import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { visibleVault } from '@/lib/notes/contextService'
 import { listFolders } from '@/lib/notes/store'
 import { standingFolders } from '@/lib/notes/entities'
+import { hiddenLandingsOf, landingHomesFrom } from '@/lib/notes/shared/namespaces'
+import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { buildTree, sortTree } from '@/lib/notes/shared/context'
 import { principalSeesFolder } from '@/lib/notes/shared/permissions'
 import { applyPlacements, placementsFrom } from '@/lib/notes/shared/placedFolders'
@@ -78,16 +80,22 @@ async function ownTree(
   // (lib/notes/shared/namespaces.ts). THIS IS WHY A NEW SPACE HAS FOLDERS:
   // provisionSpace writes no folder rows, so the shape of a space's context is
   // decided here, at read time, from the table — which is also how a space
-  // created a year ago has exactly the same shape as one created just now. The
-  // graft is what makes them un-missable: deleting one is refused
-  // (namespaceFolderDenial).
+  // created a year ago has exactly the same shape as one created just now. A
+  // fixed folder cannot be deleted (namespaceFolderDenial); a landing folder
+  // can while it is empty, and may have moved (lib/notes/landing.ts).
   //
   // `p.spaceAdmin`, not the caller's standing in the space they asked about:
   // this function is re-entered for each flowing sub-space under the
   // principal the caller reads it through (federateTree below) — their own
   // standing when they are in it, the everyone-principal otherwise — and a
   // parent's admin administers nothing there unless the sub-space says so.
-  for (const dir of standingFolders(featureConfig, { isAdmin: p.spaceAdmin })) {
+  // A landing folder the space moved stands where it went, and one it deleted
+  // stands only while something is in it (lib/notes/landing.ts) — both read
+  // off the index notes already in hand.
+  const indexes = metas.filter((m) => isIndexPath(m.path))
+  const homes = landingHomesFrom(indexes)
+  const hidden = hiddenLandingsOf(metas.find((m) => m.path === 'index.md')?.frontmatter)
+  for (const dir of standingFolders(featureConfig, { isAdmin: p.spaceAdmin, homes, hidden })) {
     ensureFolderPath(root, dir)
   }
   for (const folder of folders) {

@@ -46,6 +46,7 @@ import { jobShapeOf } from './diagnose'
 import { currentStepOf, latestRun, type RunListItem } from './runs'
 import { memoryPath } from './shared/memory'
 import { agentFolderIn } from './location'
+import { landingFolderOf } from '@/lib/notes/landing'
 import { agentFolderOfBrief, agentHomeFolder, agentNameOfFolder, briefFolderOf } from './shared/folder'
 import { lastHeartbeat } from './schedule'
 
@@ -816,7 +817,8 @@ export async function createAgentBrief(
     return { ok: false, status: 409, error: `An agent named "${name}" already exists at ${existing.path}. Edit it there — a brief is only ever created here, never replaced.` }
   }
 
-  const path = agentBriefPath(name)
+  // Written where the space's agents land — `agents/`, or wherever it moved it.
+  const path = `${await landingFolderOf(context, 'agents')}/${name}/index.md`
   const denial = await writeDenialFull(p, context, path)
   if (denial) return { ok: false, status: 403, error: denial }
 

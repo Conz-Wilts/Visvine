@@ -102,6 +102,17 @@ export interface Namespace {
    * else.
    */
   standingForAdminOnly?: boolean
+  /**
+   * A LANDING folder: where a new thing of its kind is written, and nothing
+   * more. Its kind is found by what a note declares, wherever it is filed
+   * (lib/agents/location.ts, lib/tools/location.ts, lib/connectors/locate.ts,
+   * lib/models/locate.ts), so the folder itself may be moved into a folder of
+   * the space's own — the index of wherever it lands says `home: <dir>`, and
+   * new things land there — or deleted while it holds nothing. The rest are
+   * fixed: their paths are identity (an entity's note, a resource's bytes) or
+   * another space's context.
+   */
+  landing?: true
 }
 
 export const RESERVED_NAMESPACES: readonly Namespace[] = [
@@ -170,6 +181,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
   },
   {
     dir: 'agents',
+    landing: true,
     kind: 'agent',
     // The folder is there before the first brief, and anyone who may write
     // context may write one.
@@ -183,6 +195,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
   },
   {
     dir: 'connectors',
+    landing: true,
     kind: 'connector',
     // A connector is a record in the directory whose note the console edits.
     // This folder is where a new one is written; an admin may file it in a
@@ -197,6 +210,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
   },
   {
     dir: 'models',
+    landing: true,
     kind: 'model',
     // A model note is directory furniture too — what an agent record runs on.
     feature: 'directory',
@@ -211,6 +225,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
   },
   {
     dir: 'tools',
+    landing: true,
     kind: 'tool',
     // A Tool is a node you open in the directory like any other, and the
     // marketplace has no switch — what a space runs is decided by publish +
@@ -294,14 +309,55 @@ export function dirOfKind(kind: NamespaceKind): string {
  */
 export function standingFolders(
   config: SpaceFeatureConfig | null | undefined,
-  { isAdmin }: { isAdmin: boolean },
+  { isAdmin, homes, hidden }: { isAdmin: boolean; homes?: ReadonlyMap<string, string>; hidden?: readonly string[] },
 ): string[] {
   return RESERVED_NAMESPACES.filter(
     (ns) =>
       ns.appearance === 'standing' &&
       (!ns.standingForAdminOnly || isAdmin) &&
-      (ns.feature === null || isFeatureEnabled(config, ns.feature)),
+      (ns.feature === null || isFeatureEnabled(config, ns.feature)) &&
+      // A landing folder the space moved stands where it went (it is a real
+      // folder there, with an index); one it deleted stands only while
+      // something is in it.
+      !(ns.landing && ((homes?.get(ns.dir) ?? ns.dir) !== ns.dir || hidden?.includes(ns.dir))),
   ).map((ns) => ns.dir)
+}
+
+/** True for a landing folder's own path — `agents`, `tools`, `connectors`, `models`. */
+export function isLandingDir(path: string): boolean {
+  return BY_DIR.get(path)?.landing === true
+}
+
+/** The key on a folder's index naming the landing folder it has become: `home: agents`. */
+export const HOME_KEY = 'home'
+
+/** The key on the root index listing the landing folders the space deleted: `hidden: [models]`. */
+export const HIDDEN_KEY = 'hidden'
+
+/**
+ * Where each landing folder is, from the index notes' `home:` keys — only the
+ * ones that moved. The first folder (by path) to claim a dir wins it.
+ */
+export function landingHomesFrom(indexes: ReadonlyArray<{ path: string; frontmatter: Record<string, unknown> | null | undefined }>): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const note of [...indexes].sort((a, b) => a.path.localeCompare(b.path))) {
+    const home = note.frontmatter?.[HOME_KEY]
+    if (typeof home !== 'string' || !isLandingDir(home.trim()) || out.has(home.trim())) continue
+    if (!note.path.endsWith('/index.md')) continue
+    const folder = note.path.slice(0, -'/index.md'.length)
+    // A landing folder sits in a folder of the space's own, never in another
+    // built-in one.
+    if (namespaceOf(folder)) continue
+    out.set(home.trim(), folder)
+  }
+  return out
+}
+
+/** The landing folders the root index lists as deleted. */
+export function hiddenLandingsOf(rootFrontmatter: Record<string, unknown> | null | undefined): string[] {
+  const raw = rootFrontmatter?.[HIDDEN_KEY]
+  const list = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : []
+  return list.map((x) => String(x).trim()).filter(isLandingDir)
 }
 
 /** The one line each reserved folder's index carries when it declares none. */

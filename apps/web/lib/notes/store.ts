@@ -50,6 +50,7 @@ import {
   type EntityNodeLike,
 } from './entities'
 import { isUnderResources, resourceMoveDenial } from '@/lib/resources/shared/resourceTree'
+import { isLandingDir, namespaceOf } from './shared/namespaces'
 import { revalidateTag } from 'next/cache'
 // Import cycles with vaultCache (it reads via listRaw) and publications (it
 // writes replicas via writeNote; we call its hooks) are benign: both sides
@@ -60,6 +61,7 @@ import { agentFolderDenial, agentNameOfFolder, briefFolderOf } from '@/lib/agent
 import { agentFolders } from '@/lib/agents/location'
 import { declaresTool, toolFolderDenial, toolFolderOfIndex, toolNameOfFolder } from '@/lib/tools/config'
 import { toolFolders } from '@/lib/tools/location'
+import { hiddenIndexContent, homeIndexContent, landingHomes } from './landing'
 import {
   INDEX_BASENAME,
   ancestorFolders,
@@ -91,6 +93,9 @@ export interface Actor {
   name: string
   email?: string | null
 }
+
+/** Who a structural write the store makes on nobody's behalf is stamped as. */
+const SYSTEM_ACTOR: Actor = { id: 'system', name: 'System', email: null }
 
 /**
  * A Prisma client or an interactive-transaction client. The revision ledger is
@@ -1436,14 +1441,29 @@ export async function renameFolder(
   } else if (isEntityFolder(t)) {
     throw new Error(`"${t}" is where a directory entity's notes live — a folder can't be renamed into it`)
   }
-  // A namespace folder is fixed in both directions: `agents/` can't be moved or
-  // renamed away, and nothing else can be renamed into its name — a second
-  // folder claiming to be `agents/` is exactly the collision the runtime can't
-  // see (namespaceFolderDenial).
-  const fromNamespace = namespaceFolderDenial(f)
-  if (fromNamespace) throw new Error(fromNamespace)
-  if (namespaceFolderDenial(t)) {
+  // A fixed namespace folder is fixed in both directions: `people/` can't be
+  // moved or renamed away, and nothing else can be renamed into its name
+  // (namespaceFolderDenial). A LANDING folder (`agents/`, `tools/`,
+  // `connectors/`, `models/`) may move into a folder of the space's own — its
+  // kind is found by declaration, so only where new things land changes, and
+  // the index of wherever it went says so (`home:`, lib/notes/landing.ts). It
+  // comes back to its own name the same way, and only the folder that IS it
+  // may take that name.
+  const homes = context.ownerKey === SHARED_OWNER_KEY ? await landingHomes(context) : new Map<string, string>()
+  const landingFrom = isLandingDir(f) ? f : [...homes].find(([, folder]) => folder === f)?.[0] ?? null
+  if (isLandingDir(f)) {
+    if (!t || namespaceOf(t)) throw new Error(`"${f}" moves into a folder of your own — not the top of another built-in folder.`)
+    const moved = homes.get(f)
+    if (moved) throw new Error(`New ${f} already land in "${moved}" — move that folder, or move this one's notes into it.`)
+  } else {
+    const fromNamespace = namespaceFolderDenial(f)
+    if (fromNamespace) throw new Error(fromNamespace)
+  }
+  if (isLandingDir(t) ? landingFrom !== t : namespaceFolderDenial(t)) {
     throw new Error(`"${t}" is one of the space's built-in folders — a folder can't be renamed into it`)
+  }
+  if (landingFrom && namespaceOf(t) && !isLandingDir(t)) {
+    throw new Error(`"${landingFrom}" moves into a folder of your own — not into another built-in folder.`)
   }
   // Moving a folder INTO an entity's folder converts the entity note first.
   // A moving agent or Tool brings its own index — making one at the destination first
@@ -1541,6 +1561,14 @@ export async function renameFolder(
   // folder themselves, and keep out of the way once somebody has (see
   // nextIndexTitle). Renaming the display name is editing that title.
   if (actor) await retitleIndexAfterRename(context, f, t, actor)
+  // A landing folder that moved says so on its index — and stops saying so
+  // once it is back at its own name.
+  if (landingFrom) {
+    const index = indexPathOf(t)
+    const current = (await findLive(context, index))?.content ?? null
+    const next = homeIndexContent(current, t, landingFrom)
+    if (next !== current) await writeNote(context, index, next, actor ?? SYSTEM_ACTOR, 'maintenance')
+  }
   // The folder is an entry in its old and new parents' indexes — both move.
   await refreshFolderIndex(context, folderOf(f))
   await refreshFolderIndex(context, folderOf(t))
@@ -1574,8 +1602,25 @@ export async function deleteFolder(context: Context, path: string): Promise<void
   // each caller having to remember them. Deleting what's INSIDE one is
   // untouched: `tools/<name>` and `agents/<name>` are ordinary paths and
   // the teardown hooks that remove them still work.
-  const denial = namespaceFolderDenial(p)
-  if (denial) throw new Error(denial)
+  // A landing folder may go while it holds nothing but its own index: nothing
+  // is lost, and the root index remembers not to stand it up again until
+  // something lands in it (lib/notes/landing.ts). A fixed one never goes.
+  const homes = context.ownerKey === SHARED_OWNER_KEY ? await landingHomes(context) : new Map<string, string>()
+  const landing = isLandingDir(p) ? p : [...homes].find(([, folder]) => folder === p)?.[0] ?? null
+  if (landing) {
+    const held = await prisma.contextNote.count({
+      where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: null, path: { startsWith: `${p}/`, not: indexPathOf(p) } },
+    })
+    if (held === 0) {
+      const rootIndex = (await findLive(context, INDEX_BASENAME))?.content ?? null
+      await writeNote(context, INDEX_BASENAME, hiddenIndexContent(rootIndex, landing, true), SYSTEM_ACTOR, 'maintenance')
+    } else if (isLandingDir(p)) {
+      throw new Error(`"${p}" holds ${held === 1 ? 'a note' : `${held} notes`} — move or delete what is in it first; the folder is where new ${p} land.`)
+    }
+  } else {
+    const denial = namespaceFolderDenial(p)
+    if (denial) throw new Error(denial)
+  }
   // A resource is deleted as a resource (its bytes, shares and row go with
   // it), never as a side effect of emptying the folder it was filed in.
   if (isUnderResources(p)) {
