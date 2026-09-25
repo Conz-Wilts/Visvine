@@ -668,7 +668,9 @@ tested). `GET /api/feed?spaceId=` is one space's feed. Responses camelCase;
 action inputs snake_case; the clients mirror each handler by hand. The
 resources surface (files and link cards in messages, the viewer, QuickLook /
 `FileProvider` opens) is specced in `docs/resources/mobile.md` and not yet
-built.
+built. **Tools are web and desktop only**: the server refuses a Bearer session
+or a `cl: 'mobile'` one wherever a Tool runs, and the phones are sent none
+(`lib/tools/clientClass.ts`, `docs/mobile.md`).
 
 ## The Directory
 

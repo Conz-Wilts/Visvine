@@ -11,8 +11,9 @@
 import { NextResponse } from 'next/server'
 import { featureAccessForbidden } from '@/lib/auth'
 import { principalOf, resolveContext, type ResolvedContext } from '@/lib/notes/resolve'
-import { requireSession } from '@/lib/session'
+import { getSessionInfo, requireSession, type SessionPayload } from '@/lib/session'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
+import { toolClientOf, type ToolClient } from './clientClass'
 
 export interface ToolsRouteContext {
   resolved: ResolvedContext
@@ -32,3 +33,15 @@ export async function requireToolsAccess(spaceId: string): Promise<ToolsRouteCon
 }
 
 export const bad = (error: string, status = 400) => NextResponse.json({ error }, { status })
+
+/**
+ * The session behind a request that RUNS a Tool (frame token, bridge, changes,
+ * status), with the client class the run doors judge
+ * (lib/tools/clientClass.ts). The same liveness check as requireSession.
+ */
+export async function requireToolSession(): Promise<{ session: SessionPayload; client: ToolClient } | Response> {
+  const session = await requireSession()
+  if (session instanceof Response) return session
+  const info = await getSessionInfo()
+  return { session, client: info ? toolClientOf(info) : 'app' }
+}

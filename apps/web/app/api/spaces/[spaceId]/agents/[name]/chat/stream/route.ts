@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSessionInfo } from '@/lib/session'
+import { toolClientOf } from '@/lib/tools/clientClass'
 import { z } from 'zod'
 import { requireAgentsAccess } from '@/lib/agents/route'
 import { sendChatMessage } from '@/lib/agents/chat'
@@ -34,6 +36,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
   if (ctx instanceof Response) return ctx
   const body = await parseBody(req, sendSchema)
   if (body instanceof NextResponse) return body
+  const info = await getSessionInfo()
+  const client = info ? toolClientOf(info) : 'app'
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
@@ -69,7 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
         clearTimeout(clock)
       })
 
-      void sendChatMessage(ctx.principal, ctx.resolved, name, body.text, { onEvent: send })
+      void sendChatMessage(ctx.principal, ctx.resolved, name, body.text, { onEvent: send, client })
         .then((result) => {
           if (!result.ok) send({ type: 'error', reason: result.reason, message: result.message })
         })

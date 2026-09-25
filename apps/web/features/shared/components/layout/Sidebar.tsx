@@ -67,6 +67,8 @@ const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync wit
 // check without clipping.
 const RAIL_PANEL_W = 340;
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
+// Below this the viewport is a phone's, and the rail carries no Tools.
+const PHONE_MAX_WIDTH = 639;
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
 // The rail's width, opening and closing — and the motion of anything that
 // must stay glued to its edge.
@@ -100,7 +102,18 @@ export default function Sidebar() {
   // The space's installed Tools ride the space DTO (lib/spaces/queries.ts), so
   // each one's rail row is built from the same data the rest of the nav is —
   // no fetch, no second loading state.
-  const installedTools = currentSpace?.installedTools;
+  // Tools run on the web and in the desktop shell; below the phone breakpoint
+  // the rail carries none, so a phone's browser matches the phone apps
+  // (lib/tools/clientClass.ts), which are sent none at all.
+  const [phoneWidth, setPhoneWidth] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${PHONE_MAX_WIDTH}px)`);
+    const sync = () => setPhoneWidth(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  const installedTools = phoneWidth ? [] : currentSpace?.installedTools;
   // No space selected (and not merely still loading one): the tools all act
   // on the current space, so none of them belong on the rail. The head and foot stay — the space switcher is how you get back into
   // one. During the initial load the tools render as usual so the rail doesn't

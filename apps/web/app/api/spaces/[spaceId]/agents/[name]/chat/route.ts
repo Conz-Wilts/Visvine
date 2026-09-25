@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSessionInfo } from '@/lib/session'
+import { toolClientOf } from '@/lib/tools/clientClass'
 import { z } from 'zod'
 import { requireAgentsAccess } from '@/lib/agents/route'
 import { clearChat, listChatMessages, sendChatMessage } from '@/lib/agents/chat'
@@ -47,7 +49,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const body = await parseBody(req, sendSchema)
   if (body instanceof NextResponse) return body
   try {
-    const result = await sendChatMessage(ctx.principal, ctx.resolved, name, body.text)
+    const info = await getSessionInfo()
+    const result = await sendChatMessage(ctx.principal, ctx.resolved, name, body.text, {
+      client: info ? toolClientOf(info) : 'app',
+    })
     if (!result.ok) return NextResponse.json({ error: result.message, reason: result.reason }, { status: result.status })
     return NextResponse.json({ userMessage: result.userMessage, message: result.message })
   } catch (error) {

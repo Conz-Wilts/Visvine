@@ -400,6 +400,31 @@ borrow the admin's reach. An author who left the space reaches nothing, and so
 does the draft. For anyone who is not one of its authors, the preview does not
 start by itself: it says who wrote it and what it reaches, and runs on **Run**.
 
+### Where Tools run
+
+On the web and in the desktop shell, never in the phone apps
+(`lib/tools/clientClass.ts`, `docs/mobile.md`). The phones are the only
+clients that send a session as a Bearer token, so the transport separates them
+for every token ever issued; a session minted by a phone's sign-in door also
+carries `cl: 'mobile'`. `resolveBridgeTarget` refuses either before reading
+anything — the frame token, the bridge (a `403`, not a bridge answer), the
+changes stream and the status check all pass the caller's client — and
+`proxy.ts` refuses a Bearer header on `/api/tools/*` before any route runs.
+`GET /api/data/spaces` sends a phone no installed Tools and no `tool:*` rail
+keys; `preview_tool { screenshot }` and `check_tool { render }` refuse a caller
+in a phone app, an agent chat held from one included (`ActionCaller.client`).
+A phone's *browser* is the web app and is not claimed; the rail carries no
+Tools below the phone breakpoint.
+
+The desktop shell adds enforcement, never capability
+(`apps/desktop/src/urls.ts`): `will-frame-navigate` refuses any navigation of
+a frame already holding a Tool (known by its runtime URL — its origin is
+opaque) and tells the page, which draws the refusal and records the incident
+as a browser does after the fact; WebRTC is held to proxied TCP
+(`disable_non_proxied_udp`); a permission is never granted from inside a Tool
+frame, even on the app's own origin; the preload bridge is never injected into
+sub-frames.
+
 ## Runtime architecture
 
 ### Tools origin
@@ -847,7 +872,10 @@ Playwright. Each is a `pnpm --filter @visvine/web` script:
 pnpm --filter @visvine/web verify:tools           # author over MCP → publish → review → install → frame + bridge write
 pnpm --filter @visvine/web verify:tools:escape    # adversarial: undeclared reads, cookie theft, content-area escape, cross-space,
                                                   # a foreign-bucket image, a self-navigating frame, CSP reports, a `**` read of
-                                                  # configuration, an admin-only Tool, a non-author's preview, a withdrawn version
+                                                  # configuration, an admin-only Tool, a non-author's preview, a withdrawn version,
+                                                  # Bearer and phone-minted sessions at every Tool door
+pnpm --filter @visvine/web verify:tools:desktop   # the hostile Tool in the real Electron shell: its self-navigation refused
+                                                  # before the request leaves (needs `pnpm --filter @visvine/desktop build`)
 ```
 
 `verify:tools:escape`'s first step asks the running app for its

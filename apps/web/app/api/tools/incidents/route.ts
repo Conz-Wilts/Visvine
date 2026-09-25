@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/session'
+import { requireToolSession } from '@/lib/tools/route'
 import { takeToken } from '@/lib/rateLimit'
 import { resolveBridgeTarget } from '@/lib/tools/target'
 import { incidentSubject, recordIncident } from '@/lib/tools/incidents'
@@ -16,13 +16,14 @@ export const dynamic = 'force-dynamic'
 const KINDS = { navigation: 'severe' } as const
 
 export async function POST(req: NextRequest) {
-  const session = await requireSession()
-  if (session instanceof Response) return session
+  const caller = await requireToolSession()
+  if (caller instanceof Response) return caller
+  const { session, client } = caller
   const body = (await req.json().catch(() => null)) as { target?: unknown; kind?: unknown } | null
   const kind = typeof body?.kind === 'string' && body.kind in KINDS ? (body.kind as keyof typeof KINDS) : null
   if (!kind) return NextResponse.json({ error: 'Unknown incident.' }, { status: 400 })
 
-  const resolved = await resolveBridgeTarget(session, body?.target)
+  const resolved = await resolveBridgeTarget(session, body?.target, undefined, client)
   if ('code' in resolved) return NextResponse.json({ error: resolved.message }, { status: 403 })
 
   const limit = await takeToken(`tools:incident:${session.userId}`, { capacity: 10, refillPerSec: 0.1 })

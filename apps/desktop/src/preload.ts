@@ -31,6 +31,14 @@ contextBridge.exposeInMainWorld("visvineDesktop", {
       return () => ipcRenderer.removeListener("window:fullscreen", wrapped);
     },
   },
+  /** A Tool's frame tried to navigate itself and the shell refused it (src/urls.ts). */
+  toolFrames: {
+    onNavigationRefused: (listener: (frameUrl: string) => void) => {
+      const wrapped = (_e: unknown, frameUrl: string) => listener(frameUrl);
+      ipcRenderer.on("tools:frame-navigation-refused", wrapped);
+      return () => ipcRenderer.removeListener("tools:frame-navigation-refused", wrapped);
+    },
+  },
   files: {
     open: (resourceId: string) => ipcRenderer.invoke("files:open", resourceId),
     quickLook: (resourceId: string) => ipcRenderer.invoke("files:quickLook", resourceId),

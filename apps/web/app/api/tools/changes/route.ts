@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/session'
+import { requireToolSession } from '@/lib/tools/route'
 import { subscribeChanges } from '@/lib/notes/changes'
 import { changedPathsFor } from '@/lib/tools/changes'
 import { resolveBridgeTarget } from '@/lib/tools/target'
@@ -37,8 +37,9 @@ const HEARTBEAT_MS = 20_000
 const COALESCE_MS = 150
 
 export async function GET(req: NextRequest) {
-  const session = await requireSession()
-  if (session instanceof Response) return session
+  const caller = await requireToolSession()
+  if (caller instanceof Response) return caller
+  const { session, client } = caller
 
   const raw = req.nextUrl.searchParams.get('target')
   let target: unknown = null
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
   } catch {
     target = null
   }
-  const resolved = await resolveBridgeTarget(session, target)
+  const resolved = await resolveBridgeTarget(session, target, undefined, client)
   if ('code' in resolved) {
     return NextResponse.json({ ok: false, error: resolved }, { status: resolved.code === 'forbidden' ? 403 : 400 })
   }

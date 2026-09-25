@@ -41,6 +41,7 @@ import { toolRailKey } from '@/lib/featureAccess'
 import { principalForUser } from '@/lib/agents/principal'
 import { listingHoldFor, runDenial, type ListingHold } from './verdicts'
 import { draftAuthorship, nobodyPrincipal, type DraftAuthorship } from './draftAuthors'
+import { toolRunDenial, type ToolClient } from './clientClass'
 
 /** The stored shape `resolveBridgeTarget` needs off an install row. */
 interface InstallRow {
@@ -243,12 +244,19 @@ export function targetKey(t: ResolvedTarget): string {
 /**
  * Resolve + authorise the Tool a bridge call names. The one door: every handler
  * takes what this returns and asks nothing further about identity.
+ *
+ * `client` is the kind of client asking (lib/tools/clientClass.ts): a phone app
+ * never runs a Tool, so it is refused before anything is read. Every HTTP door
+ * passes it; a caller with no client (a script, a test) is not a phone.
  */
 export async function resolveBridgeTarget(
   session: SessionPayload,
   target: unknown,
   deps: TargetDeps = REAL_DEPS,
+  client: ToolClient = 'app',
 ): Promise<ResolvedTarget | BridgeError> {
+  const phone = toolRunDenial(client)
+  if (phone) return phone
   if (!target || typeof target !== 'object') return fail('invalid', 'No tool named in this request.')
   const kind = (target as { kind?: unknown }).kind
   if (kind === 'install') return resolveInstall(session, target as Extract<BridgeTarget, { kind: 'install' }>, deps)

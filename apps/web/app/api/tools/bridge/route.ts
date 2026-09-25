@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/session'
+import { requireToolSession } from '@/lib/tools/route'
+import { toolRunDenial } from '@/lib/tools/clientClass'
 import { handleBridgeCall } from '@/lib/tools/bridge'
 import { bridgeRateKey, takeBridgeCallShared } from '@/lib/tools/limits'
 import { resolveBridgeTarget, targetKey } from '@/lib/tools/target'
@@ -19,9 +20,10 @@ import { BRIDGE_LIMITS, isBridgeMethod, type BridgeResponse } from '@/lib/tools/
  * Status codes are deliberately few. A REFUSAL is not a transport failure: a
  * perimeter denial, a missing note, a rate limit and a bad param all come back
  * 200 carrying `{ ok: false, error }`, because the SDK branches on the code and
- * a Tool must be able to handle its own failures. Only three things are not
+ * a Tool must be able to handle its own failures. Only four things are not
  * bridge answers at all — no session (401), a body too big to parse safely
- * (413), and a request that did not come from the app (403).
+ * (413), a request that did not come from the app (403), and a phone app,
+ * which runs no Tools (403, lib/tools/clientClass.ts).
  */
 
 /** Room for the envelope (`target`, `method`) around the params budget. */
@@ -48,8 +50,12 @@ function fromApp(req: NextRequest): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await requireSession()
-  if (session instanceof Response) return session
+  const caller = await requireToolSession()
+  if (caller instanceof Response) return caller
+  const { session, client } = caller
+  // Not a refusal a Tool handles but a client that runs no Tools at all.
+  const phone = toolRunDenial(client)
+  if (phone) return json({ ok: false, error: phone }, 403)
 
   if (!fromApp(req)) {
     return json({ ok: false, error: { code: 'forbidden', message: 'Not a request from Visvine.' } }, 403)
@@ -93,7 +99,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const resolved = await resolveBridgeTarget(session, target)
+  const resolved = await resolveBridgeTarget(session, target, undefined, client)
   if ('code' in resolved) return json({ ok: false, error: resolved })
 
   // Rate limited AFTER resolution, so the budget is per resolved TARGET rather

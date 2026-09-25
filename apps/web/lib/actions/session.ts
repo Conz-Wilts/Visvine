@@ -11,13 +11,15 @@
 import { MCP_SCOPES } from '@/lib/mcp/scopes'
 import type { SessionPayload } from '@/lib/session'
 import type { ActionCaller } from '@/lib/actions/types'
+import type { ToolClient } from '@/lib/tools/clientClass'
 
-export function callerFromSession(session: SessionPayload): ActionCaller {
+export function callerFromSession(session: SessionPayload, client: ToolClient = 'app'): ActionCaller {
   return {
     userId: session.userId,
     name: session.name,
     email: session.email,
     scopes: [...MCP_SCOPES],
     via: 'api',
+    client,
   }
 }

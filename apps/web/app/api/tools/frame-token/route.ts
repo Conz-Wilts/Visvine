@@ -11,7 +11,7 @@
 // asks the same questions. See FrameTokenResponse.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/session'
+import { requireToolSession } from '@/lib/tools/route'
 import { TOOL_NAME_RE } from '@/lib/tools/config'
 import { mintFrameToken } from '@/lib/tools/frameToken'
 import { frameUrl } from '@/lib/tools/origin'
@@ -56,8 +56,9 @@ function statusOf(error: BridgeError): number {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await requireSession()
-  if (session instanceof Response) return session
+  const caller = await requireToolSession()
+  if (caller instanceof Response) return caller
+  const { session, client } = caller
 
   const body: unknown = await req.json().catch(() => null)
   const target = parseTarget(isRecord(body) ? body.target : null)
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
   // The one door: membership, the `tools` feature key, an install's `enabled`
   // flag and (for a preview) read access to the working copy are all decided
   // here, not re-asked in this route — see lib/tools/target.ts.
-  const resolved = await resolveBridgeTarget(session, target)
+  const resolved = await resolveBridgeTarget(session, target, undefined, client)
   if ('code' in resolved) return fail(statusOf(resolved), resolved.message, resolved.code)
 
   const token = await mintFrameToken(

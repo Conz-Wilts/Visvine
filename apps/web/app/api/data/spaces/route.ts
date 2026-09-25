@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { spaceForPhone, toolClientOf } from '@/lib/tools/clientClass';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { requireSession, isSuperAdmin } from '@/lib/session';
+import { getSessionInfo, requireSession, isSuperAdmin } from '@/lib/session';
 import { isAdmin } from '@/lib/auth';
 import { purgeSpaceObjects } from '@/lib/storage/purge';
 import {
@@ -45,9 +46,12 @@ export async function GET() {
     // Not locked to someone who already reaches it (a parent's admin, via
     // `parentAdmins` — lib/spaces/queries.ts).
     const lockedSubspaces = locked.filter((l) => !spaces.some((s) => s.id === l.id));
+    // A phone app runs no Tools, so it is sent none (lib/tools/clientClass.ts).
+    const info = await getSessionInfo();
+    const phone = info !== null && toolClientOf(info) === 'mobile';
 
     return NextResponse.json(
-      { spaces, lockedSubspaces },
+      { spaces: phone ? spaces.map(spaceForPhone) : spaces, lockedSubspaces },
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

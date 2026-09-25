@@ -12,6 +12,8 @@ import {
   isAuthProviderUrl,
   isSameApp,
   navigationDecision,
+  permissionAllowed,
+  toolFrameNavigationRefused,
 } from "./urls";
 import { beginSignIn, completeSignIn, restoreSession, watchSessionCookie } from "./auth";
 import { loadWindowState, parseWindowControls, saveWindowState, type WindowControls } from "./window-state";
@@ -159,6 +161,16 @@ function applyNavigationPolicy(contents: WebContents) {
   };
   contents.on("will-navigate", guard);
   contents.on("will-redirect", guard);
+  // A Tool's frame loads once and never navigates again: a second navigation
+  // is the Tool leaving with data in its URL (src/urls.ts#toolFrameNavigationRefused).
+  contents.on("will-frame-navigate", (details) => {
+    const current = details.frame?.url ?? "";
+    if (!toolFrameNavigationRefused(current, details.isMainFrame)) return;
+    details.preventDefault();
+    // The page draws the frame's refusal and records it, as a browser does
+    // after the fact; here the request never left.
+    if (!contents.isDestroyed()) contents.send("tools:frame-navigation-refused", current);
+  });
   contents.setWindowOpenHandler(({ url }) => {
     if (isAppSignInUrl(url, appUrl)) {
       beginSignIn(appUrl);
@@ -254,6 +266,9 @@ function createWindow(): BrowserWindow {
   win.on("leave-full-screen", sendFullScreen);
 
   applyNavigationPolicy(win.webContents);
+  // The app itself uses no WebRTC; a Tool's frame must not reach a STUN or
+  // TURN server with data in its candidates over UDP.
+  win.webContents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
 
   // The app is loaded optimistically; an unreachable server surfaces here.
   win.webContents.on("did-fail-load", (_e, code, _desc, url, isMainFrame) => {
@@ -362,12 +377,13 @@ if (!app.requestSingleInstanceLock()) {
     nativeTheme.themeSource = WINDOW_THEME;
     // Only the app itself may hold a permission; auth-provider pages and the
     // offline page get nothing. Checks and requests answer from the same list.
-    const permitted = (permission: string, origin: string) =>
-      ALLOWED_PERMISSIONS.has(permission) && isSameApp(origin, appUrl);
+    // Never from inside a Tool's frame (src/urls.ts#permissionAllowed).
     session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
-      callback(permitted(permission, details.requestingUrl));
+      callback(permissionAllowed(permission, details.requestingUrl, appUrl, ALLOWED_PERMISSIONS));
     });
-    session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permitted(permission, origin));
+    session.defaultSession.setPermissionCheckHandler((_wc, permission, origin, details) =>
+      permissionAllowed(permission, details.requestingUrl || origin, appUrl, ALLOWED_PERMISSIONS),
+    );
 
     keepSessionOnDisk();
 

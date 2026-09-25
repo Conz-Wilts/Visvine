@@ -13,6 +13,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireApiSession, handleApiError } from '@/lib/api/route'
 import { callerFromSession } from '@/lib/actions/session'
+import { getSessionInfo } from '@/lib/session'
+import { toolClientOf } from '@/lib/tools/clientClass'
 import { buildActionDoc } from '@/lib/actions/guide'
 import { runAction } from '@/lib/actions/run'
 
@@ -53,7 +55,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
     }
 
-    const { result } = await runAction(callerFromSession(session), action, input)
+    const info = await getSessionInfo()
+    const { result } = await runAction(callerFromSession(session, info ? toolClientOf(info) : 'app'), action, input)
     return NextResponse.json({ result })
   } catch (error) {
     // ActionError carries a status, so handleApiError surfaces it as one; a

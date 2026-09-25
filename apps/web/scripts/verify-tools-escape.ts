@@ -56,6 +56,7 @@ import { chromium, type Browser, type BrowserContext, type Frame, type Page } fr
 import prisma from '../lib/prisma';
 import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { isAdmin } from '../lib/auth';
+import { createSession } from '../lib/session';
 import type { SpaceFeatureConfig } from '../lib/types/space';
 import { toolRailKey } from '../lib/featureAccess';
 import { resolveContext } from '../lib/notes/resolve';
@@ -762,6 +763,52 @@ async function main(): Promise<void> {
       for (const line of blocked.slice(0, 12)) console.log(`          ${line.slice(0, 200)}`);
     }
 
+
+    // ── 8a. no phone runs a Tool ────────────────────────────────────────────
+    step('8a. the phone apps run no Tool');
+    const phoneToken = await createSession({ userId: owner.id, name: owner.name ?? '', email: owner.email ?? '', cl: 'mobile' });
+    const plainToken = await createSession({ userId: owner.id, name: owner.name ?? '', email: owner.email ?? '' });
+    const installTarget = { kind: 'install', installId: install.id };
+    const asPhone = async (path: string, init: RequestInit & { cookie?: string; bearer?: string }) => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', Origin: APP };
+      if (init.bearer) headers.Authorization = `Bearer ${init.bearer}`;
+      if (init.cookie) headers.Cookie = `auth_session=${init.cookie}`;
+      const res = await fetch(`${APP}${path}`, { ...init, headers, redirect: 'manual' });
+      return res.status;
+    };
+    const doors: Array<[string, RequestInit]> = [
+      ['/api/tools/frame-token', { method: 'POST', body: JSON.stringify({ target: installTarget }) }],
+      ['/api/tools/bridge', { method: 'POST', body: JSON.stringify({ target: installTarget, method: 'state.get', params: { key: 'probe' } }) }],
+      [`/api/tools/changes?target=${encodeURIComponent(JSON.stringify(installTarget))}`, { method: 'GET' }],
+      [`/api/tools/status?target=${encodeURIComponent(JSON.stringify(installTarget))}`, { method: 'GET' }],
+    ];
+    const bearerStatuses = [];
+    const claimStatuses = [];
+    for (const [path, init] of doors) {
+      bearerStatuses.push(await asPhone(path, { ...init, bearer: plainToken }));
+      claimStatuses.push(await asPhone(path, { ...init, cookie: phoneToken }));
+    }
+    check(
+      'a Bearer session is refused at every Tool door',
+      bearerStatuses.every((status) => status === 403),
+      `frame-token, bridge, changes, status → ${bearerStatuses.join(', ')}`,
+    );
+    const statusBody = await fetch(`${APP}${doors[3][0]}`, { headers: { Cookie: `auth_session=${phoneToken}` } }).then((r) => r.json()).catch(() => null);
+    check(
+      "a session a phone's sign-in minted is refused too, even as a cookie",
+      claimStatuses.slice(0, 3).every((status) => status === 403) &&
+        statusBody?.ok === false && statusBody?.error?.code === 'forbidden',
+      `frame-token, bridge, changes → ${claimStatuses.slice(0, 3).join(', ')} · status says ${JSON.stringify(statusBody?.error ?? statusBody)}`,
+    );
+    const spaces = await fetch(`${APP}/api/data/spaces`, { headers: { Authorization: `Bearer ${plainToken}` } })
+      .then((r) => r.json() as Promise<{ spaces?: Array<{ id: string; installedTools?: unknown[]; featureConfig?: { order?: string[] } }> }>)
+      .catch(() => null);
+    const phoneSpace = spaces?.spaces?.find((space) => space.id === SPACE);
+    check(
+      "the phone's space list carries no installed Tools and no tool:* rail keys",
+      !!phoneSpace && (phoneSpace.installedTools ?? []).length === 0 && !(phoneSpace.featureConfig?.order ?? []).includes(RAIL_KEY),
+      phoneSpace ? `installedTools ${JSON.stringify(phoneSpace.installedTools)} · order ${JSON.stringify(phoneSpace.featureConfig?.order)}` : 'space not in the list',
+    );
 
     // ── 8b. the frame navigating itself ─────────────────────────────────────
     step('8b. a frame that navigates itself is taken down and recorded');

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Hosts the three tabs — Home, Messages, Tools (docs/mobile.md) — the
+/// Hosts the three tabs — Home, Messages, Activity (docs/mobile.md) — the
 /// system tab bar, the space sidebar, and the Profile modal. Each tab
 /// is its own NavigationStack so detail screens push within the tab; the
 /// Directory and Events screens are pushed from Home rather than being tabs.
@@ -23,8 +23,8 @@ struct MainTabView: View {
             Tab("Messages", image: VisvineIconName.message.rawValue, value: MainTab.messages) {
                 stack { MessagesHubView(onProfile: { profilePresented = true }) }
             }
-            Tab("Tools", image: VisvineIconName.grid.rawValue, value: MainTab.tools) {
-                stack { ToolsView(onProfile: { profilePresented = true }) }
+            Tab("Activity", image: VisvineIconName.bell.rawValue, value: MainTab.activity) {
+                stack { ActivityView(onProfile: { profilePresented = true }) }
             }
         }
         .tint(theme.colors.accent)

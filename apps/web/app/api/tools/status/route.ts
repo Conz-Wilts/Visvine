@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/session'
+import { requireToolSession } from '@/lib/tools/route'
 import { resolveBridgeTarget } from '@/lib/tools/target'
 
 /**
@@ -12,8 +12,9 @@ import { resolveBridgeTarget } from '@/lib/tools/target'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
-  const session = await requireSession()
-  if (session instanceof Response) return session
+  const caller = await requireToolSession()
+  if (caller instanceof Response) return caller
+  const { session, client } = caller
   let target: unknown = null
   try {
     const raw = req.nextUrl.searchParams.get('target')
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
   } catch {
     target = null
   }
-  const resolved = await resolveBridgeTarget(session, target)
+  const resolved = await resolveBridgeTarget(session, target, undefined, client)
   if ('code' in resolved) return NextResponse.json({ ok: false, error: resolved })
   return NextResponse.json({ ok: true })
 }

@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
     email: user.email,
     image: user.image,
     nodeId: user.nodeId,
+    // This door is the phone apps' dev login (lib/tools/clientClass.ts).
+    cl: 'mobile',
   });
 
   return Response.json({

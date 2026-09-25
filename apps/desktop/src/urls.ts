@@ -133,3 +133,43 @@ export function authHandoffIn(link: string): string | null {
   const handoff = target.searchParams.get("handoff");
   return handoff && handoff.length > 0 && handoff.length < 4096 ? handoff : null;
 }
+
+/** Where the web app serves a Tool's frame document (apps/web/lib/tools/origin.ts). */
+const TOOL_FRAME_PATH = "/api/tools/runtime/";
+
+/**
+ * Is this a Tool's frame, by its URL? The frame's ORIGIN is opaque (it is
+ * sandboxed without `allow-same-origin`), so it is known by where it was
+ * loaded from: the runtime path, on the tools origin or — with that unset —
+ * the app's own.
+ */
+export function isToolFrameUrl(url: string): boolean {
+  const target = safeParse(url);
+  if (!target || (target.protocol !== "http:" && target.protocol !== "https:")) return false;
+  return target.pathname.startsWith(TOOL_FRAME_PATH);
+}
+
+/**
+ * A Tool's frame may load once — the document the host asked for — and never
+ * navigate again. A second navigation is a Tool leaving its sandbox with data
+ * in the URL, the one channel CSP cannot close; a browser can only detect it
+ * after the fact, the shell refuses it outright. `current` is the frame's URL
+ * as it stands (empty or about:blank for a frame's first load).
+ */
+export function toolFrameNavigationRefused(current: string, isMainFrame: boolean): boolean {
+  return !isMainFrame && isToolFrameUrl(current);
+}
+
+/**
+ * Whether a permission is granted: only the app itself holds one, and never
+ * from inside a Tool's frame — which, with no separate tools origin, is served
+ * from the app's own origin and would otherwise pass as the app.
+ */
+export function permissionAllowed(
+  permission: string,
+  requestingUrl: string,
+  appUrl: string,
+  allowed: ReadonlySet<string>,
+): boolean {
+  return allowed.has(permission) && isSameApp(requestingUrl, appUrl) && !isToolFrameUrl(requestingUrl);
+}

@@ -45,6 +45,13 @@ interface DesktopBridge {
   runtimes?: DesktopRuntimes;
   /** Absent in a shell older than opening resources natively. */
   files?: DesktopFiles;
+  /** Absent in a shell older than refusing a Tool frame's navigation. */
+  toolFrames?: DesktopToolFrames;
+}
+
+/** A Tool frame the shell stopped from navigating itself, named by its URL. */
+interface DesktopToolFrames {
+  onNavigationRefused(listener: (frameUrl: string) => void): () => void;
 }
 
 /** Opening a resource in the computer's own app, or Quick Look on macOS. */
@@ -65,6 +72,12 @@ export function desktopRuntimes(): DesktopRuntimes | null {
   return window.visvineDesktop?.runtimes ?? null;
 }
 
+
+/** The Tool-frame bridge, or null in a browser or an older shell. */
+export function desktopToolFrames(): DesktopToolFrames | null {
+  if (typeof window === 'undefined') return null;
+  return window.visvineDesktop?.toolFrames ?? null;
+}
 
 /** The native-open bridge, or null in a browser or an older shell. */
 export function desktopFiles(): DesktopFiles | null {

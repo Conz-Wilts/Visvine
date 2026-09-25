@@ -190,6 +190,8 @@ export interface AgentToolContext {
    * which is what every run is unless the runner says otherwise.
    */
   attended?: boolean
+  /** `mobile` when the person a chat runs for is in a phone app (lib/tools/clientClass.ts). */
+  client?: 'app' | 'mobile'
   /**
    * The action catalogue, one line per action, for the run_action description.
    * Built by the caller (lib/agents/runner.ts) because reaching the registry
@@ -969,6 +971,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       via: 'agent' as const,
       agentName: ctx.agentName,
       runId: ctx.runId ?? null,
+      client: ctx.client ?? 'app',
     }
     // The registry is reached by dynamic import: an action definition imports
     // the agent service, which reaches this module, so a value import here

@@ -96,3 +96,44 @@ test("an auth link is never turned into a page path", () => {
   // ever slipped the app must not navigate to a page called /auth.
   assert.equal(authHandoffIn("visvine-desktop://auth?handoff=x") !== null, true);
 });
+
+const { isToolFrameUrl, toolFrameNavigationRefused, permissionAllowed } = require("../dist/urls.js");
+
+test("a Tool frame is known by its runtime path, on either origin", () => {
+  assert.equal(isToolFrameUrl("http://127.0.0.1:3000/api/tools/runtime/frame?token=x"), true);
+  assert.equal(isToolFrameUrl("http://localhost:3000/api/tools/runtime/frame?token=x"), true);
+  assert.equal(isToolFrameUrl("http://localhost:3000/t/deals"), false);
+  assert.equal(isToolFrameUrl("about:blank"), false);
+  assert.equal(isToolFrameUrl(""), false);
+});
+
+test("a Tool frame loads once and never navigates again", () => {
+  // Its first load: the frame is still blank.
+  assert.equal(toolFrameNavigationRefused("about:blank", false), false);
+  assert.equal(toolFrameNavigationRefused("", false), false);
+  // Once it holds the Tool, any navigation of it — to anywhere — is refused.
+  assert.equal(toolFrameNavigationRefused("http://127.0.0.1:3000/api/tools/runtime/frame?token=x", false), true);
+  // The app's own main frame and its other embeds are not this rule's.
+  assert.equal(toolFrameNavigationRefused("http://localhost:3000/api/tools/runtime/frame?token=x", true), false);
+  assert.equal(toolFrameNavigationRefused("https://www.youtube-nocookie.com/embed/x", false), false);
+});
+
+test("permissions belong to the app, never to a Tool frame on the app's origin", () => {
+  const allowed = new Set(["clipboard-read", "fullscreen"]);
+  assert.equal(permissionAllowed("fullscreen", "http://localhost:3000/directory", APP, allowed), true);
+  assert.equal(permissionAllowed("fullscreen", "http://localhost:3000/api/tools/runtime/frame?token=x", APP, allowed), false);
+  assert.equal(permissionAllowed("fullscreen", "http://127.0.0.1:3000/api/tools/runtime/frame?token=x", APP, allowed), false);
+  assert.equal(permissionAllowed("camera", "http://localhost:3000/directory", APP, allowed), false);
+  assert.equal(permissionAllowed("fullscreen", "https://evil.example/", APP, allowed), false);
+});
+
+test("the preload bridge stays out of sub-frames and the window stays sandboxed", async () => {
+  const { readFileSync } = await import("node:fs");
+  const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+  assert.ok(!/nodeIntegrationInSubFrames/.test(main), "a preload in sub-frames would hand a Tool frame the bridge");
+  assert.match(main, /contextIsolation: true/);
+  assert.match(main, /sandbox: true/);
+  assert.match(main, /nodeIntegration: false/);
+  assert.match(main, /will-frame-navigate/);
+  assert.match(main, /setWebRTCIPHandlingPolicy\("disable_non_proxied_udp"\)/);
+});

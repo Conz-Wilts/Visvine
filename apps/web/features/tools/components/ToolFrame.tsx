@@ -8,6 +8,7 @@ import { RefreshCwIcon } from '@/features/shared/icons';
 import { Button, Skeleton } from '@visvine/ui';
 import { FetchJsonError, fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
+import { desktopToolFrames } from '@/features/desktop/lib/desktop';
 import type { BridgeTarget, ToolSubject } from '@/lib/tools/protocol';
 import { useTheme } from '@/features/shared/contexts/ThemeContext';
 import {
@@ -242,6 +243,19 @@ export default function ToolFrame({
     void fetchJsonBody('/api/tools/incidents', 'POST', { target, kind: 'navigation' }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetKey]);
+
+  // The desktop shell refuses a Tool frame's navigation outright and says so;
+  // the frame is taken down and recorded exactly as a browser's second load is.
+  useEffect(() => {
+    const frames = desktopToolFrames();
+    if (!frames || !mint) return;
+    return frames.onNavigationRefused((frameUrl) => {
+      if (frameUrl !== mint.frameUrl) return;
+      setStopped(NAVIGATED);
+      void fetchJsonBody('/api/tools/incidents', 'POST', { target, kind: 'navigation' }).catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mint, targetKey]);
 
   // ── may it keep running ──
 

@@ -43,6 +43,12 @@ export interface ActionCaller {
   /** The agent whose run is acting, and that run, when `via` is `agent`. */
   agentName?: string | null
   runId?: string | null
+  /**
+   * `mobile` when the person behind the call is in a phone app — its own
+   * session, or an agent chat they are having from one. Nothing renders or
+   * runs a Tool for them (lib/tools/clientClass.ts).
+   */
+  client?: 'app' | 'mobile'
 }
 
 /** The caller as the reader a resource's gate and record of use take. */

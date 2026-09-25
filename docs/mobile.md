@@ -3,14 +3,25 @@
 The phone is a lite extension of a space, not the desktop app on a small
 screen. Two native clients (`apps/mobile/ios`, `apps/mobile/android`), thin
 over the web app's routes with `Authorization: Bearer <jwt>`, three tabs each —
-Home and Messages on both, then Tools on iOS and Activity on Android:
+Home, Messages and Activity:
 
 | Tab | What it is | Reads | Writes |
 |---|---|---|---|
 | **Home** | The space switcher and the space's feed. iOS swaps Feed, Events and Context under chips; Android has two rows (People, Events) that open the Directory and Events screens | `GET /api/data/spaces`, `GET /api/feed?spaceId=&cursor=&limit=`, `GET /api/events?spaceId=`, `GET /api/notes/tree` (iOS) | — |
 | **Messages** | iMessage-style. **Agents** — the space's agents, each a standing chat thread; **Contacts** — DMs with people | `GET /api/spaces/<id>/agents/chat`, `GET …/agents/<name>/chat?cursor=`, `GET /api/messages/conversations` (type `DM`), `GET /api/messages/users?query=` | `POST …/agents/<name>/chat/stream` (SSE) or `POST …/agents/<name>/chat`, `DELETE …/agents/<name>/chat`, `POST /api/messages/conversations {userId}` (the DM), `POST /api/messages/conversations/<id>/messages` |
-| **Tools** (iOS) | The space's installed Tools; a row opens the Tool on the web | `POST /api/actions/list_tools` | — |
-| **Activity** (Android) | Everything about you: runs that acted for you, mentions and replies, requests you can answer, the events you are going to | `GET /api/activity?cursor=&limit=` | the row's own `actions` (approve / decline through the existing member and access-request routes) |
+| **Activity** | Everything about you: runs that acted for you, mentions and replies, requests you can answer, the events you are going to | `GET /api/activity?cursor=&limit=` | the row's own `actions` (approve / decline through the existing member and access-request routes) |
+
+**Tools are web and desktop only.** A Tool is code a space runs over its data,
+and the phones run none of it: the server refuses a Bearer session (the phones
+are the only clients that send one) and a session minted by a phone's sign-in
+door (`cl: 'mobile'`) at every door where a Tool runs — frame token, bridge,
+changes stream, status — and the proxy refuses a Bearer header on
+`/api/tools/*` before any route runs (`lib/tools/clientClass.ts`). The phones
+are sent no installed Tools and no `tool:*` rail keys in `GET /api/data/spaces`,
+and nothing in `apps/mobile` names a Tool door (`tests/tools-client-class.test.ts`
+reads every source file). An agent chat held from a phone renders no Tool for
+the person either. A phone's *browser* is the web app; the rail simply carries
+no Tools below the phone breakpoint.
 
 **The apps view and edit; they do not create.** A note, a person, a space, an
 event, an agent — anything new is asked of an AI through the Visvine MCP

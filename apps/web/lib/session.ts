@@ -104,23 +104,43 @@ export async function sessionUserValid(userId: string): Promise<boolean> {
 }
 
 /**
- * The caller's session, read once per request: a route's own gate, the
- * context resolver and any helper underneath all share one verification.
+ * How a session reached this request. Web and the desktop shell hold the
+ * `auth_session` cookie; the phone apps are the only clients that send their
+ * session as a Bearer token. The transport is observed, never signed into the
+ * token — it is what keeps tools off the phones (lib/tools/clientClass.ts).
  */
-export const getSession = requestMemo('session', async (): Promise<SessionPayload | null> => {
+type SessionTransport = 'cookie' | 'bearer';
+
+export interface SessionInfo {
+  session: SessionPayload;
+  transport: SessionTransport;
+}
+
+/**
+ * The caller's session and how it arrived, read once per request: a route's
+ * own gate, the context resolver and any helper underneath all share one
+ * verification.
+ */
+export const getSessionInfo = requestMemo('sessionInfo', async (): Promise<SessionInfo | null> => {
   const headerStore = await headers();
   const authHeader = headerStore.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const bearer = authHeader.substring(7);
     const session = await verifySession(bearer);
-    if (session) return session;
+    if (session) return { session, transport: 'bearer' };
   }
 
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
-  return verifySession(token);
+  const session = await verifySession(token);
+  return session ? { session, transport: 'cookie' } : null;
 });
+
+/** The caller's session, read once per request (see {@link getSessionInfo}). */
+export async function getSession(): Promise<SessionPayload | null> {
+  return (await getSessionInfo())?.session ?? null;
+}
 
 /**
  * Returns the current session or a 401 JSON response.

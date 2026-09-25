@@ -197,6 +197,8 @@ export type SendChatResult =
 export interface SendChatOptions {
   signal?: AbortSignal
   onEvent?: (event: ChatStreamEvent) => void
+  /** `mobile` when the person is chatting from a phone app — nothing runs a Tool for them. */
+  client?: 'app' | 'mobile'
   /** A scripted model, for tests. */
   chatFn?: ChatFn
 }
@@ -323,6 +325,7 @@ export async function sendChatMessage(
       machineAllow: reach.hosts,
       attended: true,
       actionCatalogue,
+      client: opts.client ?? 'app',
     }),
   )
 

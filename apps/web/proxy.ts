@@ -124,6 +124,14 @@ export async function proxy(req: NextRequest) {
     });
   }
 
+  // Tools run on the web and in the desktop shell. The phone apps are the only
+  // clients that send a session as a Bearer token (lib/tools/clientClass.ts),
+  // so a Bearer header on a Tool door is refused before any route runs; the
+  // routes refuse it again on their own.
+  if (pathname.startsWith("/api/tools/") && req.headers.get("authorization")?.startsWith("Bearer ")) {
+    return secured(NextResponse.json({ error: "Tools run on the web and in the desktop app." }, { status: 403 }));
+  }
+
   const isPublic =
     pathname === "/" ||
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||

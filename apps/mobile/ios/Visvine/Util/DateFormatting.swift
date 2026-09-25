@@ -73,6 +73,15 @@ enum DateFormatting {
         return date > Date()
     }
 
+    /// "Today", "Yesterday", else "Monday, January 5, 2026" — Activity's day headings.
+    static func dayLabel(_ value: String) -> String {
+        guard let date = parse(value) else { return value }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Today" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        return longDate(value)
+    }
+
     /// Conversations list relative format: now / 5m / 3h / 2d / "Mar 4".
     static func relativeShort(_ value: String) -> String {
         guard let date = parse(value) else { return value }

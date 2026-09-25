@@ -40,6 +40,7 @@ import type { ToolConfig } from '@/lib/tools/config'
 import { appOrigin as liveAppOrigin } from '@/lib/tools/origin'
 import { describePerimeter, perimeterIsEmpty } from '@/lib/tools/perimeter'
 import { BRIDGE_METHODS } from '@/lib/tools/protocol'
+import { TOOL_PHONE_REFUSAL } from '@/lib/tools/clientClass'
 import { computeRequirements, describeRequirements, isDegraded } from '@/lib/tools/requirements'
 import { TOOL_AUTHOR_GUIDE, TOOL_KIT_DTS } from '@/lib/tools/sdkDocs'
 import {
@@ -487,6 +488,7 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
   // report what the console said. Only when it compiles — an error card has no
   // runtime errors worth reading — and never an image here (that is preview_tool).
   let runtime: RuntimeReport | undefined
+  if (args.render && ctx.client === 'mobile') throw new ActionError(403, TOOL_PHONE_REFUSAL)
   if (args.render && build.ok) {
     runtime = runtimeReport(
       await deps.capturePreview(previewRequest(ctx, target, args.name, deps, { image: false })),
@@ -538,6 +540,7 @@ async function previewTool(ctx: ActionCaller, args: PreviewToolArgs, deps: AppTo
   // The screenshot is opt-in and best-effort: it launches a browser, and where
   // that cannot happen (no Playwright, production without TOOLS_SCREENSHOT=on)
   // the answer says so and the links still stand.
+  if (args.screenshot && ctx.client === 'mobile') throw new ActionError(403, TOOL_PHONE_REFUSAL)
   const screenshot = args.screenshot
     ? screenshotReport(await deps.capturePreview(previewRequest(ctx, target, detail.name, deps, { image: true })))
     : undefined
