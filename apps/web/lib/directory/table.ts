@@ -198,12 +198,13 @@ export function columnsForType(type: string, config?: NodeTypeConfig | null, opt
     .map((x) => x.c)
 
   const seen = new Set([...CORE_HEAD, ...typeColumns, ...CORE_TAIL].map((c) => c.key))
+  const platform = platformMetadataKeys(type)
   const tracked: TableColumn[] = []
   for (const field of config?.fields ?? []) {
-    // A stored field that collides with a platform column is skipped rather
-    // than shown twice — addTrackedField refuses these, but the config note
-    // is hand-editable.
-    if (seen.has(field.key)) continue
+    // A stored field that collides with a platform column or key is skipped
+    // rather than shown twice or handed the platform's value — addTrackedField
+    // refuses these, but a stored config predates any one rule.
+    if (seen.has(field.key) || platform.has(field.key)) continue
     seen.add(field.key)
     tracked.push({
       key: field.key,
@@ -654,15 +655,43 @@ const MAX_LABEL = 40
 const MAX_OPTIONS = 50
 
 /**
- * Metadata keys the platform reads or writes for its own reasons. A tracked
- * field may not take one: a space that "tracked" `userId` would hand the
- * identity binding to a text cell, and `status` on an event is its draft
- * flag. Column and core keys are refused per type in addTrackedField, since
- * they depend on the type.
+ * Metadata keys the platform reads or writes for its own reasons, on every
+ * type: no field door ever writes one, and no tracked field may take one. A
+ * space that "tracked" `userId` would hand the identity binding to a text
+ * cell, a writable `notePath` would re-point an entity at another note, and
+ * `status` / `visibility` are an event's draft flag and its audience.
+ */
+const PLATFORM_METADATA_KEYS = [
+  'userId', 'identityId', 'spaceRef', 'globalMode', 'notePath',
+  'status', 'visibility', 'form_schema', 'experience',
+]
+
+/**
+ * The same, per type: an event keeps its hosts (who manages it), its public
+ * slug, its RSVP form and the rest of its record in metadata
+ * (lib/eventRepo.ts), each written only by the event's own doors.
+ */
+const TYPE_PLATFORM_METADATA_KEYS: Record<string, string[]> = {
+  event: [
+    'hosts', 'slug', 'form', 'analytics', 'theme', 'coverImageUrl', 'locationData',
+    'timezone', 'description', 'waitlistEnabled', 'guestListVisible', 'allowPlusOnes',
+    'allowedResponses',
+  ],
+}
+
+/** The keys of `type` that only the platform writes. */
+export function platformMetadataKeys(type: string): ReadonlySet<string> {
+  return new Set([...PLATFORM_METADATA_KEYS, ...(TYPE_PLATFORM_METADATA_KEYS[canonicalType(type)] ?? [])])
+}
+
+/**
+ * What a tracked field may not be called, on any type: the platform's keys and
+ * every built-in type's own property keys, so a field never shadows one.
+ * Column and core keys are refused per type in addTrackedField, since they
+ * depend on the type.
  */
 const RESERVED_METADATA_KEYS = new Set([
-  'userId', 'spaceRef', 'globalMode', 'identityId',
-  'status', 'visibility', 'form_schema', 'experience',
+  ...PLATFORM_METADATA_KEYS,
   'bio', 'website', 'linkedinUrl', 'twitterUrl', 'phone', 'pronouns',
   'company_name', 'company_image_url', 'image_url', 'imageUrl',
   'start_at', 'end_at', 'capacity', 'organizerEmail',
@@ -703,7 +732,7 @@ export function addTrackedField(
   // `user_id` is `userId` as far as anyone typing a label is concerned, so
   // the comparison ignores case and underscores on both sides.
   const fold = (k: string) => k.toLowerCase().replace(/_/g, '')
-  if ([...RESERVED_METADATA_KEYS].some((k) => fold(k) === fold(key))) {
+  if ([...RESERVED_METADATA_KEYS, ...platformMetadataKeys(config.name)].some((k) => fold(k) === fold(key))) {
     return { ok: false, error: `"${label}" is a field the platform already keeps` }
   }
   const existing = columnsForType(config.name, config)

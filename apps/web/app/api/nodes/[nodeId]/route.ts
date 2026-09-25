@@ -15,13 +15,17 @@ import { GLOBAL_MODE_KEY, syncGlobalRecordSafe } from '@/lib/global/record';
 import { requireApiSession } from '@/lib/api/route';
 import { syncEntityNoteFrontmatter } from '@/lib/notes/context/entityNodes';
 import { samePersonRecords } from '@/lib/directory/samePerson';
+import { planMetadataWrite, writableColumns } from '@/lib/directory/fieldWrite';
+import { findNodeTypeConfig } from '@/lib/types/context';
+import { canonicalType } from '@/lib/types/typeFields';
+import { entityNotePath } from '@/lib/notes/entities';
+import { principalOf, resolveContext } from '@/lib/notes/resolve';
+import { writeDenialFull } from '@/lib/notes/contextService';
+import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth';
+import type { NBEvent } from '@/lib/types';
+import type { NodeTypeConfig } from '@/lib/types';
 
 const MAX_NAME_LEN = 120;
-
-/** Metadata keys clients may not write through the generic property-row patch.
- *  `userId` is the person-node record key the entity sync finds nodes by —
- *  forging it would let any member re-point a person context at another record. */
-const RESERVED_METADATA_KEYS = ['userId'];
 
 type RouteContext = {
   params: Promise<{ nodeId: string }>;
@@ -199,11 +203,21 @@ const PATCHABLE_COLUMNS = {
 
 /**
  * PATCH /api/nodes/[nodeId] — update an entity's tags, property rows, and
- * display name from its context note. Body: { spaceId, name?, tags?,
- * metadata?, subtitle?, location?, url?, image_url? }. Gated on active
- * membership of the node's own space
- * (the same audience that can read/write the space context); these are shared
- * collaborative metadata, so any member with write access may edit them.
+ * display name from its context note or a Directory cell. Body: { spaceId,
+ * name?, tags?, metadata?, subtitle?, location?, url?, image_url? }.
+ *
+ * This is the record's FIELD door, so it writes fields and nothing else
+ * (lib/directory/fieldWrite.ts): `metadata` keys must be fields the node's
+ * type declares — its property rows and the space's tracked fields — each
+ * parsed on the server, and a column only one the type has. The keys the
+ * platform keeps in metadata (an event's hosts, audience and draft flag, a
+ * note pointer, an identity binding) are refused by name: each has its own
+ * door with its own gate.
+ *
+ * Who: an active member of the node's space who can see the record (the
+ * Directory's rule) and may write its note (the context write gate). An
+ * event's fields are its managers' (`isEventManager`), as on its edit page;
+ * its tags stay the space's.
  *
  * `metadata` MERGES into the stored blob rather than replacing it — the property
  * rows only know the keys for the node's own type, and a replace would silently
@@ -222,7 +236,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const columnKeys = Object.keys(PATCHABLE_COLUMNS).filter((k) => k in body);
   const hasTags = 'tags' in body;
-  const hasMetadata = 'metadata' in body && body.metadata !== null && typeof body.metadata === 'object';
+  const hasMetadata = 'metadata' in body && body.metadata !== null && typeof body.metadata === 'object' && !Array.isArray(body.metadata);
   const hasName = 'name' in body;
   const name = hasName && typeof body.name === 'string' ? body.name.trim().slice(0, MAX_NAME_LEN) : null;
   if (hasName && !name) {
@@ -238,7 +252,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { spaceId: true, metadata: true, type: true, identityId: true },
+    select: { id: true, spaceId: true, metadata: true, type: true, identityId: true, name: true, alias: true },
   });
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
@@ -247,9 +261,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (node.spaceId !== spaceId) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
-  // Active membership (or admin) of the node's own space is the write gate.
+  // Active membership (or admin) of the node's own space is the first gate.
   if (await spaceMemberForbidden(session.userId, spaceId, session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const metadataNow = (node.metadata as Record<string, unknown> | null) ?? {};
+  // A record the viewer cannot see reads as absent, exactly as GET answers.
+  const lens = await entityLensFor(spaceId, session.userId, session.email);
+  if (lens && isEntityHidden({ ...node, metadata: metadataNow }, lens)) {
+    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
   // A global record's fields are gathered, not typed (lib/global/record.ts);
   // a follower's are pushed from the record. Neither takes a local edit.
@@ -259,11 +279,45 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       { status: 403 },
     );
   }
-  if (((node.metadata as Record<string, unknown> | null) ?? {})[GLOBAL_MODE_KEY] === 'follow') {
+  if (metadataNow[GLOBAL_MODE_KEY] === 'follow') {
     return NextResponse.json(
       { error: 'This context follows its Visvine record — detach it to edit here.' },
       { status: 409 },
     );
+  }
+
+  // The record is its note: whoever may not write the note may not change it.
+  const notePath = entityNotePath({ ...node, metadata: metadataNow });
+  if (notePath) {
+    const resolved = await resolveContext(session, spaceId);
+    if (resolved instanceof Response) return resolved;
+    const denial = await writeDenialFull(await principalOf(resolved), resolved, notePath);
+    if (denial) return NextResponse.json({ error: denial }, { status: 403 });
+  }
+
+  // An event's name, date, place and the rest are its managers' to change.
+  const touchesFields = hasName || hasMetadata || columnKeys.length > 0;
+  if (touchesFields && canonicalType(node.type) === 'event') {
+    const hosts = Array.isArray(metadataNow.hosts) ? (metadataNow.hosts as string[]) : [];
+    if (!(await isEventManager(session, spaceId, { hosts } as unknown as NBEvent))) {
+      return NextResponse.json({ error: EVENT_MANAGER_DENIAL }, { status: 403 });
+    }
+  }
+
+  const columns = writableColumns(node.type);
+  for (const key of columnKeys) {
+    if (!columns.has(key)) {
+      return NextResponse.json({ error: `"${key}" is not a field of ${node.type}` }, { status: 400 });
+    }
+  }
+
+  let metadataPatch: Record<string, unknown> | null = null;
+  if (hasMetadata) {
+    const space = await prisma.space.findUnique({ where: { id: spaceId }, select: { nodeTypes: true } });
+    const config = findNodeTypeConfig(node.type, (space?.nodeTypes ?? []) as unknown as NodeTypeConfig[]);
+    const plan = planMetadataWrite(node.type, config, body.metadata as Record<string, unknown>);
+    if (!plan.ok) return NextResponse.json({ error: plan.error }, { status: 400 });
+    metadataPatch = plan.metadata;
   }
 
   const data: Record<string, unknown> = {};
@@ -274,31 +328,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const value = body[key];
     // An empty string means "clear this row", which is a null column — storing
     // '' would make a blank field read as a real (empty) value downstream.
-    data[column] = typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+    data[column] = typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, 2000) : null;
   }
-  if (hasMetadata) {
-    const patch = { ...(body.metadata as Record<string, unknown>) };
-    for (const key of RESERVED_METADATA_KEYS) delete patch[key];
-    data.metadata = {
-      ...((node.metadata as Record<string, unknown>) ?? {}),
-      ...patch,
-    };
+  if (metadataPatch) {
+    data.metadata = { ...metadataNow, ...metadataPatch };
   }
 
-  // Update the context node. NOTHING is mirrored onto the Person row.
-  //
-  // This used to copy `tags` and `imageUrl` across, so that a person card edited
-  // in one space's directory rewrote that member's GLOBAL profile — their photo
-  // and their skills — everywhere, for everyone. The gate on this route is
-  // active membership of the node's own space, so any member of any space you
-  // belonged to could change your profile picture. That is not a doctrine
-  // violation so much as an authorization hole, and the mirror was the hole.
-  //
-  // The two are different things and now say so: a `Person` is the member's own
-  // cross-space profile, edited only by them at PATCH /api/profile/[personId],
-  // and a person NODE is one space's card for them, collaborative like every
-  // other node in that space's directory. The profile page reads Person; this
-  // route writes the node. Neither reaches across.
+  // The node is one space's card for the entity; nothing here writes the
+  // member's own cross-space profile, which only they edit
+  // (PATCH /api/profile/<id>).
   const updated = await prisma.node.update({
     where: { id: nodeId },
     data,
