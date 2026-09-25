@@ -1285,6 +1285,11 @@ guide. The invariants:
   versions, Build = working copies, Approvals = the queue), and cross-space
   install is the `install_tool` action. A re-publish supersedes the author's
   earlier pending submission rather than being refused.
+- **A Tool is its folder, filed anywhere.** `tools/<name>/` is where one
+  lands; a folder of the space's own whose index declares `type: tool` is the
+  same Tool. The folder name is its name (build, installs, versions and node
+  key on it), so it moves and is never renamed. `lib/tools/location.ts` finds
+  it; `toolIndexPath(name, folder)` and its siblings take the found folder.
 - The working copy renders live at `/tools/preview/<name>` for anyone who can
   read the note. That path is load-bearing: `create_tool`, `write_tool` and
   `preview_tool` all hand it back, and the desktop deep link resolves to it.

@@ -52,9 +52,10 @@ export interface TreeNode {
   title?: string // display title for notes
   // Set on a note that declares a config kind (`type: connector` / `type:
   // model`, lib/notes/shared/configKinds.ts) wherever it sits, and on a folder
-  // that IS an agent (lib/agents/shared/folder.ts), so the sidebar can offer
-  // the moves each is allowed and not the ones it is not.
-  declares?: 'connector' | 'model' | 'agent'
+  // that IS an agent or a Tool (lib/agents/shared/folder.ts,
+  // lib/tools/config.ts), so the sidebar can offer the moves each is allowed
+  // and not the ones it is not.
+  declares?: 'connector' | 'model' | 'agent' | 'tool'
   children?: TreeNode[]
   // Set on a folder somebody has arranged: its index note's `order:` list,
   // which sortTree honours ahead of the by-name sort (folderOrder.ts).

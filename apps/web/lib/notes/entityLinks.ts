@@ -43,7 +43,7 @@ import {
 } from './entities'
 import { slugify } from '@/lib/eventUtils'
 import { Prisma } from '@prisma/client'
-import { toolFileKindOfPath, toolNameOfPath } from '@/lib/tools/config'
+import { declaresTool, toolFolderOfIndex, toolNameOfFolder } from '@/lib/tools/config'
 import { agentNameOfFolder, briefFolderOf } from '@/lib/agents/shared/folder'
 
 // Matches store.ts's SHARED_OWNER_KEY — redeclared here (not imported) so the
@@ -466,9 +466,11 @@ async function syncNoteNode(
     if (content === null) {
       const connectorGone = await removeEntityNode(spaceId, 'connector', path)
       const agentGone = isIndexPath(path) ? await removeEntityNode(spaceId, 'agent', path) : false
-      return (await syncAdoptedNode(spaceId, path, null)) || connectorGone || agentGone
+      const toolGone = isIndexPath(path) ? await removeEntityNode(spaceId, 'tool', path) : false
+      return (await syncAdoptedNode(spaceId, path, null)) || connectorGone || agentGone || toolGone
     }
     if (briefFolderOf(path, content)) return syncAgentNode(spaceId, path, content)
+    if (toolFolderOfIndex(path, declaresTool(content))) return ensureToolNode(spaceId, path, content)
     if (isConnectorNoteAt(path, content)) return syncConnectorNode(spaceId, path, content)
     return syncAdoptedNode(spaceId, path, content)
   }
@@ -542,16 +544,24 @@ export async function ensureAgentNode(spaceId: string, path: string, content: st
  * refusal.
  */
 export async function ensureToolNode(spaceId: string, path: string, content: string): Promise<boolean> {
-  if (toolFileKindOfPath(path) !== 'index') return false
-  const name = toolNameOfPath(path)
-  if (!name) return false
+  // `tools/<name>/index.md`, or a folder of the space's own whose index
+  // declares `type: tool` (lib/tools/config.ts#toolFolderOfIndex).
+  const folder = toolFolderOfIndex(path, declaresTool(content))
+  if (!folder) return false
+  const name = toolNameOfFolder(folder)
   const declared = declaredFolderOnlyEntity(parseFrontmatter(content), 'tool', name)
   if (!declared) return false
 
   const nodeId = `tool:${name}`
-  const clash = await prisma.node.findUnique({ where: { id: nodeId }, select: { spaceId: true } })
+  const clash = await prisma.node.findUnique({ where: { id: nodeId }, select: { spaceId: true, metadata: true } })
   if (clash) {
-    if (clash.spaceId === spaceId) return false // already made — createTool, or a second hand-made save
+    if (clash.spaceId === spaceId) {
+      // Already made — createTool, or a second hand-made save. A Tool whose
+      // folder moved keeps its node; only the way back changes.
+      const meta = (clash.metadata as Record<string, unknown> | null) ?? {}
+      if (meta.notePath !== path) await prisma.node.update({ where: { id: nodeId }, data: { metadata: { ...meta, notePath: path } } })
+      return false
+    }
     throw new Error(entityNameClashDenial(name, 'tool', 'lib/tools/service.ts#createTool'))
   }
 

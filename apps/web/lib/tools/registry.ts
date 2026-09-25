@@ -50,6 +50,7 @@ import { principalCanWrite, principalIsSuperAdmin } from '@/lib/notes/shared/per
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
+import { toolFolderIn } from './location'
 import {
   getBuild,
   readToolSources,
@@ -557,7 +558,8 @@ export async function publishTool(
 ): Promise<PublishResult> {
   if (!TOOL_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad tool name.' }
   const isSpaceAdmin = principalIsSuperAdmin(p)
-  if (!isSpaceAdmin && !principalCanWrite(p, toolIndexPath(name))) {
+  const folder = await toolFolderIn(context.spaceId, name)
+  if (!isSpaceAdmin && !principalCanWrite(p, toolIndexPath(name, folder))) {
     return {
       ok: false,
       status: 403,
@@ -591,7 +593,7 @@ export async function publishTool(
   // The sources as the compiler read them — publishing is admin-only, and an
   // admin's visibility lens is the whole space, so these are the same notes the
   // build was made from rather than a second, possibly narrower, reading.
-  const indexPath = toolIndexPath(name)
+  const indexPath = toolIndexPath(name, folder)
   const sources = await readToolSources(spaceId, name)
 
   // ...and they must still hash to what the build was compiled from.

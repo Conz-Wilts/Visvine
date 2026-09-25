@@ -35,6 +35,7 @@ import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { EMPTY_PERIMETER, parseToolPerimeter, type ToolPerimeter } from './perimeter'
 import { parseToolConfig, parseToolPreviewUrl, parseToolTags, toolIndexPath, TOOL_NAME_RE, type ToolConfig } from './config'
+import { toolFolderIn } from './location'
 import type { BridgeError, BridgeTarget, ToolDegraded, ToolInstallInfo, ToolSubject } from './protocol'
 
 /** The stored shape `resolveBridgeTarget` needs off an install row. */
@@ -73,6 +74,8 @@ export interface TargetDeps {
   principalOf: typeof principalOf
   readVisible: typeof readVisible
   featureAccessForbidden: typeof featureAccessForbidden
+  /** Where the Tool's folder is — `tools/<name>` unless filed elsewhere. Absent: `tools/<name>`. */
+  toolFolder?: (spaceId: string, name: string) => Promise<string>
 }
 
 const REAL_DEPS: TargetDeps = {
@@ -87,6 +90,7 @@ const REAL_DEPS: TargetDeps = {
   principalOf,
   readVisible,
   featureAccessForbidden,
+  toolFolder: toolFolderIn,
 }
 
 /**
@@ -304,7 +308,8 @@ async function resolvePreview(
   // folder lens, and returns null identically for absent and invisible — so a
   // preview cannot be used to probe which Tools exist in a folder the viewer
   // cannot see.
-  const source = await deps.readVisible(principal, context, toolIndexPath(name))
+  const folder = deps.toolFolder ? await deps.toolFolder(target.spaceId, name) : undefined
+  const source = await deps.readVisible(principal, context, toolIndexPath(name, folder))
   if (source === null) return fail('not_found', `No tool named "${name}" here.`)
 
   const parsedConfig = parseToolConfig(parseFrontmatter(source) as NoteFrontmatter, name)

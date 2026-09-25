@@ -30,7 +30,8 @@ import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
 import { readSpaceConfig, updateSpaceConfig } from '@/lib/spaces/spaceConfig'
 import { mergeFeatureConfig, toolRailKey } from '@/lib/featureAccess'
 import { ADMIN_ALIAS_ID, DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
-import { TOOL_NAME_RE, toolIndexPath } from './config'
+import { TOOL_NAME_RE, toolIndexPath, toolNameOfFolder } from './config'
+import { toolFolderIn, toolFolders } from './location'
 import { decodeToolConfig, decodeToolPerimeter, toolKey } from './registry'
 import { computeRequirements, type SpaceAvailability } from './requirements'
 import { featureConfigWithoutRail, orderWithRail, uniqueSlug } from './installs'
@@ -136,9 +137,10 @@ async function houseAdminId(houseId: string): Promise<string | null> {
 export async function syncSharedToolInstalls(houseId: string, name: string): Promise<SharePlan> {
   const empty: SharePlan = { create: [], update: [], remove: [] }
   if (!TOOL_NAME_RE.test(name)) return empty
+  const folder = await toolFolderIn(houseId, name)
   const [note, rooms] = await Promise.all([
     prisma.contextNote.findFirst({
-      where: { spaceId: houseId, ownerKey: SHARED_OWNER_KEY, path: toolIndexPath(name), deletedAt: null },
+      where: { spaceId: houseId, ownerKey: SHARED_OWNER_KEY, path: toolIndexPath(name, folder), deletedAt: null },
       select: { content: true },
     }),
     prisma.space.findMany({ where: { parentId: houseId }, select: { id: true } }),
@@ -229,15 +231,17 @@ export async function syncSharedToolInstalls(houseId: string, name: string): Pro
 
 /** Every Tool the house shares, by name — the ones whose index says so. */
 async function sharedToolNames(houseId: string): Promise<string[]> {
+  // Wherever the house filed them (lib/tools/location.ts).
+  const folders = await toolFolders(houseId)
   const rows = await prisma.contextNote.findMany({
-    where: { spaceId: houseId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: 'tools/', endsWith: '/index.md' } },
+    where: { spaceId: houseId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { in: [...folders.values()].map((f) => `${f}/index.md`) } },
     select: { path: true, content: true },
   })
   const out: string[] = []
   for (const row of rows) {
-    const m = /^tools\/([^/]+)\/index\.md$/.exec(row.path)
-    if (!m || !TOOL_NAME_RE.test(m[1])) continue
-    if (shareTargets(parseFrontmatter(row.content)) !== 'none') out.push(m[1])
+    const name = toolNameOfFolder(row.path.slice(0, -'/index.md'.length))
+    if (!TOOL_NAME_RE.test(name)) continue
+    if (shareTargets(parseFrontmatter(row.content)) !== 'none') out.push(name)
   }
   return out
 }

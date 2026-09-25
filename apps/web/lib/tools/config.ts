@@ -38,6 +38,7 @@
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { entityKindOf } from '@/lib/notes/entities'
+import { namespaceOf } from '@/lib/notes/shared/namespaces'
 import { parseToolPerimeter, type ToolPerimeter } from './perimeter'
 
 /** The context namespace every Tool lives under. */
@@ -54,29 +55,96 @@ export const TOOL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,62}$/
 const TOOL_TYPE = 'tool'
 const INDEX_BASENAME = 'index.md'
 
-/** `tools/<name>` — the Tool's entity folder. */
+/** `tools/<name>` — where a Tool's folder is unless the space filed it elsewhere. */
 export function toolFolderPath(name: string): string {
   return `${TOOLS_DIR}/${name}`
 }
 
-/** `tools/<name>/index.md` — config in the frontmatter, docs in the body. */
-export function toolIndexPath(name: string): string {
-  return `${toolFolderPath(name)}/${INDEX_BASENAME}`
+// Every path below takes the Tool's folder when the caller has found it
+// (lib/tools/location.ts#toolFolderIn) — a Tool may be filed in a folder of
+// the space's own — and falls back to `tools/<name>` when it has not.
+
+/** `<folder>/index.md` — config in the frontmatter, docs in the body. */
+export function toolIndexPath(name: string, folder: string = toolFolderPath(name)): string {
+  return `${folder}/${INDEX_BASENAME}`
 }
 
-/** `tools/<name>/ui.md` — the wrapped TSX the author writes as `ui.tsx`. */
-export function toolUiPath(name: string): string {
-  return `${toolFolderPath(name)}/${TOOL_SOURCE_FILES.ui.path}`
+/** `<folder>/ui.md` — the wrapped TSX the author writes as `ui.tsx`. */
+export function toolUiPath(name: string, folder: string = toolFolderPath(name)): string {
+  return `${folder}/${TOOL_SOURCE_FILES.ui.path}`
 }
 
-/** `tools/<name>/data.md` — the wrapped JS the author writes as `data.js`. */
-export function toolDataPath(name: string): string {
-  return `${toolFolderPath(name)}/${TOOL_SOURCE_FILES.data.path}`
+/** `<folder>/data.md` — the wrapped JS the author writes as `data.js`. */
+export function toolDataPath(name: string, folder: string = toolFolderPath(name)): string {
+  return `${folder}/${TOOL_SOURCE_FILES.data.path}`
 }
 
-/** `tools/<name>/icon.md` — the wrapped SVG the author writes as `icon.svg`. */
-export function toolIconPath(name: string): string {
-  return `${toolFolderPath(name)}/${TOOL_SOURCE_FILES.icon.path}`
+/** `<folder>/icon.md` — the wrapped SVG the author writes as `icon.svg`. */
+export function toolIconPath(name: string, folder: string = toolFolderPath(name)): string {
+  return `${folder}/${TOOL_SOURCE_FILES.icon.path}`
+}
+
+/** The last segment of a folder path — the Tool's name. */
+export function toolNameOfFolder(folder: string): string {
+  return folder.slice(folder.lastIndexOf('/') + 1)
+}
+
+/**
+ * Why a Tool's folder may not be `folder`, or null when it may:
+ * `tools/<name>` or a folder of the space's own. The name is the folder's
+ * last segment and the Tool's identity (its build, installs, versions, node
+ * and URL key on it), so a Tool moves between folders and keeps its name.
+ */
+export function toolFolderDenial(folder: string): string | null {
+  const clean = normalizePath(folder).replace(/\/+$/, '')
+  if (!clean) return 'A tool is a folder of its own, not the context root.'
+  const name = toolNameOfFolder(clean)
+  if (!TOOL_NAME_RE.test(name)) {
+    return 'A tool’s folder name is its name: lowercase letters, digits and "-", up to 63 characters.'
+  }
+  const ns = namespaceOf(clean)
+  if (!ns) return null
+  if (ns.writes === 'nobody') return 'A tool is written in the space that owns it.'
+  if (ns.dir !== TOOLS_DIR) {
+    return `"${ns.dir}" is one of the space's built-in folders — a tool sits in "${TOOLS_DIR}/" or in a folder of your own.`
+  }
+  if (clean !== toolFolderPath(name)) {
+    return `Inside "${TOOLS_DIR}/" a tool is ${TOOLS_DIR}/<name> — to group tools, use a folder of your own.`
+  }
+  return null
+}
+
+/**
+ * The Tool folder an index at `path` makes, or null: under `tools/` the path
+ * alone decides (as it always has); anywhere else the index must declare
+ * `type: tool`. `declared` answers that from whatever the caller holds.
+ */
+export function toolFolderOfIndex(path: string, declared: boolean): string | null {
+  const raw = normalizePath(path)
+  if (!raw.endsWith(`/${INDEX_BASENAME}`)) return null
+  const folder = raw.slice(0, -(INDEX_BASENAME.length + 1))
+  if (toolFolderDenial(folder)) return null
+  if (folder.startsWith(`${TOOLS_DIR}/`)) return folder
+  return declared ? folder : null
+}
+
+/** True when this content declares `type: tool`. */
+export function declaresTool(content: string | null | undefined): boolean {
+  if (!content || !/^\s*type\s*:\s*["']?tool["']?\s*$/im.test(content)) return false
+  const type = parseFrontmatter(content).type
+  return typeof type === 'string' && type.trim().toLowerCase() === TOOL_TYPE
+}
+
+/** What a path is inside the Tool folder `folder` — the same roles as {@link toolFileKindOfPath}. */
+export function toolFileKindIn(folder: string, path: string): 'index' | 'ui' | 'data' | 'icon' | 'other' | null {
+  const raw = normalizePath(path)
+  if (!raw.startsWith(`${folder}/`)) return null
+  const basename = raw.slice(folder.length + 1)
+  if (basename === INDEX_BASENAME) return 'index'
+  if (basename === TOOL_SOURCE_FILES.ui.path) return 'ui'
+  if (basename === TOOL_SOURCE_FILES.data.path) return 'data'
+  if (basename === TOOL_SOURCE_FILES.icon.path) return 'icon'
+  return 'other'
 }
 
 /** Drop a leading slash, so `/tools/x/index.md` reads like the stored path. */

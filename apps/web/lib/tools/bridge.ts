@@ -63,6 +63,7 @@ import { logger } from '@/lib/logger'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
 import { configKindOfContent } from '@/lib/notes/shared/configKinds'
 import { briefFolderOf } from '@/lib/agents/shared/folder'
+import { declaresTool, toolFolderOfIndex } from './config'
 
 /**
  * Everything the handlers touch that isn't pure. Injectable as one object so a
@@ -483,7 +484,13 @@ async function checkWrite(
     // the seal follows the declaration too: a Tool neither mints one in a
     // folder of the space's own nor edits one already there.
     const current = await deps.readVisible(t.principal, t.context, path)
-    const kind = configKindOfContent(body) ?? configKindOfContent(current) ?? (briefFolderOf(path, body) || briefFolderOf(path, current) ? 'agent brief' : null)
+    const dir = path.slice(0, path.lastIndexOf('/'))
+    const inTool = dir && !path.endsWith('/index.md') ? declaresTool(await deps.readVisible(t.principal, t.context, `${dir}/index.md`)) : false
+    const kind =
+      configKindOfContent(body) ??
+      configKindOfContent(current) ??
+      (briefFolderOf(path, body) || briefFolderOf(path, current) ? 'agent brief' : null) ??
+      (inTool || toolFolderOfIndex(path, declaresTool(body) || declaresTool(current)) ? 'tool’s source' : null)
     if (kind) {
       return {
         ok: false,

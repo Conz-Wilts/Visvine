@@ -46,6 +46,8 @@ import { connectorNotePathIn } from '@/lib/connectors/locate'
 import { modelNotePathIn } from '@/lib/models/locate'
 import { agentContaining, agentFolderIn } from '@/lib/agents/location'
 import { agentNameOfFolder, briefFolderOf } from '@/lib/agents/shared/folder'
+import { declaresTool, toolFolderOfIndex, toolNameOfFolder } from '@/lib/tools/config'
+import { toolContaining, toolFolderIn } from '@/lib/tools/location'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { ContextPrincipal, WriteResult } from './shared/contextTypes'
 import type { NoteMeta, NoteRevisionOrigin, RawNote, References } from './shared/types'
@@ -399,14 +401,15 @@ export function lockedDenial(
 }
 
 /**
- * The agent rules `lockedDenial` keeps for `agents/`, kept for an agent filed
- * in a folder of the space's own (lib/agents/location.ts): an AI origin may
- * write only its OWN notes there, never a brief, never another agent's
- * folder, and never mint a brief by writing one. And an agent's name is its
- * identity, so a brief may not take a name another agent holds. `next` is the
- * content being written (null for a delete or a move's source).
+ * The agent and Tool rules `lockedDenial` keeps for `agents/` and `tools/`,
+ * kept for one filed in a folder of the space's own (lib/agents/location.ts,
+ * lib/tools/location.ts). An AI origin may write only an agent's OWN notes,
+ * as that agent — never a brief, another agent's folder or anything in a
+ * Tool's, and never mint either by writing an index. And the name is the
+ * identity, so an index may not take a name another agent or Tool holds.
+ * `next` is the content being written (null for a delete or a move's source).
  */
-async function agentPlaceDenial(
+async function namedFolderDenial(
   p: ContextPrincipal,
   context: Context,
   path: string,
@@ -417,20 +420,54 @@ async function agentPlaceDenial(
 ): Promise<string | null> {
   if (!isShared(context)) return null
   const clean = path.replace(/^\/+/, '')
+  const tool = await toolPlaceDenial(context, clean, next, origin, opts)
+  if (tool) return tool
   if (clean === 'agents' || clean.startsWith('agents/')) {
     // Under agents/ the path rules already answer; only the name clash with an
     // agent filed elsewhere is left to ask.
     const folder = briefFolderOf(clean, next ?? '')
     return folder ? agentNameClash(context, folder, opts.movingFrom) : null
   }
-  const at = await agentContaining(context.spaceId, clean)
   const mints = briefFolderOf(clean, next) ?? (opts.movingFrom && next === null ? briefFolderOf(clean, await store.readNoteOrNull(context, opts.movingFrom)) : null)
+  const at = AI_ORIGINS.has(origin) ? await agentContaining(context.spaceId, clean) : null
   if (AI_ORIGINS.has(origin) && (at || mints)) {
     const own = agentOfRevisionStamp(origin, model)
     if (!mints && at && own === at.name && at.file === 'own') return null
     return 'Agent briefs are frozen for AI — a human must make this change.'
   }
   return mints ? agentNameClash(context, mints, opts.movingFrom) : null
+}
+
+/**
+ * The same for a Tool filed in a folder of the space's own: `tools/` is frozen
+ * for AI, so a Tool anywhere is, and a Tool's name is its identity.
+ */
+async function toolPlaceDenial(
+  context: Context,
+  path: string,
+  next: string | null,
+  origin: NoteRevisionOrigin,
+  opts: { movingFrom?: string },
+): Promise<string | null> {
+  if (path === 'tools' || path.startsWith('tools/')) {
+    const folder = toolFolderOfIndex(path, true)
+    return folder ? toolNameClash(context, folder, opts.movingFrom) : null
+  }
+  const incoming = opts.movingFrom && next === null ? await store.readNoteOrNull(context, opts.movingFrom) : next
+  const mints = toolFolderOfIndex(path, declaresTool(incoming))
+  if (AI_ORIGINS.has(origin) && (mints || (await toolContaining(context.spaceId, path)))) {
+    return 'Tools are frozen for AI — a human must make this change.'
+  }
+  return mints ? toolNameClash(context, mints, opts.movingFrom) : null
+}
+
+/** Why a Tool index at `folder` would clash with a Tool of the same name elsewhere, or null. */
+async function toolNameClash(context: Context, folder: string, movingFrom?: string): Promise<string | null> {
+  const name = toolNameOfFolder(folder)
+  const held = await toolFolderIn(context.spaceId, name)
+  if (held === folder || !(await store.readNoteOrNull(context, `${held}/index.md`))) return null
+  if (movingFrom && movingFrom.startsWith(`${held}/`)) return null
+  return `A tool named "${name}" already exists at ${held}/ — a tool's name is its folder's name, and one space holds one of each.`
 }
 
 /** Why a brief at `folder` would clash with an agent of the same name elsewhere, or null. */
@@ -595,7 +632,7 @@ export async function writeGated(
   const denial =
     (await writeDenialFull(p, context, path)) ??
     lockedDenial(p, context, path, origin, model) ??
-    (await agentPlaceDenial(p, context, path, content, origin, model)) ??
+    (await namedFolderDenial(p, context, path, content, origin, model)) ??
     (await configKindDenial(p, context, path, content)) ??
     (await resourceHomeDenial(context, path, content))
   if (denial) return { status: 'denied', reason: denial }
@@ -642,7 +679,7 @@ export async function appendLogGated(
   const denial =
     (await writeDenialFull(p, context, path)) ??
     lockedDenial(p, context, path, origin, model) ??
-    (await agentPlaceDenial(p, context, path, null, origin, model))
+    (await namedFolderDenial(p, context, path, null, origin, model))
   if (denial) return { status: 'denied', reason: denial }
   const current = await store.readNote(context, path)
   const declared = await configKindDenial(p, context, path, null, { current })
@@ -690,7 +727,7 @@ export async function moveGated(
     const denial =
       writeDenial(p, context, end) ??
       lockedDenial(p, context, end, origin) ??
-      (await agentPlaceDenial(p, context, end, null, origin, model, end === to ? { movingFrom: from } : {}))
+      (await namedFolderDenial(p, context, end, null, origin, model, end === to ? { movingFrom: from } : {}))
     if (denial) return { status: 'denied', reason: denial }
   }
   // The destination only: a note may always be moved OUT of a namespace whose

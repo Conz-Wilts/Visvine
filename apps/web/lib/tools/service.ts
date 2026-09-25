@@ -39,6 +39,7 @@ import { computeRequirements, type ToolRequirements } from './requirements'
 import { removeInstallForTool, spaceFacts } from './installs'
 import type { ToolPerimeter } from './perimeter'
 import { latestPublications, toolKey, type ToolPublicationSummary } from './registry'
+import { toolFolderIn } from './location'
 import {
   getBuild,
   listBuilds,
@@ -54,10 +55,10 @@ import {
   parseToolConfig,
   toolDataPath,
   toolIconPath,
-  toolFileKindOfPath,
-  toolFolderPath,
+  declaresTool,
+  toolFolderOfIndex,
+  toolNameOfFolder,
   toolIndexPath,
-  toolNameOfPath,
   toolUiPath,
   unwrapSource,
   wrapSource,
@@ -136,11 +137,11 @@ function badName(name: string): ToolServiceError {
 }
 
 /** The note behind an author-facing filename. */
-function notePathOf(name: string, file: ToolFileName): string {
-  if (file === TOOL_SOURCE_FILES.ui.authorName) return toolUiPath(name)
-  if (file === TOOL_SOURCE_FILES.data.authorName) return toolDataPath(name)
-  if (file === TOOL_SOURCE_FILES.icon.authorName) return toolIconPath(name)
-  return toolIndexPath(name)
+function notePathOf(name: string, file: ToolFileName, folder: string): string {
+  if (file === TOOL_SOURCE_FILES.ui.authorName) return toolUiPath(name, folder)
+  if (file === TOOL_SOURCE_FILES.data.authorName) return toolDataPath(name, folder)
+  if (file === TOOL_SOURCE_FILES.icon.authorName) return toolIconPath(name, folder)
+  return toolIndexPath(name, folder)
 }
 
 /** What actually goes in the note: the two sources ride inside a fenced block. */
@@ -162,6 +163,7 @@ function isShared(context: Context): boolean {
 
 function summarise(
   name: string,
+  indexPath: string,
   indexContent: string,
   createdBy: string | null,
   build: BuildSummary | null,
@@ -172,7 +174,7 @@ function summarise(
   const config = parsed.ok ? parsed.config : null
   return {
     name,
-    path: toolIndexPath(name),
+    path: indexPath,
     nodeId: toolNodeId(name),
     title: config?.title || (typeof fm.title === 'string' && fm.title.trim()) || name,
     description:
@@ -205,8 +207,19 @@ export async function listAuthoredTools(
 ): Promise<AuthoredToolSummary[]> {
   if (!isShared(context)) return []
   const { raws } = await visibleVault(p, context)
-  const indexes = raws.filter((raw) => toolFileKindOfPath(raw.path) === 'index')
-  const names = indexes.map((raw) => toolNameOfPath(raw.path)).filter((name): name is string => !!name)
+  // Wherever the space filed them: `tools/<name>/` or a folder of its own
+  // whose index declares `type: tool` — `tools/` wins a name held twice.
+  const seen = new Set<string>()
+  const indexes = raws
+    .map((raw) => ({ raw, folder: toolFolderOfIndex(raw.path, declaresTool(raw.content)) }))
+    .sort((a, b) => Number(!a.raw.path.startsWith('tools/')) - Number(!b.raw.path.startsWith('tools/')))
+    .flatMap(({ raw, folder }) => {
+      const name = folder ? toolNameOfFolder(folder) : null
+      if (!name || seen.has(name)) return []
+      seen.add(name)
+      return [{ ...raw, name }]
+    })
+  const names = indexes.map((raw) => raw.name)
   const [authors, builds, publications] = await Promise.all([
     authorsOf(
       context.spaceId,
@@ -217,12 +230,12 @@ export async function listAuthoredTools(
   ])
   const out: AuthoredToolSummary[] = []
   for (const raw of indexes) {
-    const name = toolNameOfPath(raw.path)
-    if (!name) continue
+    const name = raw.name
     const build = builds.get(name)
     out.push(
       summarise(
         name,
+        raw.path,
         raw.content,
         authors.get(raw.path) ?? null,
         build ? toBuildSummary(build) : null,
@@ -240,22 +253,24 @@ export async function describeAuthoredTool(
   name: string,
 ): Promise<AuthoredToolDetail | null> {
   if (!isShared(context) || !TOOL_NAME_RE.test(name)) return null
-  const indexContent = await readVisible(p, context, toolIndexPath(name))
+  const folder = await toolFolderIn(context.spaceId, name)
+  const indexContent = await readVisible(p, context, toolIndexPath(name, folder))
   if (indexContent === null) return null
 
   const key = toolKey(context.spaceId, name)
   const [uiNote, dataNote, iconNote, authors, build, publications] = await Promise.all([
-    readVisible(p, context, toolUiPath(name)),
-    readVisible(p, context, toolDataPath(name)),
-    readVisible(p, context, toolIconPath(name)),
-    authorsOf(context.spaceId, [toolIndexPath(name)]),
+    readVisible(p, context, toolUiPath(name, folder)),
+    readVisible(p, context, toolDataPath(name, folder)),
+    readVisible(p, context, toolIconPath(name, folder)),
+    authorsOf(context.spaceId, [toolIndexPath(name, folder)]),
     getBuild(context.spaceId, name),
     latestPublications([key]),
   ])
   const summary = summarise(
     name,
+    toolIndexPath(name, folder),
     indexContent,
-    authors.get(toolIndexPath(name)) ?? null,
+    authors.get(toolIndexPath(name, folder)) ?? null,
     build ? toBuildSummary(build) : null,
     publications.get(key) ?? null,
   )
@@ -351,15 +366,17 @@ export async function createTool(
     return { ok: false, status: 400, error: 'Tools are authored in a space, not in personal context.' }
   }
 
-  const indexPath = toolIndexPath(name)
+  // A Tool of this name filed in a folder of the space's own is this name taken.
+  const folder = await toolFolderIn(context.spaceId, name)
+  const indexPath = toolIndexPath(name, folder)
   // Every path this call will write is checked BEFORE anything is created, so a
   // denial can never leave a half-made Tool (node + index, no sources) behind
   // that 409s on the retry. Denial reasons are per-path (a note-level
   // writeDenial can seal one file and not its sibling), hence all three.
   for (const path of [
     indexPath,
-    notePathOf(name, TOOL_SOURCE_FILES.ui.authorName),
-    notePathOf(name, TOOL_SOURCE_FILES.data.authorName),
+    notePathOf(name, TOOL_SOURCE_FILES.ui.authorName, folder),
+    notePathOf(name, TOOL_SOURCE_FILES.data.authorName, folder),
   ]) {
     const denial = await writeDenialFull(p, context, path)
     if (denial) return { ok: false, status: 403, error: denial }
@@ -397,7 +414,7 @@ export async function createTool(
     // listing all appear together.
     await store.createIndexFolder(
       context,
-      toolFolderPath(name),
+      folder,
       newToolIndexNote({ name, title, description, railLabel: input.railLabel }),
       actorOf(p),
     )
@@ -409,7 +426,7 @@ export async function createTool(
     [TOOL_SOURCE_FILES.ui.authorName, starterUi(title)] as const,
     [TOOL_SOURCE_FILES.data.authorName, starterData()] as const,
   ]) {
-    const written = await writeGated(p, context, notePathOf(name, file), noteContentOf(file, content))
+    const written = await writeGated(p, context, notePathOf(name, file, folder), noteContentOf(file, content))
     // Pre-checked above; only a grant revoked mid-call can land here.
     if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
   }
@@ -438,11 +455,12 @@ export async function writeToolFile(
   if (!isShared(context)) {
     return { ok: false, status: 400, error: 'Tools are authored in a space, not in personal context.' }
   }
-  if (!(await store.readNoteOrNull(context, toolIndexPath(name)))) {
+  const folder = await toolFolderIn(context.spaceId, name)
+  if (!(await store.readNoteOrNull(context, toolIndexPath(name, folder)))) {
     return { ok: false, status: 404, error: `No tool named "${name}" — create it first.` }
   }
 
-  const path = notePathOf(name, file)
+  const path = notePathOf(name, file, folder)
   let written
   try {
     written = await writeGated(p, context, path, noteContentOf(file, content))
@@ -479,11 +497,12 @@ export async function deleteToolIcon(
   if (!isShared(context)) {
     return { ok: false, status: 400, error: 'Tools are authored in a space, not in personal context.' }
   }
-  if (!(await store.readNoteOrNull(context, toolIndexPath(name)))) {
+  const folder = await toolFolderIn(context.spaceId, name)
+  if (!(await store.readNoteOrNull(context, toolIndexPath(name, folder)))) {
     return { ok: false, status: 404, error: `No tool named "${name}" — create it first.` }
   }
 
-  const path = toolIconPath(name)
+  const path = toolIconPath(name, folder)
   const denial = await writeDenialFull(p, context, path)
   if (denial) return { ok: false, status: 403, error: denial }
 
@@ -537,7 +556,8 @@ export async function deleteTool(
     return { ok: false, status: 400, error: 'Tools are authored in a space, not in personal context.' }
   }
 
-  const indexPath = toolIndexPath(name)
+  const folder = await toolFolderIn(context.spaceId, name)
+  const indexPath = toolIndexPath(name, folder)
   if (!(await store.readNoteOrNull(context, indexPath))) {
     return { ok: false, status: 404, error: `No tool named "${name}".` }
   }
@@ -566,7 +586,7 @@ export async function deleteTool(
   await removeEntityNode(context.spaceId, 'tool', indexPath)
   // Then the folder: trashes every note (which drops the build via the store's
   // delete hook), removes the folder rows, and drops grants into the subtree.
-  await store.deleteFolder(context, toolFolderPath(name))
+  await store.deleteFolder(context, folder)
   return { ok: true }
 }
 

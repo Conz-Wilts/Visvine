@@ -58,6 +58,8 @@ import { invalidateVault } from './vaultCache'
 import { syncPublicationsOnDelete, syncPublicationsOnRename } from './publications'
 import { agentFolderDenial, agentNameOfFolder, briefFolderOf } from '@/lib/agents/shared/folder'
 import { agentFolders } from '@/lib/agents/location'
+import { declaresTool, toolFolderDenial, toolFolderOfIndex, toolNameOfFolder } from '@/lib/tools/config'
+import { toolFolders } from '@/lib/tools/location'
 import {
   INDEX_BASENAME,
   ancestorFolders,
@@ -1281,13 +1283,18 @@ async function enforceIndexContract(context: Context, p: string, content: string
   // before the frontmatter is decided, for the same reason a Tool's is — so it
   // gains its node and its `node:` back-pointer on the very first save rather
   // than on the second.
-  // An agent filed in a folder of the space's own: its brief is held to the
-  // agent's node exactly as one under agents/ is (lib/agents/shared/folder.ts).
-  const filedAgent = !isEntityFolderIndex(p) && context.ownerKey === SHARED_OWNER_KEY ? briefFolderOf(p, content) : null
-  if (filedAgent) {
-    await ensureAgentNode(context.spaceId, p, content)
+  // An agent or a Tool filed in a folder of the space's own: its index is held
+  // to its node exactly as one under agents/ or tools/ is
+  // (lib/agents/shared/folder.ts, lib/tools/config.ts#toolFolderOfIndex).
+  const shared = !isEntityFolderIndex(p) && context.ownerKey === SHARED_OWNER_KEY
+  const filedAgent = shared ? briefFolderOf(p, content) : null
+  const filedTool = shared && !filedAgent ? toolFolderOfIndex(p, declaresTool(content)) : null
+  if (filedAgent || filedTool) {
+    if (filedAgent) await ensureAgentNode(context.spaceId, p, content)
+    else await ensureToolNode(context.spaceId, p, content)
+    const nodeId = filedAgent ? `agent:${agentNameOfFolder(filedAgent)}` : `tool:${toolNameOfFolder(filedTool!)}`
     const node = await prisma.node.findFirst({
-      where: { id: `agent:${agentNameOfFolder(filedAgent)}`, spaceId: context.spaceId },
+      where: { id: nodeId, spaceId: context.spaceId },
       select: { id: true, type: true, name: true, subtitle: true, location: true, metadata: true },
     })
     if (node) {
@@ -1365,7 +1372,7 @@ async function resourceNotesUnder(context: Context, folder: string): Promise<str
     .map((r) => r.path)
 }
 
-/** The agent folders at or under `folder`. */
+/** The agent (or Tool) folders at or under `folder`. */
 function agentFoldersUnder(folders: Map<string, string>, folder: string): string[] {
   return [...folders.values()].filter((f) => f === folder || f.startsWith(`${folder}/`))
 }
@@ -1399,23 +1406,30 @@ export async function renameFolder(
     const denial = resourceMoveDenial(f, t)
     if (denial) throw new Error(denial)
   }
-  // An agent is a folder whose name is its identity (lib/agents/shared/folder.ts):
-  // it moves between folders — out of agents/ into a team's, and back — but
-  // keeps its name, and every agent a folder carries must land where an agent
-  // may sit.
-  const agentsMoving = context.ownerKey === SHARED_OWNER_KEY ? agentFoldersUnder(await agentFolders(context.spaceId), f) : []
-  for (const folder of agentsMoving) {
-    const landed = t + folder.slice(f.length)
-    if (folder === f && agentNameOfFolder(landed) !== agentNameOfFolder(f)) {
-      throw new Error(`An agent's name is its folder's name, and its runs, subscribers and page key on it — move "${f}" between folders, but keep the name.`)
+  // An agent or a Tool is a folder whose name is its identity
+  // (lib/agents/shared/folder.ts, lib/tools/config.ts): it moves between
+  // folders — out of agents/ or tools/ into a team's, and back — but keeps its
+  // name, and every one a folder carries must land where it may sit.
+  const shared = context.ownerKey === SHARED_OWNER_KEY
+  const agentsMoving = shared ? agentFoldersUnder(await agentFolders(context.spaceId), f) : []
+  const toolsMoving = shared ? agentFoldersUnder(await toolFolders(context.spaceId), f) : []
+  for (const [folders, noun, denialOf] of [
+    [agentsMoving, 'agent', agentFolderDenial],
+    [toolsMoving, 'tool', toolFolderDenial],
+  ] as const) {
+    for (const folder of folders) {
+      const landed = t + folder.slice(f.length)
+      if (folder === f && agentNameOfFolder(landed) !== agentNameOfFolder(f)) {
+        throw new Error(`A${noun === 'agent' ? 'n' : ''} ${noun}'s name is its folder's name, and everything that uses it keys on it — move "${f}" between folders, but keep the name.`)
+      }
+      const denial = denialOf(landed)
+      if (denial) throw new Error(denial)
     }
-    const denial = agentFolderDenial(landed)
-    if (denial) throw new Error(denial)
   }
-  const movesAgent = agentsMoving.includes(f)
+  const movesNamed = agentsMoving.includes(f) || toolsMoving.includes(f)
   if (withinResources) {
     if (await findLive(context, indexPathOf(t))) throw new Error(`"${t}" already exists`)
-  } else if (movesAgent) {
+  } else if (movesNamed) {
     if (await findLive(context, indexPathOf(t))) throw new Error(`"${t}" already exists`)
   } else if (isEntityFolder(f)) {
     throw new Error(`"${f}" is a directory entity's folder — its path is the entity's identity and can't change`)
@@ -1432,9 +1446,9 @@ export async function renameFolder(
     throw new Error(`"${t}" is one of the space's built-in folders — a folder can't be renamed into it`)
   }
   // Moving a folder INTO an entity's folder converts the entity note first.
-  // A moving agent brings its own index — making one at the destination first
+  // A moving agent or Tool brings its own index — making one at the destination first
   // (an entity folder's, under agents/) would stand where the brief lands.
-  if (actor) await ensureParentFolderNote(context, movesAgent ? t : `${t}/x.md`, actor)
+  if (actor) await ensureParentFolderNote(context, movesNamed ? t : `${t}/x.md`, actor)
   const notes = await prisma.contextNote.findMany({
     where: {
       spaceId: context.spaceId,

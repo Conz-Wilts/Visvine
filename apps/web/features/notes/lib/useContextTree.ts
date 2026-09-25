@@ -20,6 +20,7 @@ import {
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { configHomeDenial, connectorHomeDenial, declaredConfigKind } from '@/lib/notes/shared/configKinds'
 import { agentFolderDenial } from '@/lib/agents/shared/folder'
+import { toolFolderDenial } from '@/lib/tools/config'
 import { drawnParentOf, placementDenial } from '@/lib/notes/shared/placedFolders'
 import {
   SUBSPACE_FOLDER,
@@ -95,11 +96,12 @@ export function moveDenial(
   if (kind === 'note' && (declares === 'model' || entityKindOfPath(from) === 'model')) {
     return configHomeDenial('model', `${destFolder ? `${destFolder}/` : ''}${from.split('/').pop()}`)
   }
-  // An agent is its folder, wherever it is filed (lib/agents/shared/folder.ts):
-  // it moves between agents/ and the space's own folders, keeping its name.
-  if (kind === 'folder' && declares === 'agent') {
+  // An agent or a Tool is its folder, wherever it is filed: it moves between
+  // agents/ (tools/) and the space's own folders, keeping its name.
+  if (kind === 'folder' && (declares === 'agent' || declares === 'tool')) {
     if (destFolder === from || destFolder.startsWith(`${from}/`)) return 'A folder can’t be moved inside itself.'
-    return agentFolderDenial(`${destFolder ? `${destFolder}/` : ''}${from.split('/').pop()}`)
+    const landed = `${destFolder ? `${destFolder}/` : ''}${from.split('/').pop()}`
+    return declares === 'agent' ? agentFolderDenial(landed) : toolFolderDenial(landed)
   }
   // Into an entity's OWN folder (people/<slug>) is fine — that files the note
   // under the entity (and converts its note to the folder if needed). Into the

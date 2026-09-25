@@ -7,6 +7,7 @@ import { bad, requireToolsAccess } from '@/lib/tools/route'
 import { readVisible, writeGated } from '@/lib/notes/contextService'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { toolIndexPath } from '@/lib/tools/config'
+import { toolFolderIn } from '@/lib/tools/location'
 import prisma from '@/lib/prisma'
 import type {
   AuthoredToolDetail,
@@ -130,7 +131,7 @@ export async function PATCH(
   const body = await parseBody(req, shareSchema)
   if (body instanceof NextResponse) return body
 
-  const path = toolIndexPath(name)
+  const path = toolIndexPath(name, await toolFolderIn(spaceId, name))
   const content = await readVisible(ctx.principal, ctx.resolved, path)
   if (content === null) return bad('Tool not found', 404)
 

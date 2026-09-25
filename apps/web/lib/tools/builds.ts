@@ -41,6 +41,7 @@ import {
   TOOL_SOURCE_FILES,
   parseToolConfig,
   toolDataPath,
+  toolFolderPath,
   toolIconPath,
   toolIndexPath,
   toolUiPath,
@@ -73,6 +74,8 @@ export interface ToolSources {
   data: string | null
   /** `icon.md`, when the author shipped their own rail glyph. */
   icon: string | null
+  /** Where they were read from. Not part of the source hash. */
+  folder?: string
 }
 
 /** What a rebuild persists. The row's own keys, minus the generated ones. */
@@ -95,6 +98,8 @@ export interface ToolBuildInput {
 /** The read / compile / persist steps, injectable for tests. */
 export interface ToolBuildDeps {
   readSource(spaceId: string, path: string): Promise<string | null>
+  /** Where the Tool's folder is — `tools/<name>` unless the space filed it elsewhere. Absent: `tools/<name>`. */
+  toolFolder?(spaceId: string, name: string): Promise<string>
   compileUi(source: string): Promise<CompileResult>
   compileData(source: string): Promise<CompileResult>
   loadBuild(spaceId: string, name: string): Promise<AppToolBuild | null>
@@ -134,6 +139,10 @@ const liveDeps: ToolBuildDeps = {
   async readSource(spaceId, path) {
     const store = await import('@/lib/notes/store')
     return store.readNoteOrNull({ spaceId, ownerKey: SHARED_OWNER_KEY }, path)
+  },
+  async toolFolder(spaceId, name) {
+    const { toolFolderIn } = await import('./location')
+    return toolFolderIn(spaceId, name)
   },
   compileUi: compileToolUi,
   compileData: compileToolData,
@@ -203,13 +212,14 @@ export async function readToolSources(
   name: string,
   deps: ToolBuildDeps = liveDeps,
 ): Promise<ToolSources> {
+  const folder = deps.toolFolder ? await deps.toolFolder(spaceId, name) : toolFolderPath(name)
   const [index, ui, data, icon] = await Promise.all([
-    deps.readSource(spaceId, toolIndexPath(name)),
-    deps.readSource(spaceId, toolUiPath(name)),
-    deps.readSource(spaceId, toolDataPath(name)),
-    deps.readSource(spaceId, toolIconPath(name)),
+    deps.readSource(spaceId, toolIndexPath(name, folder)),
+    deps.readSource(spaceId, toolUiPath(name, folder)),
+    deps.readSource(spaceId, toolDataPath(name, folder)),
+    deps.readSource(spaceId, toolIconPath(name, folder)),
   ])
-  return { index, ui, data, icon }
+  return { index, ui, data, icon, folder }
 }
 
 // ── the rebuild ───────────────────────────────────────────────────────────────
@@ -282,11 +292,11 @@ export async function rebuildTool(
   let sizeBytes = 0
   const ui = TOOL_SOURCE_FILES.ui
   if (sources.ui === null) {
-    errors.push(missingSource(ui.authorName, toolUiPath(name)))
+    errors.push(missingSource(ui.authorName, toolUiPath(name, sources.folder)))
   } else {
     const unwrapped = unwrapSource(sources.ui)
     if (!unwrapped || unwrapped.lang !== ui.lang) {
-      errors.push(unreadableSource(ui.authorName, toolUiPath(name)))
+      errors.push(unreadableSource(ui.authorName, toolUiPath(name, sources.folder)))
     } else {
       const result = await deps.compileUi(unwrapped.code)
       errors.push(...diagnosticsOf(result, ui.authorName))
@@ -306,7 +316,7 @@ export async function rebuildTool(
   if (sources.data !== null) {
     const unwrapped = unwrapSource(sources.data)
     if (!unwrapped || unwrapped.lang !== data.lang) {
-      errors.push(unreadableSource(data.authorName, toolDataPath(name)))
+      errors.push(unreadableSource(data.authorName, toolDataPath(name, sources.folder)))
     } else {
       const result = await deps.compileData(unwrapped.code)
       errors.push(...diagnosticsOf(result, data.authorName))
@@ -327,7 +337,7 @@ export async function rebuildTool(
   if (sources.icon !== null) {
     const unwrapped = unwrapSource(sources.icon)
     if (!unwrapped || unwrapped.lang !== iconFile.lang) {
-      errors.push(unreadableSource(iconFile.authorName, toolIconPath(name)))
+      errors.push(unreadableSource(iconFile.authorName, toolIconPath(name, sources.folder)))
     } else {
       const result = sanitizeToolIcon(unwrapped.code)
       if (result.ok) iconSvg = result.svg

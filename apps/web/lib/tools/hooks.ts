@@ -38,7 +38,8 @@
 import { logger } from '@/lib/logger'
 import { publishChange } from '@/lib/notes/changes'
 import type { Context } from '@/lib/notes/store'
-import { isToolPath, toolFileKindOfPath, toolNameOfPath } from './config'
+import { isToolPath, toolNameOfFolder, toolNameOfPath } from './config'
+import type { ToolAt } from './location'
 
 // Redeclared (as agents/hooks.ts and entityLinks.ts do) rather than imported:
 // the store imports this module, and a value import back would make an
@@ -49,10 +50,15 @@ function isSharedContext(context: Context): boolean {
   return context.ownerKey === SHARED_OWNER_KEY
 }
 
-/** The Tool a path belongs to, or null when the write is none of our business. */
-function toolOf(context: Context, path: string): string | null {
-  if (!isSharedContext(context) || !isToolPath(path)) return null
-  return toolNameOfPath(path)
+/**
+ * The Tool a path belongs to — under `tools/` or in a folder of the space's
+ * own (lib/tools/location.ts) — or null when the write is none of our business.
+ */
+async function toolOf(context: Context, path: string, opts: { deleted?: boolean } = {}): Promise<ToolAt | null> {
+  if (!isSharedContext(context)) return null
+  if (!isToolPath(path) && !/\/(index|ui|data|icon)\.md$/.test(path)) return null
+  const { toolContaining } = await import('./location')
+  return toolContaining(context.spaceId, path, opts)
 }
 
 async function rebuild(spaceId: string, name: string): Promise<void> {
@@ -106,13 +112,13 @@ async function settleRenamedFrom(spaceId: string, name: string): Promise<void> {
 
 // ── Store hooks ──────────────────────────────────────────────────────────────
 
-/** After a note write (create or save) anywhere under `tools/`. */
+/** After a note write (create or save) in a Tool's folder. */
 export async function toolNoteWritten(context: Context, path: string): Promise<void> {
   publishChange({ spaceId: context.spaceId, ownerKey: context.ownerKey, path, kind: 'write' })
-  const name = toolOf(context, path)
-  if (!name) return
-  await rebuild(context.spaceId, name)
-  if (toolFileKindOfPath(path) === 'index') await syncShare(context.spaceId, name)
+  const at = await toolOf(context, path)
+  if (!at) return
+  await rebuild(context.spaceId, at.name)
+  if (at.kind === 'index') await syncShare(context.spaceId, at.name)
 }
 
 /**
@@ -123,12 +129,16 @@ export async function toolNoteWritten(context: Context, path: string): Promise<v
 export async function toolNoteRenamed(context: Context, from: string, to: string): Promise<void> {
   if (from !== to) publishChange({ spaceId: context.spaceId, ownerKey: context.ownerKey, path: to, kind: 'rename', from })
   if (!isSharedContext(context) || from === to) return
-  const fromName = isToolPath(from) ? toolNameOfPath(from) : null
-  const toName = isToolPath(to) ? toolNameOfPath(to) : null
+  const toAt = await toolOf(context, to)
+  const toName = toAt?.name ?? null
+  // Where it came from is no longer there to read, so the old name is the
+  // path's own (`tools/<name>/…`) or the folder's: settleRenamedFrom asks the
+  // Tool's sources, wherever they now are, before it drops anything.
+  const fromName = isToolPath(from) ? toolNameOfPath(from) : /\/(index|ui|data|icon)\.md$/.test(from) ? toolNameOfFolder(from.slice(0, from.lastIndexOf('/'))) : null
   if (fromName && fromName !== toName) await settleRenamedFrom(context.spaceId, fromName)
   if (toName) await rebuild(context.spaceId, toName)
   if (fromName && fromName !== toName) await syncShare(context.spaceId, fromName)
-  if (toName && toolFileKindOfPath(to) === 'index') await syncShare(context.spaceId, toName)
+  if (toName && toAt?.kind === 'index') await syncShare(context.spaceId, toName)
 }
 
 /**
@@ -141,7 +151,7 @@ export async function toolNoteRenamed(context: Context, from: string, to: string
  * `deleteTool` path (which does the same work itself before trashing the
  * notes) rides through as a set of no-ops.
  */
-async function teardownTool(context: Context, name: string): Promise<void> {
+async function teardownTool(context: Context, name: string, folder: string): Promise<void> {
   try {
     // Dynamic imports, same discipline as `rebuild` above: the store imports
     // this module, and entityNodes/installs both import the store back.
@@ -155,8 +165,8 @@ async function teardownTool(context: Context, name: string): Promise<void> {
     // that pointer is how removeEntityNode finds it. Then the rest of the
     // folder (sources, icon, the folder row itself); trashing the sources
     // re-fires the hooks below, whose rebuilds the final dropBuild sweeps.
-    await entityNodes.removeEntityNode(context.spaceId, 'tool', config.toolIndexPath(name))
-    await store.deleteFolder(context, config.toolFolderPath(name))
+    await entityNodes.removeEntityNode(context.spaceId, 'tool', config.toolIndexPath(name, folder))
+    await store.deleteFolder(context, folder)
     await installs.removeInstallForTool(context.spaceId, name)
   } catch (err) {
     // Rule 1: never throw into the delete path. The next teardown re-derives.
@@ -167,10 +177,11 @@ async function teardownTool(context: Context, name: string): Promise<void> {
 /** After a note is trashed. Losing the index note ends the Tool. */
 export async function toolNoteDeleted(context: Context, path: string): Promise<void> {
   publishChange({ spaceId: context.spaceId, ownerKey: context.ownerKey, path, kind: 'delete' })
-  const name = toolOf(context, path)
-  if (!name) return
-  if (toolFileKindOfPath(path) === 'index') {
-    await teardownTool(context, name)
+  const at = await toolOf(context, path, { deleted: true })
+  if (!at) return
+  const name = at.name
+  if (at.kind === 'index') {
+    await teardownTool(context, name, at.folder)
     await syncShare(context.spaceId, name)
     await dropBuild(context.spaceId, name)
     return

@@ -36,6 +36,7 @@ import { rewriteLinks } from '@/lib/notes/shared/linkRewrite'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { connectorHomeDenial, declaredConfigKind } from '@/lib/notes/shared/configKinds'
 import { agentFolderDenial } from '@/lib/agents/shared/folder'
+import { toolFolderDenial } from '@/lib/tools/config'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 
 /**
@@ -165,7 +166,7 @@ export function shareTargets(frontmatter: Record<string, unknown> | null | undef
 /**
  * Whether a note's frontmatter shares it down into `roomId`. Only what a room
  * borrows from the house can be shared — a note in `agents/` or `tools/`, an
- * agent's brief filed in a folder of the house's own, or a connector, which is
+ * agent's brief or a Tool's index filed in a folder of the house's own, or a connector, which is
  * the note declaring `type: connector` wherever the house filed it
  * (lib/notes/shared/configKinds.ts) — and only the note
  * carrying the flag, never a subtree. Without a room id: whether it is
@@ -181,11 +182,16 @@ export function isSharedDown(path: string, frontmatter: Record<string, unknown> 
   return roomId === undefined ? true : reachesRoom(targets, roomId)
 }
 
-/** An agent's brief outside `agents/`: a folder index declaring `type: agent` (lib/agents/shared/folder.ts). */
+/**
+ * An agent's brief or a Tool's index outside `agents/` / `tools/`: a folder
+ * index declaring `type: agent` or `type: tool` where one may sit
+ * (lib/agents/shared/folder.ts, lib/tools/config.ts).
+ */
 function isFiledBrief(path: string, frontmatter: Record<string, unknown> | null | undefined): boolean {
   const type = typeof frontmatter?.type === 'string' ? frontmatter.type.trim().toLowerCase() : ''
-  if (type !== 'agent' || !path.endsWith('/index.md')) return false
-  return agentFolderDenial(path.slice(0, -'/index.md'.length)) === null
+  if ((type !== 'agent' && type !== 'tool') || !path.endsWith('/index.md')) return false
+  const folder = path.slice(0, -'/index.md'.length)
+  return (type === 'agent' ? agentFolderDenial(folder) : toolFolderDenial(folder)) === null
 }
 
 /** Whether a path is the `parent/` folder or anything under it. */
