@@ -5,10 +5,13 @@ import { fetchJson } from '@/lib/fetchJson';
 import { swrFetch, watchRequestCache, invalidateRequestCachePrefix } from '@/features/shared/lib/requestCache';
 import { listQueryString, type ListQuery } from '@/lib/resources/shared/listQuery';
 import type { ResourceView } from '@/lib/resources/shared/view';
+import type { ResourceFolderView } from '@/lib/resources/shared/resourceTree';
 
 interface Page {
   items: ResourceView[];
   nextOffset: number | null;
+  /** In a folder, the first page's folders inside it. */
+  folders?: ResourceFolderView[];
 }
 
 /** Every resources list of a space is cached under this prefix; a write invalidates it. */
@@ -27,6 +30,7 @@ export function useResourceList(spaceId: string | null, query: Partial<ListQuery
   const qs = listQueryString(query);
   const key = spaceId ? `${resourceListPrefix(spaceId)}${qs}` : null;
   const [items, setItems] = useState<ResourceView[] | null>(null);
+  const [folders, setFolders] = useState<ResourceFolderView[]>([]);
   const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [version, setVersion] = useState(0);
@@ -43,6 +47,7 @@ export function useResourceList(spaceId: string | null, query: Partial<ListQuery
       (page) => {
         if (cancelled) return;
         setItems(page.items);
+        setFolders(page.folders ?? []);
         setNextOffset(page.nextOffset);
       },
     ).catch(() => !cancelled && setItems([]));
@@ -67,5 +72,5 @@ export function useResourceList(spaceId: string | null, query: Partial<ListQuery
     }
   }, [spaceId, nextOffset, loadingMore, query]);
 
-  return { items, loadMore, hasMore: nextOffset !== null, loadingMore };
+  return { items, folders, loadMore, hasMore: nextOffset !== null, loadingMore };
 }

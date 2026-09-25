@@ -12,7 +12,7 @@ import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { LEVEL_VIEW } from '@/lib/notes/shared/authz'
 import { SHARED_OWNER_KEY } from '@/lib/notes/store'
-import { entityFolderPathOf } from '@/lib/notes/entities'
+import { folderOfResourceNote } from '@/lib/resources/shared/resourceTree'
 import { findNodeIdByRecord } from '@/lib/notes/context/entityNodes'
 import { noteAudience, type NoteAudience } from './shared/visibility'
 
@@ -79,7 +79,7 @@ async function isOurRestriction(spaceId: string, folder: string): Promise<boolea
 
 /** The context folder a node's entity note sits in, or null. */
 function folderOfNode(node: { id: string; type: string; metadata: unknown }): string | null {
-  return entityFolderPathOf({
+  return folderOfResourceNote({
     id: node.id,
     type: node.type,
     metadata: (node.metadata ?? {}) as Record<string, unknown>,

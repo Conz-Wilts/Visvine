@@ -14,8 +14,11 @@ test('a list query is read from a URL, defaults filled and junk refused', () => 
   const q = parseListQuery(new URLSearchParams('kind=pdf&channel=c1&by=me&q=%20plan%20&sort=size&trash=1&offset=60&since=2026-09-01'))
   assert.deepEqual(q, {
     kind: 'pdf', channelId: 'c1', by: 'me', q: 'plan', since: '2026-09-01T00:00:00.000Z',
-    sort: 'size', trash: true, offset: 60, limit: PAGE_SIZE,
+    sort: 'size', trash: true, folder: null, offset: 60, limit: PAGE_SIZE,
   })
+  assert.equal(parseListQuery(new URLSearchParams('folder=resources/design/')).folder, 'resources/design')
+  assert.equal(parseListQuery(new URLSearchParams('folder=resources/../people')).folder, null, 'no climbing out')
+  assert.equal(parseListQuery(new URLSearchParams('folder=people/x')).folder, null, 'only under resources/')
   const junk = parseListQuery(new URLSearchParams('kind=exe&sort=random&offset=-5&limit=9999&since=yesterday'))
   assert.equal(junk.kind, 'all')
   assert.equal(junk.sort, 'recent')

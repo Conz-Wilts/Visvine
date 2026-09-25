@@ -49,6 +49,7 @@
     "db:agents:stamp": "tsx scripts/stamp-agent-briefs.ts",
     "db:agents:to-rows": "tsx scripts/agents-to-rows.ts",
     "db:models:migrate": "tsx scripts/migrate-model-notes.ts",
+    "db:resources:folders-to-notes": "tsx scripts/resource-folders-to-notes.ts",
     "db:rename:spaces": "tsx scripts/rename-community-to-space.ts",
     "db:actions:sync": "tsx scripts/sync-action-notes.ts",
     "db:prices": "tsx scripts/sync-model-prices.ts",

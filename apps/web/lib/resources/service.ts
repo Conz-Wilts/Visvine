@@ -43,9 +43,9 @@ import { setFolderRestricted } from '@/lib/notes/access'
 import { ingestSource, reingestSourceFrom } from '@/lib/notes/sources/ingest'
 import * as sourceStore from '@/lib/notes/sourceStore'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
-import { entityFolderPathOf } from '@/lib/notes/entities'
+import { folderOfResourceNote } from '@/lib/resources/shared/resourceTree'
 import { normalizeSourcePath, sourceKindOf } from '@/lib/notes/shared/sourceTypes'
-import { requireFolderInSpace } from '@/lib/resources/folders'
+import { fileResource, resourceFolderPath } from '@/lib/resources/tree'
 import { removeFileNode, requireResourceNode } from '@/lib/resources/node'
 import { ensureResourceEntity } from '@/lib/resources/entity'
 import { addShares, type ShareVia } from '@/lib/resources/shares'
@@ -78,8 +78,6 @@ export interface DriveFile {
   indexError: string | null
   /** Chunks this file contributed to retrieval — 0 until it is indexed. */
   chunkCount: number
-  /** The Drive folder it sits in; null is the root. */
-  folderId: string | null
   metadata: Record<string, unknown>
   createdAt: string
 }
@@ -142,8 +140,8 @@ export interface UploadInput {
   mimeType: string
   buffer: Buffer
   uploadedBy: string
-  /** The folder to land in; null (the default) is the root. */
-  folderId?: string | null
+  /** A folder of `resources/` to file it in; null (the default) is the top. */
+  folder?: string | null
   /**
    * The resource node this file is the content of. Omitted, the upload gets a
    * node of its own, named after the file.
@@ -169,9 +167,12 @@ export type UploadedFile = DriveFile & { nodeId: string | null; kind: string }
  */
 export async function uploadResource(input: UploadInput): Promise<UploadedFile> {
   if (input.nodeId) await requireResourceNode(input.spaceId, input.nodeId)
+  const folder = await resourceFolderPath(input.spaceId, input.folder)
   const row = await storeResource(input)
   return finishUpload(row.id, {
     nodeId: input.conversationId ? null : (input.nodeId ?? null),
+    folder,
+    by: input.uploadedBy,
     share: input.conversationId
       ? null
       : { sharedBy: input.uploadedBy, via: input.via ?? 'upload', agentName: input.agentName ?? null },
@@ -191,11 +192,22 @@ export async function finishUpload(
   resourceId: string,
   opts: {
     nodeId?: string | null
+    /** A folder of `resources/` to file its note in, by `by`. */
+    folder?: string | null
+    by?: string
     share: { sharedBy: string; via: ShareVia; agentName?: string | null } | null
   },
 ): Promise<UploadedFile> {
   const { nodeId, replacedResourceId } = await ensureResourceEntity(resourceId, { nodeId: opts.nodeId ?? null })
   if (replacedResourceId) await deleteResource(replacedResourceId)
+  if (nodeId && opts.folder && opts.by) {
+    const row0 = await prisma.resource.findUniqueOrThrow({ where: { id: resourceId }, select: { spaceId: true } })
+    const user = await prisma.user.findUnique({ where: { id: opts.by }, select: { id: true, name: true, email: true } })
+    const actor = { id: opts.by, name: user?.name ?? 'Member', email: user?.email ?? null }
+    await fileResource(row0.spaceId, nodeId, opts.folder, actor).catch((err) =>
+      logger.warn('resources.finish.file', { resourceId, folder: opts.folder, err }),
+    )
+  }
   const row = await prisma.resource.findUniqueOrThrow({ where: { id: resourceId } })
   if (opts.share) {
     await addShares([{ resourceId, spaceId: row.spaceId, sharedBy: opts.share.sharedBy, via: opts.share.via, agentName: opts.share.agentName }])
@@ -234,8 +246,6 @@ const FINISH_BUDGET_MS = 8_000
  */
 async function storeResource(input: UploadInput) {
   const { spaceId, buffer, uploadedBy } = input
-  const folderId = input.folderId ?? null
-  await requireFolderInSpace(spaceId, folderId)
   if (buffer.length > MAX_RESOURCE_BYTES) {
     throw new Error(`File must be less than ${Math.floor(MAX_RESOURCE_BYTES / 1024 / 1024)}MB`)
   }
@@ -271,7 +281,6 @@ async function storeResource(input: UploadInput) {
       ...dims,
       uploadedBy,
       createdBy: uploadedBy,
-      folderId,
       indexState: 'pending',
       metadata: { originalFilename: name, mimeType },
     },
@@ -316,7 +325,7 @@ export async function indexResource(resourceId: string, bytes?: Buffer): Promise
   await alignFolderPrivacy(resource.spaceId)
   const folder =
     (resource.node &&
-      entityFolderPathOf({
+      folderOfResourceNote({
         id: resource.node.id,
         type: resource.node.type,
         metadata: (resource.node.metadata ?? {}) as Record<string, unknown>,
@@ -445,7 +454,6 @@ type ResourceRow = {
   sourcePath: string | null
   indexState: string
   indexError: string | null
-  folderId: string | null
   metadata: unknown
   createdAt: Date
 }
@@ -463,7 +471,6 @@ function toDriveFile(row: ResourceRow, chunkCount: number, fileUrl?: string | nu
     indexState: row.indexState as IndexState,
     indexError: row.indexError,
     chunkCount,
-    folderId: row.folderId,
     metadata: (row.metadata as Record<string, unknown> | null) ?? {},
     createdAt: row.createdAt.toISOString(),
   }

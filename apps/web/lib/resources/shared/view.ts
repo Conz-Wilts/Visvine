@@ -3,6 +3,7 @@
 // Every URL here is one of ours and gated (a signed URL is never handed out),
 // and the shares listed are only the ones the viewer can see.
 
+import { entityNotePath } from '@/lib/notes/entities'
 import type { SerializedLinkPreview } from '@/lib/messages/types'
 import { PROVIDER_LABEL, type LinkProvider } from '@/lib/links/shared/providers'
 import { linkCardOf, resourceImagePath, type LinkResourceRow } from './linkCard'
@@ -48,6 +49,8 @@ export interface ResourceView {
   shares: ResourceShareView[]
   sharedToSpace: boolean
   nodeId: string | null
+  /** Its note — `resources/<slug>/index.md`, or wherever in `resources/` it is filed. */
+  notePath: string | null
   canManage: boolean
   deleted: boolean
   indexState: string
@@ -68,6 +71,7 @@ export interface ResourceViewRow extends LinkResourceRow {
   createdAt: Date
   deletedAt: Date | null
   nodeId: string | null
+  node?: { id: string; type: string; metadata: unknown } | null
   indexState: string
   sourcePath: string | null
   renditions: ReadonlyArray<{ kind: string }>
@@ -113,6 +117,7 @@ export function toResourceView(
     shares: extra.shares,
     sharedToSpace: extra.sharedToSpace,
     nodeId: row.nodeId,
+    notePath: row.node ? entityNotePath({ ...row.node, metadata: row.node.metadata as Record<string, unknown> | null }) : null,
     canManage: extra.canManage,
     deleted: row.deletedAt !== null,
     indexState: row.indexState,

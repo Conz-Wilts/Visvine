@@ -19,7 +19,8 @@ export interface IncomingFile {
   userId: string
   email?: string | null
   spaceId: string
-  folderId?: string | null
+  /** A folder of `resources/` to file it in. */
+  folder?: string | null
   name?: string | null
   mimeType?: string | null
   bytes: Buffer
@@ -53,7 +54,7 @@ export async function receiveFile(input: IncomingFile): Promise<UploadedFile> {
       mimeType: incomingMimeType(filename, input.mimeType),
       buffer: input.bytes,
       uploadedBy: input.userId,
-      folderId: input.folderId ?? null,
+      folder: input.folder ?? null,
       conversationId: input.conversationId ?? null,
       via: input.via,
       agentName: input.agentName ?? null,

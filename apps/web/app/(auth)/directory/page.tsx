@@ -161,7 +161,11 @@ function DirectoryPane() {
   if (view === 'resources') {
     return spaceId ? (
       <div className="flex w-full flex-col" style={{ height: 'calc(100dvh - 88px)' }}>
-        <ResourcesBrowser spaceId={spaceId} />
+        <ResourcesBrowser
+          spaceId={spaceId}
+          folder={searchParams.get('folder')}
+          onFolder={(f) => router.push(f ? `/directory?view=resources&folder=${encodeURIComponent(f)}` : '/directory?view=resources')}
+        />
       </div>
     ) : null;
   }

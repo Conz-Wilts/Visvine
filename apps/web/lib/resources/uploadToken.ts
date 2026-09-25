@@ -23,8 +23,8 @@ const UPLOAD_TOKEN_TTL_SEC = 15 * 60
 export interface UploadTokenPayload {
   userId: string
   spaceId: string
-  /** The Drive folder files land in; null is the root. */
-  folderId: string | null
+  /** The folder of `resources/` files land in; null is the top. */
+  folder: string | null
 }
 
 function getSecret(): Uint8Array {
@@ -59,10 +59,10 @@ export async function verifyUploadToken(token: string): Promise<UploadTokenPaylo
       algorithms: ['HS256'],
       audience: UPLOAD_TOKEN_AUDIENCE,
     })
-    const { userId, spaceId, folderId } = payload as Record<string, unknown>
+    const { userId, spaceId, folder } = payload as Record<string, unknown>
     if (typeof userId !== 'string' || !userId || typeof spaceId !== 'string' || !spaceId) return null
-    if (folderId !== null && folderId !== undefined && typeof folderId !== 'string') return null
-    return { userId, spaceId, folderId: typeof folderId === 'string' && folderId ? folderId : null }
+    if (folder !== null && folder !== undefined && typeof folder !== 'string') return null
+    return { userId, spaceId, folder: typeof folder === 'string' && folder ? folder : null }
   } catch {
     return null
   }

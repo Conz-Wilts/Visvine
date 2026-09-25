@@ -31,12 +31,15 @@ import {
   DownloadIcon,
   EllipsisIcon,
   ExternalLinkIcon,
+  FolderInputIcon,
   RotateCcwIcon,
   Share2Icon,
   Trash2Icon,
   XIcon,
 } from '@/features/shared/icons';
-import { fetchJson } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import MoveDialog, { FolderCrumbs } from '@/features/resources/components/MoveDialog';
+import { RESOURCES_ROOT } from '@/lib/resources/shared/resourceTree';
 import type { ChannelDirectoryEntry } from '@/lib/messages/types';
 import type { ListKind, ListQuery, ListSort } from '@/lib/resources/shared/listQuery';
 import type { ResourceView } from '@/lib/resources/shared/view';
@@ -112,10 +115,15 @@ function download(url: string) {
 export default function ResourcesBrowser({
   spaceId,
   channelId = null,
+  folder = null,
+  onFolder,
 }: {
   spaceId: string;
   /** A channel's Files tab: only what was shared there. */
   channelId?: string | null;
+  /** The folder of `resources/` open in the space's Resources (the URL's `folder`). */
+  folder?: string | null;
+  onFolder?: (folder: string | null) => void;
 }) {
   const inChannel = Boolean(channelId);
   const layoutKey = `vv:resources:layout:${inChannel ? 'channel' : 'space'}`;
@@ -132,6 +140,11 @@ export default function ResourcesBrowser({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sharing, setSharing] = useState<ResourceView | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ResourceView[] | null>(null);
+  const [moving, setMoving] = useState<ResourceView[] | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  // The space's Resources is a file system; the trash and a channel's Files are flat.
+  const here = inChannel || trash ? null : (folder ?? RESOURCES_ROOT);
   const sentinel = useRef<HTMLDivElement>(null);
   const viewer = useResourceViewer();
 
@@ -169,10 +182,14 @@ export default function ResourcesBrowser({
       channelId: channelId ?? channel,
       since: sinceDays ? new Date(Date.now() - sinceDays * 86_400_000).toISOString().slice(0, 10) : null,
       trash,
+      folder: here,
     }),
-    [kind, query, sort, mine, channelId, channel, sinceDays, trash],
+    [kind, query, sort, mine, channelId, channel, sinceDays, trash, here],
   );
-  const { items, loadMore, hasMore, loadingMore } = useResourceList(spaceId, listQuery);
+  const { items, folders, loadMore, hasMore, loadingMore } = useResourceList(spaceId, listQuery);
+  // Searching or filtering reaches everything below the folder, so its folders step aside.
+  const deep = Boolean(query || kind !== 'all' || mine || channel || sinceDays);
+  const shownFolders = here && !deep ? folders : [];
   const ids = useMemo(() => (items ?? []).map((r) => r.id), [items]);
   const imageGrid = kind === 'image' && layout === 'grid';
 
@@ -187,6 +204,53 @@ export default function ResourcesBrowser({
   }, [hasMore, loadMore]);
 
   const refresh = useCallback(() => invalidateResourceLists(spaceId), [spaceId]);
+
+  /** File resources in a folder: each note folder moves there (PATCH …/resources/<id>). */
+  const fileIn = useCallback(
+    async (list: ResourceView[], to: string) => {
+      setProblem(null);
+      try {
+        for (const r of list) {
+          await fetchJsonBody(`/api/resources/${encodeURIComponent(r.id)}`, 'PATCH', { folder: to === RESOURCES_ROOT ? null : to });
+        }
+      } finally {
+        setSelected(new Set());
+        refresh();
+      }
+    },
+    [refresh],
+  );
+
+  const dragged = (e: React.DragEvent): ResourceView[] => {
+    const ids = e.dataTransfer.getData('application/x-visvine-resources').split(',').filter(Boolean);
+    return (items ?? []).filter((r) => ids.includes(r.id));
+  };
+  const dropOn = (to: string, e: React.DragEvent) => {
+    e.preventDefault();
+    setDropTarget(null);
+    const list = dragged(e);
+    if (list.length) void fileIn(list, to).catch((err: unknown) => setProblem(err instanceof Error ? err.message : 'Could not move it'));
+  };
+  const dragProps = (r: ResourceView) =>
+    here && r.canManage
+      ? {
+          draggable: true,
+          onDragStart: (e: React.DragEvent) => {
+            const ids = selected.has(r.id) ? [...selected] : [r.id];
+            e.dataTransfer.setData('application/x-visvine-resources', ids.join(','));
+            e.dataTransfer.effectAllowed = 'move';
+          },
+        }
+      : {};
+  const folderDrop = (path: string) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes('application/x-visvine-resources')) return;
+      e.preventDefault();
+      setDropTarget(path);
+    },
+    onDragLeave: () => setDropTarget((t) => (t === path ? null : t)),
+    onDrop: (e: React.DragEvent) => dropOn(path, e),
+  });
 
   const toggle = (id: string, range: boolean) => {
     setSelected((prev) => {
@@ -230,6 +294,7 @@ export default function ResourcesBrowser({
     }
     const menu: MenuItem[] = [
       { id: 'share', label: 'Share', icon: <Share2Icon />, onSelect: () => setSharing(r) },
+      ...(here && r.canManage ? [{ id: 'move', label: 'Move to…', icon: <FolderInputIcon />, onSelect: () => setMoving([r]) }] : []),
       ...(r.canManage ? [{ id: 'delete', label: 'Delete', icon: <Trash2Icon />, danger: true, onSelect: () => setConfirmDelete([r]) }] : []),
     ];
     return (
@@ -359,6 +424,13 @@ export default function ResourcesBrowser({
         </div>
       </div>
 
+      {here && (here !== RESOURCES_ROOT || problem) && (
+        <div className="mt-3 flex items-center gap-3 pr-6">
+          {here !== RESOURCES_ROOT && <FolderCrumbs folder={here} onPick={(f) => onFolder?.(f === RESOURCES_ROOT ? null : f)} onDropOn={dropOn} />}
+          {problem && <p className="ml-auto text-sm text-danger">{problem}</p>}
+        </div>
+      )}
+
       {/* The list */}
       <div className={clsx('mt-3 min-h-0 flex-1 overflow-y-auto', inChannel ? 'px-2 pb-6' : 'pb-24 pr-6')}>
         {items === null ? (
@@ -372,7 +444,19 @@ export default function ResourcesBrowser({
           </div>
         ) : layout === 'grid' ? (
           <ResourceGrid variant={imageGrid ? 'image' : 'file'}>
+            {shownFolders.map((f) => (
+              <div key={f.path} {...folderDrop(f.path)} className={clsx('rounded-xl', dropTarget === f.path && 'ring-2 ring-accent')}>
+                <ResourceCard
+                  name={f.title}
+                  kind="folder"
+                  meta={f.description ?? undefined}
+                  variant={imageGrid ? 'image' : 'file'}
+                  onOpen={() => onFolder?.(f.path)}
+                />
+              </div>
+            ))}
             {items.map((r) => (
+              <div key={r.id} {...dragProps(r)}>
               <ResourceCard
                 key={r.id}
                 name={r.name}
@@ -385,11 +469,18 @@ export default function ResourcesBrowser({
                 actions={rowActions(r)}
                 onOpen={() => (selected.size ? toggle(r.id, false) : open(r))}
               />
+              </div>
             ))}
           </ResourceGrid>
         ) : (
           <div className="divide-y divide-line-subtle">
+            {shownFolders.map((f) => (
+              <div key={f.path} {...folderDrop(f.path)} className={clsx('rounded-lg', dropTarget === f.path && 'bg-accent-soft')}>
+                <ResourceRow name={f.title} kind="folder" meta={f.description ?? undefined} onOpen={() => onFolder?.(f.path)} />
+              </div>
+            ))}
             {items.map((r) => (
+              <div key={r.id} {...dragProps(r)}>
               <ResourceRow
                 key={r.id}
                 name={r.name}
@@ -401,6 +492,7 @@ export default function ResourcesBrowser({
                 actions={rowActions(r)}
                 onOpen={() => (selected.size ? toggle(r.id, false) : open(r))}
               />
+              </div>
             ))}
           </div>
         )}
@@ -427,6 +519,9 @@ export default function ResourcesBrowser({
                   icon={<DownloadIcon />}
                   onClick={() => selectedItems.forEach((r, i) => r.downloadUrl && setTimeout(() => download(r.downloadUrl!), i * 400))}
                 />
+                {here && selectedItems.every((r) => r.canManage) && (
+                  <IconButton label="Move to…" icon={<FolderInputIcon />} onClick={() => setMoving(selectedItems)} />
+                )}
                 {selectedItems.every((r) => r.canManage) && (
                   <IconButton label="Delete" icon={<Trash2Icon />} onClick={() => setConfirmDelete(selectedItems)} />
                 )}
@@ -446,6 +541,15 @@ export default function ResourcesBrowser({
             setSharing(null);
             refresh();
           }}
+        />
+      )}
+      {moving && here && (
+        <MoveDialog
+          spaceId={spaceId}
+          count={moving.length}
+          from={here}
+          onClose={() => setMoving(null)}
+          onMove={(to) => fileIn(moving, to)}
         />
       )}
       <ConfirmDialog

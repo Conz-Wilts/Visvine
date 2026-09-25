@@ -378,6 +378,11 @@ export function entityOwnerPathOf(path: string): string | null {
   const m = ENTITY_OWNER_PATH_RE.exec(raw)
   if (!m || m[2] === INDEX_BASENAME) return null
   if (m[3] === INDEX_BASENAME) return null
+  // `resources/` is a file system: a folder there holds resources of its own,
+  // so only a note directly inside `resources/<slug>/` is that slug's by shape.
+  // Anything deeper is owned by whichever ancestor index a node claims — the
+  // reverse map's walk (resolveEntityOwner, entityLinks#ownerIdOf).
+  if (m[1] === 'resources' && m[3].includes('/')) return null
   return `${m[1]}/${m[2]}`
 }
 

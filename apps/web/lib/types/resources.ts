@@ -32,8 +32,6 @@ export interface Resource {
   indexError?: string | null;
   /** Chunks this file contributed to retrieval — 0 until it is indexed. */
   chunkCount?: number;
-  /** The Drive folder it sits in; null is the root. */
-  folderId: string | null;
   createdAt: string;
   metadata: {
     originalFilename?: string;

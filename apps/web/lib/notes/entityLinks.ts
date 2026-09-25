@@ -259,9 +259,13 @@ async function repointAdoptedNodes(
   if (removed.length === 0 || added.length === 0) return
   const landedAt = new Map<string, string>()
   for (const [path, content] of added) {
-    if (!adoptablePath(path)) continue
     const kind = declaredAdoptableKind(content)
-    if (kind) landedAt.set(adoptionKey(kind, adoptedNameOf(path, content)), path)
+    if (!kind) continue
+    // A resource filed back at the top of `resources/` lands on its kind's own
+    // shape: the pointer follows so the removal below finds nothing bound to
+    // the path it left, and the node reads its note from the namespace again.
+    const home = !adoptablePath(path) && kind === 'resource' && entityKindOfPath(path) === 'resource'
+    if (adoptablePath(path) || home) landedAt.set(adoptionKey(kind, adoptedNameOf(path, content)), path)
   }
   if (landedAt.size === 0) return
   for (const from of removed) {

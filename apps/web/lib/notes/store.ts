@@ -38,6 +38,7 @@ import {
   canonicalEntityPath,
   entityFlatPath,
   entityIndexPathOf,
+  entityKindOf,
   entityOwnerPathOf,
   entityStub,
   entityTypeLabelOf,
@@ -48,6 +49,7 @@ import {
   parseEntityHref,
   type EntityNodeLike,
 } from './entities'
+import { isUnderResources, resourceMoveDenial } from '@/lib/resources/shared/resourceTree'
 import { revalidateTag } from 'next/cache'
 // Import cycles with vaultCache (it reads via listRaw) and publications (it
 // writes replicas via writeNote; we call its hooks) are benign: both sides
@@ -1231,13 +1233,18 @@ async function ensureParentFolderNote(
   if (owner) {
     if (await findLive(context, indexPathOf(owner))) return
     const node = await nodeForEntityPath(context.spaceId, `${owner}.md`)
-    if (!node) {
+    if (!node && isUnderResources(owner)) {
+      // A folder in the Resources file system, not a resource: made below like
+      // any other folder.
+    } else if (!node) {
       throw new Error(
         `"${owner}" is not a directory entity — notes filed under an entity namespace must belong to one`,
       )
     }
-    await ensureEntityFolder(context, node, actor)
-    return
+    else {
+      await ensureEntityFolder(context, node, actor)
+      return
+    }
   }
   const parent = folderOf(sanitizePath(path))
   if (!parent) return
@@ -1326,6 +1333,22 @@ export async function canonicalEntityWritePath(context: Context, path: string): 
   return (await findLive(context, index)) ? index : p
 }
 
+/** The resource notes (`type: Resource` indexes) at or below `folder`. */
+async function resourceNotesUnder(context: Context, folder: string): Promise<string[]> {
+  const rows = await prisma.contextNote.findMany({
+    where: {
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
+      deletedAt: null,
+      path: { startsWith: `${folder}/`, endsWith: `/${INDEX_BASENAME}` },
+    },
+    select: { path: true, content: true },
+  })
+  return rows
+    .filter((r) => entityKindOf(String(parseFrontmatter(r.content).type ?? '')) === 'resource')
+    .map((r) => r.path)
+}
+
 /** True when `folder` is some entity's context folder (people/<slug>). */
 function isEntityFolder(folder: string): boolean {
   return entityOwnerPathOf(`${folder}/x.md`) !== null && parseEntityHref(`${folder}/index.md`) !== null
@@ -1343,10 +1366,23 @@ export async function renameFolder(
   // An entity folder IS the entity's note path (people/<slug>): its name is the
   // node's identity, so it can't be renamed or moved — and nothing else can
   // become one by being renamed into that shape.
-  if (isEntityFolder(f)) {
-    throw new Error(`"${f}" is a directory entity's folder — its path is the entity's identity and can't change`)
+  // `resources/` is a file system: its folders move freely inside it, and a
+  // resource's own folder moves between them under its name. Nothing that
+  // holds a resource leaves it.
+  const withinResources = isUnderResources(f) && isUnderResources(t)
+  const heldResources = isUnderResources(f) ? await resourceNotesUnder(context, f) : []
+  if (heldResources.length && !isUnderResources(t)) {
+    throw new Error(`"${f}" holds resources, and a resource lives under resources/`)
   }
-  if (isEntityFolder(t)) {
+  if (withinResources && heldResources.includes(indexPathOf(f))) {
+    const denial = resourceMoveDenial(f, t)
+    if (denial) throw new Error(denial)
+  }
+  if (withinResources) {
+    if (await findLive(context, indexPathOf(t))) throw new Error(`"${t}" already exists`)
+  } else if (isEntityFolder(f)) {
+    throw new Error(`"${f}" is a directory entity's folder — its path is the entity's identity and can't change`)
+  } else if (isEntityFolder(t)) {
     throw new Error(`"${t}" is where a directory entity's notes live — a folder can't be renamed into it`)
   }
   // A namespace folder is fixed in both directions: `agents/` can't be moved or
@@ -1487,6 +1523,12 @@ export async function deleteFolder(context: Context, path: string): Promise<void
   // the teardown hooks that remove them still work.
   const denial = namespaceFolderDenial(p)
   if (denial) throw new Error(denial)
+  // A resource is deleted as a resource (its bytes, shares and row go with
+  // it), never as a side effect of emptying the folder it was filed in.
+  if (isUnderResources(p)) {
+    const held = (await resourceNotesUnder(context, p)).filter((n) => n !== indexPathOf(p))
+    if (held.length) throw new Error(`"${p}" holds ${held.length === 1 ? 'a resource' : `${held.length} resources`} — move ${held.length === 1 ? 'it' : 'them'} out first`)
+  }
   const notes = await prisma.contextNote.findMany({
     where: {
       spaceId: context.spaceId,

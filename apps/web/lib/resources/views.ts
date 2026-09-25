@@ -30,6 +30,7 @@ export const VIEW_SELECT = {
   createdAt: true,
   deletedAt: true,
   nodeId: true,
+  node: { select: { id: true, type: true, metadata: true } },
   indexState: true,
   sourcePath: true,
   createdBy: true,

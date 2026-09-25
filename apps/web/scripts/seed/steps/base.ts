@@ -43,7 +43,6 @@ export async function wipe(): Promise<void> {
     prisma.resourceComment.deleteMany({}),
     prisma.resourceChange.deleteMany({}),
     prisma.resource.deleteMany({}),
-    prisma.resourceFolder.deleteMany({}),
     prisma.spaceMember.deleteMany({}),
     prisma.identityResolution.deleteMany({}),
     prisma.node.deleteMany({}),

@@ -20,6 +20,9 @@ export interface ListQuery {
   since: string | null
   sort: ListSort
   trash: boolean
+  /** A folder of the Resources file system (`resources/design`): what sits in
+   *  it — anywhere below it while searching or filtering. Null for no folder. */
+  folder: string | null
   /** Rows to skip — the next page's start. */
   offset: number
   limit: number
@@ -29,6 +32,14 @@ export const PAGE_SIZE = 60
 
 function pick<T extends string>(value: string | null, allowed: readonly T[], fallback: T): T {
   return value && (allowed as readonly string[]).includes(value) ? (value as T) : fallback
+}
+
+/** A folder path under `resources/`, or null: no `..`, no empty segment. */
+function folderParam(value: string | null): string | null {
+  if (!value) return null
+  const parts = value.replace(/^\/+|\/+$/g, '').split('/')
+  if (parts[0] !== 'resources' || parts.some((p) => !p || p === '.' || p === '..')) return null
+  return parts.join('/')
 }
 
 export function parseListQuery(params: URLSearchParams): ListQuery {
@@ -43,6 +54,7 @@ export function parseListQuery(params: URLSearchParams): ListQuery {
     since: since && !Number.isNaN(Date.parse(since)) ? new Date(since).toISOString() : null,
     sort: pick(params.get('sort'), LIST_SORTS, 'recent'),
     trash: params.get('trash') === '1',
+    folder: folderParam(params.get('folder')),
     offset: Number.isInteger(offset) && offset > 0 ? Math.min(offset, 10_000) : 0,
     limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : PAGE_SIZE,
   }
@@ -58,6 +70,7 @@ export function listQueryString(query: Partial<ListQuery>): string {
   if (query.since) params.set('since', query.since)
   if (query.sort && query.sort !== 'recent') params.set('sort', query.sort)
   if (query.trash) params.set('trash', '1')
+  if (query.folder) params.set('folder', query.folder)
   if (query.offset) params.set('offset', String(query.offset))
   if (query.limit && query.limit !== PAGE_SIZE) params.set('limit', String(query.limit))
   return params.toString()

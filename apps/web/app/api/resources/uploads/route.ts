@@ -8,7 +8,7 @@ const initSchema = z.object({
   name: z.string().trim().min(1).max(255),
   size: z.number().int().positive(),
   mimeType: z.string().max(200).optional(),
-  folderId: z.string().min(1).nullable().optional(),
+  folder: z.string().min(1).max(500).nullable().optional(),
   nodeId: z.string().min(1).nullable().optional(),
   conversationId: z.string().min(1).nullable().optional(),
 });

@@ -51,11 +51,11 @@ test('the signature reads the formats people send', () => {
 
 test('an upload token names one person and one space, and nothing else verifies as one', async () => {
   const { mintUploadToken, verifyUploadToken } = await import('@/lib/resources/uploadToken')
-  const { token, expiresAt } = await mintUploadToken({ userId: 'u1', spaceId: 's1', folderId: null })
-  assert.deepEqual(await verifyUploadToken(token), { userId: 'u1', spaceId: 's1', folderId: null })
+  const { token, expiresAt } = await mintUploadToken({ userId: 'u1', spaceId: 's1', folder: null })
+  assert.deepEqual(await verifyUploadToken(token), { userId: 'u1', spaceId: 's1', folder: null })
   assert.ok(expiresAt.getTime() > Date.now())
 
-  const expired = await mintUploadToken({ userId: 'u1', spaceId: 's1', folderId: 'f1' }, -1)
+  const expired = await mintUploadToken({ userId: 'u1', spaceId: 's1', folder: 'resources/f1' }, -1)
   assert.equal(await verifyUploadToken(expired.token), null)
 
   // Tampering with a byte breaks it.

@@ -30,8 +30,8 @@ import {
 } from '@/lib/gcs'
 import { localAppendChunk, localDropStaged, localFinishStaged, localStagedSize } from '@/lib/storage/localStore'
 import { resourceObjectPath } from '@/lib/storage/objectPaths'
-import { requireFolderInSpace } from '@/lib/resources/folders'
 import { requireResourceNode } from '@/lib/resources/node'
+import { resourceFolderPath } from '@/lib/resources/tree'
 import { requireDriveWriter } from '@/lib/resources/receive'
 import { requireChannelOfSpace } from '@/lib/resources/access'
 import { finishUpload, type UploadedFile } from '@/lib/resources/service'
@@ -55,6 +55,7 @@ interface PendingMeta {
   originalFilename: string
   conversationId: string | null
   nodeId: string | null
+  folder?: string | null
 }
 
 function pendingOf(metadata: unknown): PendingMeta {
@@ -64,6 +65,7 @@ function pendingOf(metadata: unknown): PendingMeta {
     originalFilename: m.originalFilename ?? 'file',
     conversationId: m.conversationId ?? null,
     nodeId: m.nodeId ?? null,
+    folder: m.folder ?? null,
   }
 }
 
@@ -74,7 +76,8 @@ export interface InitInput {
   name: string
   size: number
   mimeType?: string | null
-  folderId?: string | null
+  /** A folder of `resources/` to file it in (lib/resources/tree.ts#resourceFolderPath). */
+  folder?: string | null
   /** A Resource record this file becomes the content of. */
   nodeId?: string | null
   /** The channel it is being dropped into; shared there when the message is sent. */
@@ -105,7 +108,7 @@ export async function initUpload(input: InitInput): Promise<InitResult> {
   const refusal = refuseUploadByName(name, input.size, maxUploadBytes())
   if (refusal) throw new ApiError(400, refusal)
   if (name.startsWith('~')) throw new ApiError(400, 'A file name cannot start with ~')
-  await requireFolderInSpace(input.spaceId, input.folderId ?? null)
+  const folder = await resourceFolderPath(input.spaceId, input.folder)
   if (input.nodeId) await requireResourceNode(input.spaceId, input.nodeId)
 
   const id = randomUUID()
@@ -125,10 +128,9 @@ export async function initUpload(input: InitInput): Promise<InitResult> {
       mimeType,
       uploadedBy: input.userId,
       createdBy: input.userId,
-      folderId: input.folderId ?? null,
       indexState: 'pending',
       scanState: 'pending',
-      metadata: { originalFilename: name, mimeType, conversationId, nodeId: input.nodeId ?? null } satisfies PendingMeta,
+      metadata: { originalFilename: name, mimeType, conversationId, nodeId: input.nodeId ?? null, folder } satisfies PendingMeta,
     },
   })
   const session = await startResumableUpload(gcsPath, mimeType, input.origin)
@@ -230,6 +232,8 @@ export async function completeUpload(id: string, userId: string): Promise<Upload
   })
   const file = await finishUpload(id, {
     nodeId: meta.conversationId ? null : meta.nodeId,
+    folder: meta.folder,
+    by: userId,
     share: meta.conversationId ? null : { sharedBy: userId, via: 'upload' },
   })
   return { ...file, conversationId: meta.conversationId }
@@ -249,7 +253,6 @@ async function finishedShape(id: string): Promise<UploadedFile> {
     indexState: row.indexState as UploadedFile['indexState'],
     indexError: row.indexError,
     chunkCount: 0,
-    folderId: row.folderId,
     metadata: (row.metadata as Record<string, unknown> | null) ?? {},
     createdAt: row.createdAt.toISOString(),
     nodeId: row.nodeId,

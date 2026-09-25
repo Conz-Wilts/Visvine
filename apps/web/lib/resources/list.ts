@@ -14,6 +14,8 @@ import { viewsOf, VIEW_SELECT } from './views'
 import type { ResourceViewer } from './shared/visibility'
 import type { ResourceView } from './shared/view'
 import type { ListQuery } from './shared/listQuery'
+import { filedResourceFolders } from './tree'
+import { RESOURCES_ROOT } from './shared/resourceTree'
 
 export interface ResourcePage {
   items: ResourceView[]
@@ -36,10 +38,20 @@ export async function listResources(
   spaceId: string,
   viewer: ResourceViewer,
   query: ListQuery,
-  { folderId }: { folderId?: string } = {},
 ): Promise<ResourcePage> {
   const where: Prisma.ResourceWhereInput[] = [{ spaceId }, visibleResourceWhere(viewer, { trash: query.trash })]
-  if (folderId) where.push({ folderId })
+  if (query.folder) {
+    // In a folder: what sits in it — or, while searching or filtering, what
+    // sits anywhere below it, the way a file browser searches.
+    const filed = await filedResourceFolders(spaceId)
+    const deep = Boolean(query.q || query.kind !== 'all' || query.channelId || query.by || query.since)
+    const inside = (at: string) => (deep ? at === query.folder || at.startsWith(`${query.folder}/`) : at === query.folder)
+    if (query.folder === RESOURCES_ROOT) {
+      if (!deep) where.push({ OR: [{ nodeId: null }, { nodeId: { notIn: [...filed.keys()] } }] })
+    } else {
+      where.push({ nodeId: { in: [...filed].filter(([, at]) => inside(at)).map(([id]) => id) } })
+    }
+  }
   if (query.kind === 'files') where.push({ source: 'upload' })
   else if (query.kind !== 'all') where.push({ kind: query.kind })
   if (query.channelId) where.push({ shares: { some: { conversationId: query.channelId } } })

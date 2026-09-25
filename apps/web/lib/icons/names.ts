@@ -56,6 +56,7 @@ export const ICON_NAMES = [
   'file-text',
   'file',
   'flame',
+  'folder-input',
   'folder-open',
   'folder',
   'gamepad-2',

@@ -15,7 +15,7 @@ import prisma from '@/lib/prisma'
 import { defineAction, ActionError, type ActionCaller } from '@/lib/actions/types'
 import { requireSpaceContext, resolveTarget } from '@/lib/actions/resolve'
 import { inSpaces } from '@/lib/actions/searchEverywhere'
-import { accessOf, asMessaging, folderIdFor, messageHref, stampShare } from '@/lib/actions/resourceUse'
+import { accessOf, asMessaging, folderFor, messageHref, stampShare } from '@/lib/actions/resourceUse'
 import { featureAccessForbidden } from '@/lib/auth'
 import { listResources } from '@/lib/resources/list'
 import { loadView } from '@/lib/resources/views'
@@ -25,7 +25,6 @@ import { logResourceAccess } from '@/lib/resources/accessLog'
 import { LIST_KINDS, PAGE_SIZE, type ListQuery } from '@/lib/resources/shared/listQuery'
 import type { ResourceView } from '@/lib/resources/shared/view'
 import { readFederated } from '@/lib/notes/federation'
-import { entityNotePath } from '@/lib/notes/entities'
 import { sendMessage } from '@/lib/messages'
 import { publishToUsers } from '@/lib/messages/realtime'
 import { inSpace } from '@/lib/spaces/shared/spaceUrl'
@@ -68,7 +67,7 @@ function describeResource(view: ResourceView, space?: SearchedSpace) {
       message_href: s.channelId && s.messageId ? messageHref(view.spaceId, s.channelId, s.messageId) : null,
     })),
     node_id: view.nodeId,
-    note_path: view.nodeId ? entityNotePath({ id: view.nodeId, type: 'resource', metadata: null }) : null,
+    note_path: view.notePath,
     page: view.nodeId ? inSpace(view.spaceId, `/directory/${encodeURIComponent(view.nodeId)}`) : null,
     has_thumbnail: view.thumbUrl !== null,
     // Its text (a PDF's pages, a deck's slides) is read with read_resource.
@@ -106,7 +105,7 @@ export const RESOURCE_ACTIONS = [
       shared_by: z.string().optional().describe("Only what this person added — a user id, or 'me'"),
       since: z.string().optional().describe('ISO date: only what arrived on or after it'),
       sort: z.enum(['recent', 'name', 'size']).optional().describe("Default 'recent'"),
-      folder: z.string().optional().describe('Only files in this Drive folder, by name or path (needs space_id)'),
+      folder: z.string().optional().describe('Only what is filed in this folder of resources/, by path (`design`, `design/logos`); with q or a filter, anything below it too (needs space_id)'),
       limit: z.number().int().min(1).max(100).optional().describe(`Default ${PAGE_SIZE}`),
       offset: z.number().int().min(0).max(10_000).optional().describe("The previous answer's next_offset, for the next page (needs space_id)"),
     },
@@ -123,15 +122,16 @@ export const RESOURCE_ACTIONS = [
         since,
         sort: args.sort ?? 'recent',
         trash: false,
+        folder: null,
         offset: args.space_id ? (args.offset ?? 0) : 0,
         limit,
       }
       const { runs, searched, skipped } = await inSpaces(ctx, args.space_id, async (space) => {
         await requireSpaceContext(ctx, space.id)
         await requireResourcesFeature(ctx, space.id)
-        const folderId = args.folder ? ((await folderIdFor(space.id, args.folder)) ?? undefined) : undefined
+        const folder = args.folder ? ((await folderFor(space.id, args.folder)) ?? 'resources') : null
         const viewer = await resourceViewer(space.id, ctx.userId, ctx.email)
-        const page = await listResources(space.id, viewer, query, { folderId })
+        const page = await listResources(space.id, viewer, { ...query, folder })
         return { space, page }
       })
       const rows = runs.flatMap((r) => r.result.page.items.map((view) => ({ view, space: r.result.space })))

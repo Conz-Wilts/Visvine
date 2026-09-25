@@ -26,7 +26,8 @@ import { upsertLink } from '../../../lib/notes/context/links'
 import { ingestSource } from '../../../lib/notes/sources/ingest'
 import { ensureMemberNode } from '../../../lib/spaces/memberNode'
 import { normalizeSourcePath, sourceKindOf } from '../../../lib/notes/shared/sourceTypes'
-import { SHARED_OWNER_KEY } from '../../../lib/notes/store'
+import { SHARED_OWNER_KEY, createIndexFolder } from '../../../lib/notes/store'
+import { fileResource } from '../../../lib/resources/tree'
 import { linkFileNode } from '../../../lib/resources/node'
 import {
   CHANNELS,
@@ -283,31 +284,31 @@ export async function seedChannels(): Promise<{ sections: number; channels: numb
 
 // ---- the Drive ----------------------------------------------------------------
 
-const DRIVE_FOLDERS = [
-  { id: 'rfold_bb_portfolio', name: 'Portfolio', parentId: null as string | null },
-  { id: 'rfold_bb_investments', name: 'Investments', parentId: null },
-  { id: 'rfold_bb_programs', name: 'Programs', parentId: null },
-  { id: 'rfold_bb_funds', name: 'Funds', parentId: null },
-  { id: 'rfold_bb_sunrise', name: 'Sunrise Aotearoa 2026', parentId: 'rfold_bb_programs' },
+/** The Resources file system: each folder is its index note under `resources/`. */
+const RESOURCE_FOLDERS = [
+  { path: 'resources/portfolio', title: 'Portfolio' },
+  { path: 'resources/investments', title: 'Investments' },
+  { path: 'resources/programs', title: 'Programs' },
+  { path: 'resources/funds', title: 'Funds' },
+  { path: 'resources/programs/sunrise-aotearoa-2026', title: 'Sunrise Aotearoa 2026' },
 ]
 
-/** Which folder each seeded file is filed in; unlisted files sit at the root. */
+/** Which folder each seeded file is filed in; unlisted files sit at the top. */
 const FILING: Record<string, string> = {
-  'portfolio-by-sector.csv': 'rfold_bb_portfolio',
-  'fund-performance.csv': 'rfold_bb_funds',
-  'sunrise-aotearoa-run-sheet.md': 'rfold_bb_sunrise',
-  'investment-memo-template.md': 'rfold_bb_investments',
-  'giants-mentor-guide.md': 'rfold_bb_programs',
+  'portfolio-by-sector.csv': 'resources/portfolio',
+  'fund-performance.csv': 'resources/funds',
+  'sunrise-aotearoa-run-sheet.md': 'resources/programs/sunrise-aotearoa-2026',
+  'investment-memo-template.md': 'resources/investments',
+  'giants-mentor-guide.md': 'resources/programs',
 }
 
 const MIME: Record<string, string> = { csv: 'text/csv', md: 'text/markdown' }
 
 export async function seedDrive(): Promise<{ files: number; indexed: number }> {
   const context = { spaceId: SPACE_ID, ownerKey: SHARED_OWNER_KEY }
-  for (const folder of DRIVE_FOLDERS) {
-    await prisma.resourceFolder.create({
-      data: { ...folder, spaceId: SPACE_ID, createdBy: ADMIN_USER, createdAt: daysAgo(14) },
-    })
+  const admin = { id: ADMIN_USER, name: 'Dev Admin', email: null }
+  for (const folder of RESOURCE_FOLDERS) {
+    await createIndexFolder(context, folder.path, `---\ntitle: ${folder.title}\n---\n`, admin)
   }
 
   let indexed = 0
@@ -322,14 +323,14 @@ export async function seedDrive(): Promise<{ files: number; indexed: number }> {
         fileType: r.fileType,
         fileSize: buffer.length,
         uploadedBy: ADMIN_USER,
-        folderId: FILING[r.file] ?? null,
         indexState: kind ? 'pending' : 'unsupported',
         metadata: { originalFilename: r.file, mimeType, seeded: true },
         createdAt: daysAgo(r.daysAgo),
       },
     })
     // Every file is the content of a Resource, as an upload makes it.
-    await linkFileNode(resource, null, { revalidate: false })
+    const { nodeId } = await linkFileNode(resource, null, { revalidate: false })
+    if (nodeId && FILING[r.file]) await fileResource(SPACE_ID, nodeId, FILING[r.file], admin)
     if (!kind) continue
     const meta = await ingestSource(context, {
       path: normalizeSourcePath(`resources/${r.file}`),

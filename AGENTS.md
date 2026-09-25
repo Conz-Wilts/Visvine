@@ -688,6 +688,19 @@ only).
   names its `resource:<slug>` node and `resources/<slug>/index.md`, made by
   `lib/resources/entity.ts#ensureResourceEntity` for every upload, channel file
   and link alike. The Grid hides `resource` unless that type is picked.
+- **`resources/` is a file system** (`lib/resources/shared/resourceTree.ts`,
+  `lib/resources/tree.ts`): a folder is an index note there with no `type:`,
+  a resource is an index declaring `type: Resource` at any depth, and a
+  resource never leaves `resources/` (`contextService#resourceHomeDenial`,
+  `store.renameFolder`). One filed below the top is adopted — its node's
+  `metadata.notePath` follows it through a move, under its own folder name
+  (`resourceMoveDenial`); a folder holding resources is not deleted. The
+  Resources tab walks it (`?folder=`, the list's `folder`), files with Move
+  to… or a drag (`PATCH /api/resources/<id> { folder }` → `fileResource`),
+  and folders are made over MCP (`edit_context` on
+  `resources/<path>/index.md`). The row-based `resource_folders` /
+  `resources.folder_id` are unused, awaiting a drop migration after
+  `db:resources:folders-to-notes` has run.
 - **Visibility is the union of shares** (`lib/resources/shared/visibility.ts`,
   pure; `visibility.ts` the SQL and `requireVisibleResource`, every byte door's
   and action's one check): admins see all; a space share reaches every member,

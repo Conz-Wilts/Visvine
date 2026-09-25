@@ -24,7 +24,7 @@ test('a session verifies as a session', async () => {
 })
 
 test('an upload token is not a session', async () => {
-  const { token } = await mintUploadToken({ userId: 'user_1', spaceId: 'space_1', folderId: null })
+  const { token } = await mintUploadToken({ userId: 'user_1', spaceId: 'space_1', folder: null })
   assert.equal((await verifyUploadToken(token))?.userId, 'user_1')
   assert.equal(await verifySession(token), null)
 })

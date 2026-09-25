@@ -10,6 +10,7 @@ import {
   FilePlayIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
+  FolderIcon,
   Link2Icon,
   PresentationIcon,
 } from '../icons';
@@ -27,7 +28,9 @@ export type FileKind =
   | 'code'
   | 'archive'
   | 'link'
-  | 'other';
+  | 'other'
+  /** Not a resource: a folder of the Resources file system, drawn beside them. */
+  | 'folder';
 
 export const FILE_GLYPH: Record<FileKind, ComponentType<IconProps>> = {
   image: FileImageIcon,
@@ -42,6 +45,7 @@ export const FILE_GLYPH: Record<FileKind, ComponentType<IconProps>> = {
   archive: FileArchiveIcon,
   link: Link2Icon,
   other: FileIcon,
+  folder: FolderIcon,
 };
 
 /** Wash and ink per kind (tokens `color.file.*`), written out so the classes exist. */
@@ -58,6 +62,7 @@ export const FILE_TONE: Record<FileKind, string> = {
   archive: 'bg-file-archive-wash text-file-archive-fg',
   link: 'bg-file-link-wash text-file-link-fg',
   other: 'bg-file-other-wash text-file-other-fg',
+  folder: 'bg-surface-muted text-fg-muted',
 };
 
 /** How a kind is said, one word, for a meta line. */
@@ -74,6 +79,7 @@ export const FILE_KIND_LABEL: Record<FileKind, string> = {
   archive: 'Archive',
   link: 'Link',
   other: 'File',
+  folder: 'Folder',
 };
 
 export function asFileKind(value: string | null | undefined): FileKind {

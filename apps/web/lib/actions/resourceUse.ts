@@ -5,8 +5,9 @@
  * post makes before it speaks.
  */
 import { ActionError, readerOf, type ActionCaller } from '@/lib/actions/types'
+import { ApiError } from '@/lib/api/route'
 import prisma from '@/lib/prisma'
-import { listFolders } from '@/lib/resources/folders'
+import { resourceFolderPath } from '@/lib/resources/tree'
 import { MessagingError } from '@/lib/messages/core'
 import { inSpace } from '@/lib/spaces/shared/spaceUrl'
 
@@ -53,25 +54,13 @@ export async function requireChannelIn(ctx: ActionCaller, spaceId: string, chann
   }
 }
 
-/** A Drive folder named by name or path, or null for none given. */
-export async function folderIdFor(spaceId: string, folder: string | undefined): Promise<string | null> {
-  const wanted = folder?.trim().replace(/^\/+|\/+$/g, '').toLowerCase()
-  if (!wanted) return null
-  const folders = await listFolders(spaceId)
-  const byId = new Map(folders.map((f) => [f.id, f]))
-  const pathOf = (id: string): string => {
-    const parts: string[] = []
-    let cursor: string | null = id
-    for (let i = 0; cursor && i < 16; i++) {
-      const f = byId.get(cursor)
-      if (!f) break
-      parts.unshift(f.name)
-      cursor = f.parentId
-    }
-    return parts.join('/').toLowerCase()
+/** A folder of `resources/` named by path (`design`, `resources/design/logos`), or null for none given. */
+export async function folderFor(spaceId: string, folder: string | undefined): Promise<string | null> {
+  try {
+    return await resourceFolderPath(spaceId, folder)
+  } catch (err) {
+    if (err instanceof ApiError) throw new ActionError(err.status, err.message)
+    throw err
   }
-  const hit = folders.find((f) => pathOf(f.id) === wanted) ?? folders.find((f) => f.name.toLowerCase() === wanted)
-  if (!hit) throw new ActionError(404, `No Drive folder named '${folder}'`)
-  return hit.id
 }
 

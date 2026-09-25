@@ -3,7 +3,10 @@ import prisma from '@/lib/prisma';
 import { getSignedUrl, RESOURCES_BUCKET } from '@/lib/gcs';
 import { z } from 'zod';
 import { requireApiSession, forbiddenResponse, parseBody, handleApiError } from '@/lib/api/route';
-import { moveResource, renameResource } from '@/lib/resources/folders';
+import { renameResource } from '@/lib/resources/rename';
+import { principalOf, resolveContext } from '@/lib/notes/resolve';
+import { principalCanWrite } from '@/lib/notes/shared/permissions';
+import { fileResource, resourceFolderPath } from '@/lib/resources/tree';
 import { requireVisibleResource } from '@/lib/resources/visibility';
 import { canManageResource } from '@/lib/resources/shared/visibility';
 
@@ -80,13 +83,13 @@ export async function GET(
 
 const patchSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  /** The folder to move into; `null` is the Drive's root. */
-  folderId: z.string().min(1).nullable().optional(),
+  /** A folder of `resources/` to file it in (`resources/design`); `null` is the top. */
+  folder: z.string().min(1).max(500).nullable().optional(),
 });
 
 /**
- * PATCH /api/resources/[resourceId] — rename and/or move a file between Drive
- * folders. Neither touches the stored object or its index.
+ * PATCH /api/resources/[resourceId] — rename it, and/or file its note in a
+ * folder of `resources/`. Neither touches the stored object or its index.
  */
 export async function PATCH(
   req: NextRequest,
@@ -95,8 +98,9 @@ export async function PATCH(
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
   const { resourceId } = await params;
+  let gate: Awaited<ReturnType<typeof requireVisibleResource>>;
   try {
-    const gate = await requireVisibleResource(resourceId, session.userId, session.email);
+    gate = await requireVisibleResource(resourceId, session.userId, session.email);
     if (!canManageResource(gate.viewer, gate)) return forbiddenResponse();
   } catch (err) {
     return handleApiError(err, 'resources.update');
@@ -105,7 +109,19 @@ export async function PATCH(
   if (body instanceof NextResponse) return body;
   try {
     if (body.name !== undefined) await renameResource(resourceId, body.name);
-    if (body.folderId !== undefined) await moveResource(resourceId, body.folderId);
+    if (body.folder !== undefined) {
+      const { nodeId } = await prisma.resource.findUniqueOrThrow({ where: { id: resourceId }, select: { nodeId: true } });
+      if (!nodeId) return NextResponse.json({ error: 'This resource has no note to file' }, { status: 409 });
+      const folder = await resourceFolderPath(gate.spaceId, body.folder);
+      // Filing is a move in the notes, so it asks what the folders route asks:
+      // edit access where it lands.
+      const resolved = await resolveContext(session, gate.spaceId);
+      if (resolved instanceof Response) return resolved;
+      if (!resolved.isPersonalSpace && !principalCanWrite(await principalOf(resolved), folder ?? 'resources')) {
+        return NextResponse.json({ error: `You need edit access to "${folder ?? 'resources'}" to file something there` }, { status: 403 });
+      }
+      await fileResource(gate.spaceId, nodeId, folder, { id: session.userId, name: session.name ?? 'Member', email: session.email });
+    }
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleApiError(err, 'resources.update');

@@ -32,14 +32,14 @@ import { inSpace } from '@/lib/spaces/shared/spaceUrl'
 import { sendMessage } from '@/lib/messages'
 import { publishToUsers } from '@/lib/messages/realtime'
 import { logResourceAccess } from '@/lib/resources/accessLog'
-import { accessOf, asMessaging, folderIdFor, messageHref, requireChannelIn, stampShare } from '@/lib/actions/resourceUse'
+import { accessOf, asMessaging, folderFor, messageHref, requireChannelIn, stampShare } from '@/lib/actions/resourceUse'
 
 const spaceArg = z.string().describe('The space to act in — list_spaces returns the ids you can act in')
 
 const folderArg = z
   .string()
   .optional()
-  .describe('A Drive folder to put it in, by name or path (list_resources shows what is in one) — omit for the root')
+  .describe('A folder under resources/ to file it in, by path (`design`, `design/logos`) — make one with edit_context on resources/<path>/index.md; omit for the top')
 
 /** Base64 is for small files; anything bigger goes through request_upload. */
 const MAX_BASE64_CHARS = Math.ceil((8 * 1024 * 1024 * 4) / 3)
@@ -131,7 +131,7 @@ export const DRIVE_ACTIONS = [
         throw new ActionError(403, "Posting into a channel requires the 'messages:write' scope")
       }
       await requireWriter(ctx, args.space_id)
-      const folderId = await folderIdFor(args.space_id, args.folder)
+      const folder = await folderFor(args.space_id, args.folder)
       if (args.channel_id) await requireChannelIn(ctx, args.space_id, args.channel_id)
 
       let bytes: Buffer
@@ -152,7 +152,7 @@ export const DRIVE_ACTIONS = [
         userId: ctx.userId,
         email: ctx.email,
         spaceId: args.space_id,
-        folderId,
+        folder,
         name,
         mimeType,
         bytes,
@@ -196,8 +196,8 @@ export const DRIVE_ACTIONS = [
     },
     run: async (ctx, args) => {
       await requireWriter(ctx, args.space_id)
-      const folderId = await folderIdFor(args.space_id, args.folder)
-      const { token, expiresAt } = await mintUploadToken({ userId: ctx.userId, spaceId: args.space_id, folderId })
+      const folder = await folderFor(args.space_id, args.folder)
+      const { token, expiresAt } = await mintUploadToken({ userId: ctx.userId, spaceId: args.space_id, folder })
       const origin = appOrigin()
       const uploadUrl = `${origin}/api/uploads/${token}`
       return {

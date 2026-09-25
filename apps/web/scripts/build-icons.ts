@@ -33,7 +33,7 @@ const UI_GLYPHS = [
   // The resources viewer and its file tiles (packages/ui/src/resources).
   'chevron-left', 'chevron-right', 'download', 'external-link', 'ellipsis', 'maximize-2', 'minimize-2',
   'zoom-in', 'zoom-out', 'link-2', 'file', 'file-text', 'file-pdf', 'file-image', 'file-spreadsheet',
-  'presentation', 'file-music', 'file-play', 'file-code-2', 'file-archive', 'copy', 'share',
+  'presentation', 'file-music', 'file-play', 'file-code-2', 'file-archive', 'copy', 'share', 'folder',
 ];
 
 const BANNER = [

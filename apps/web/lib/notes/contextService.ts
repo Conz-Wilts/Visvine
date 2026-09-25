@@ -32,7 +32,8 @@ import {
   principalIsSuperAdmin,
   principalLevelName,
 } from './shared/permissions'
-import { agentOfRevisionStamp, isAgentActivationPath, isAgentBriefPath, isAgentOwnNotePath } from './entities'
+import { agentOfRevisionStamp, entityKindOf, isAgentActivationPath, isAgentBriefPath, isAgentOwnNotePath } from './entities'
+import { isUnderResources } from '@/lib/resources/shared/resourceTree'
 import { isRestrictedPath, isLockedPath } from './shared/authz'
 import { replicaDenial } from './publications'
 import { isGlobalSpace } from '@/lib/spaces/globalSpace'
@@ -519,6 +520,18 @@ export async function folderConfigKindDenial(p: ContextPrincipal, context: Conte
   return null
 }
 
+/**
+ * A resource lives under `resources/` (lib/resources/shared/resourceTree.ts):
+ * a note declaring `type: Resource` anywhere else is refused, unless the note
+ * already there declared it (older data keeps saving).
+ */
+async function resourceHomeDenial(context: Context, path: string, next: string | null): Promise<string | null> {
+  if (!isShared(context) || isUnderResources(path) || !next) return null
+  const declares = (content: string | null) => content !== null && entityKindOf(String(parseFrontmatter(content).type ?? '')) === 'resource'
+  if (!declares(next) || declares(await store.readNoteOrNull(context, path))) return null
+  return 'A resource lives under resources/ — file it in a folder there.'
+}
+
 /** Gated whole-note write, recording revision history. */
 export async function writeGated(
   p: ContextPrincipal,
@@ -531,7 +544,8 @@ export async function writeGated(
   const denial =
     (await writeDenialFull(p, context, path)) ??
     lockedDenial(p, context, path, origin, model) ??
-    (await configKindDenial(p, context, path, content))
+    (await configKindDenial(p, context, path, content)) ??
+    (await resourceHomeDenial(context, path, content))
   if (denial) return { status: 'denied', reason: denial }
   const runKeys = await briefRunKeyDenial(p, context, path, content)
   if (runKeys) return { status: 'denied', reason: runKeys }
@@ -626,7 +640,9 @@ export async function moveGated(
   if (namespace) return { status: 'denied', reason: namespace }
   // A connector or model moves as what it is: an admin's, to a place a
   // connector may sit, under a name the context does not already hold.
-  const declared = await configKindDenial(p, context, to, null, { movingFrom: from })
+  const declared =
+    (await configKindDenial(p, context, to, null, { movingFrom: from })) ??
+    (await resourceHomeDenial(context, to, await store.readNoteOrNull(context, from)))
   if (declared) return { status: 'denied', reason: declared }
   // A note arriving at an agent's brief is held to what a write there is: it
   // may not bring run keys with it, or a move would set how an agent runs —
