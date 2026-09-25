@@ -67,6 +67,10 @@ export interface BridgeClient {
   onSubject(fn: (subject: ToolSubject | null) => void): Unsubscribe;
   /** Note paths inside the perimeter changed. Best-effort; see useLiveQuery. */
   onChanged(fn: (paths: string[]) => void): Unsubscribe;
+  /** The person chose another of the Tool's sections. */
+  onRoute(fn: (section: string | null) => void): Unsubscribe;
+  /** The person pressed one of the Tool's band buttons. */
+  onAction(fn: (id: string) => void): Unsubscribe;
   /** Tell the host the frame is listening. The host replies with `visvine:init`. */
   ready(): void;
   /** Report an uncaught error so the host can render its error card. */
@@ -75,6 +79,8 @@ export interface BridgeClient {
   resize(height: number): void;
   /** Ask the app to navigate. The host refuses anything that is not in-app. */
   navigate(path: string): void;
+  /** Ask the host to switch to one of the Tool's own sections. */
+  section(id: string): void;
   /** Drop the listener and fail everything still in flight. */
   close(): void;
 }
@@ -106,6 +112,8 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
   const themeListeners = new Set<(theme: Record<string, string>) => void>();
   const subjectListeners = new Set<(subject: ToolSubject | null) => void>();
   const changedListeners = new Set<(paths: string[]) => void>();
+  const routeListeners = new Set<(section: string | null) => void>();
+  const actionListeners = new Set<(id: string) => void>();
 
   let lastInit: ToolInitMessage | null = null;
   let seq = 0;
@@ -158,6 +166,16 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
         if (Array.isArray(paths) && paths.every((p) => typeof p === 'string')) {
           changedListeners.forEach((fn) => fn(paths as string[]));
         }
+        break;
+      }
+      case 'visvine:route': {
+        const section = (data as { section?: unknown }).section;
+        if (section === null || typeof section === 'string') routeListeners.forEach((fn) => fn(section));
+        break;
+      }
+      case 'visvine:action': {
+        const id = (data as { id?: unknown }).id;
+        if (typeof id === 'string') actionListeners.forEach((fn) => fn(id));
         break;
       }
       default:
@@ -221,6 +239,14 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
       return subscribe(changedListeners, fn);
     },
 
+    onRoute(fn) {
+      return subscribe(routeListeners, fn);
+    },
+
+    onAction(fn) {
+      return subscribe(actionListeners, fn);
+    },
+
     ready() {
       post({ type: 'visvine:ready', version: PROTOCOL_VERSION });
     },
@@ -238,6 +264,10 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
       post({ type: 'visvine:navigate', path });
     },
 
+    section(id) {
+      post({ type: 'visvine:section', section: id });
+    },
+
     close() {
       if (closed) return;
       closed = true;
@@ -251,6 +281,8 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
       themeListeners.clear();
       subjectListeners.clear();
       changedListeners.clear();
+      routeListeners.clear();
+      actionListeners.clear();
     },
   };
 }

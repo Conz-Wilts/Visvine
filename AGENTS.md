@@ -1305,9 +1305,12 @@ guide. The invariants:
   that queue is `/admin?section=approvals`. There is no `/tools` destination:
   the console owns tools (Tools = rail placement + installed versions,
   Approvals = the queue; a working copy is published from its own Tool tab),
-  and cross-space install is the `install_tool` action. A re-publish
-  supersedes the author's earlier pending submission rather than being
-  refused. **A draft runs with its authors' reach**: a preview's principal is
+  and cross-space install is the `install_tool` action; `update_install` is
+  the admin's other four decisions (on/off, type claims, upgrade, uninstall).
+  An admin installs without MCP through the install sheet (`InstallSheet`:
+  Rail or More, Page · Tab · None per declared type), opened from Approvals and
+  from the Tool tab. A re-publish supersedes the author's earlier pending
+  submission rather than being refused. **A draft runs with its authors' reach**: a preview's principal is
   the viewer intersected with everyone who wrote it since its last approval
   (`lib/tools/draftAuthors.ts`), and it starts by itself only for them.
 - **A Tool is its folder, filed anywhere.** `tools/<name>/` is where one
@@ -1315,6 +1318,12 @@ guide. The invariants:
   same Tool. The folder name is its name (build, installs, versions and node
   key on it), so it moves and is never renamed. `lib/tools/location.ts` finds
   it; `toolIndexPath(name, folder)` and its siblings take the found folder.
+- **The app draws a Tool's chrome; the Tool draws its content.** On
+  `/t/<slug>` its own sections (`surfaces.nav`) are tabs on the shell's band or
+  a side list, its ≤2 `surfaces.actions` are band buttons, and ⋯ holds About,
+  Edit, Manage and Report. The section is `?section=`, pushed into the frame as
+  `visvine:route` — a tab press never reloads the frame. Nav and actions are
+  surfaces, so changing them is reviewed like a new rail row.
 - The working copy renders live at `/tools/preview/<name>` for anyone who can
   read the note. That path is load-bearing: `create_tool`, `write_tool` and
   `preview_tool` all hand it back, and the desktop deep link resolves to it.

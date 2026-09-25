@@ -60,6 +60,8 @@ import {
 } from './builds'
 import {
   TOOL_NAME_RE,
+  parseToolBandActions,
+  parseToolNav,
   parseToolPreviewUrl,
   parseToolTags,
   toolIndexPath,
@@ -246,7 +248,12 @@ export function decodeToolConfig(raw: unknown, name: string): ToolConfig {
     title: typeof value.title === 'string' && value.title ? value.title : name,
     description: typeof value.description === 'string' ? value.description : '',
     version: typeof value.version === 'number' && Number.isInteger(value.version) ? value.version : 0,
-    surfaces: { rail: decodeRail(surfaces.rail), types: decodeTypeSurfaces(surfaces.types) },
+    surfaces: {
+      rail: decodeRail(surfaces.rail),
+      types: decodeTypeSurfaces(surfaces.types),
+      nav: ((n) => (n.ok ? n.nav : null))(parseToolNav(surfaces.nav)),
+      actions: ((a) => (a.ok ? a.actions : []))(parseToolBandActions(surfaces.actions)),
+    },
     perimeter: decodeToolPerimeter(value.perimeter),
     tags: ((t) => (t.ok ? t.tags : []))(parseToolTags(value.tags)),
     previewUrl: ((p) => (p.ok ? p.previewUrl : null))(parseToolPreviewUrl(value.previewUrl)),
@@ -479,6 +486,11 @@ function normalizeSurfaces(surfaces: ToolConfig['surfaces']): string {
   return JSON.stringify({
     rail: surfaces.rail ? { label: surfaces.rail.label, icon: surfaces.rail.icon } : null,
     types: [...surfaces.types].map((t) => ({ type: t.type, mode: t.mode })).sort((a, b) => a.type.localeCompare(b.type)),
+    // The band's buttons and sections are the app's chrome too.
+    nav: surfaces.nav
+      ? { style: surfaces.nav.style, sections: surfaces.nav.sections.map((x) => ({ id: x.id, label: x.label, admin: !!x.admin })) }
+      : null,
+    actions: (surfaces.actions ?? []).map((a) => ({ id: a.id, label: a.label })),
   })
 }
 

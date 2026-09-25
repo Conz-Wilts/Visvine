@@ -141,6 +141,12 @@ declare module '@visvine/tool-kit' {
     degraded: ToolDegraded | null
     /** In-app paths only; Visvine refuses anything else. */
     navigate(path: string): void
+    /** The active one of this Tool's own sections (surfaces.nav), or null. */
+    section: string | null
+    ui: {
+      /** Switch to one of this Tool's declared sections. */
+      navigate(to: { section: string }): void
+    }
   }
 
   /** Mounted for you by the runtime. You never render this yourself. */
@@ -148,6 +154,13 @@ declare module '@visvine/tool-kit' {
 
   export function useVisvine(): VisvineApi
   export function useSubject(): ToolSubject | null
+  /**
+   * The active section and a way to switch it. Visvine draws the sections
+   * (band tabs or a side list, from surfaces.nav); render only the active one.
+   */
+  export function useSection(): [string | null, (id: string) => void]
+  /** Run handler when the person presses the band button \`id\` (surfaces.actions). */
+  export function useBandAction(id: string, handler: () => void): void
   /**
    * The theme as raw CSS custom properties; prefer styling with var(--vv-*),
    * which the runtime keeps applied to :root and repaints live when the viewer
@@ -493,6 +506,12 @@ surfaces:
                                            # icon: one of the built-ins, or
                                            # 'custom' to use your own icon.svg
   types: [{ type: deal, mode: page }]      # optional: own the page for a type
+  nav:                                     # optional: your sections, drawn by Visvine
+    style: tabs                            # tabs on the band (≤7) or side (a list)
+    sections:
+      - { id: board, label: Board }
+      - { id: settings, label: Settings, admin: true }   # admins only
+  actions: [{ id: new-deal, label: New deal }]           # optional: ≤2 band buttons
 perimeter:
   read:  ["deals/**", "people/*/index.md"]
   write: ["deals/**"]
@@ -506,6 +525,27 @@ preview: /api/media/…                      # optional marketplace preview imag
 
 What this Tool is for, in a paragraph or two.
 \`\`\`
+
+## Sections and band buttons — optional
+
+Visvine draws your Tool's chrome so it looks like the rest of the app: declare
+\`surfaces.nav\` and your sections appear as tabs on the top band (or a list
+beside your content with \`style: side\`), in the app's own style. Draw only the
+content for the active one:
+
+\`\`\`tsx
+import { useSection, useBandAction } from '@visvine/tool-kit'
+
+export default function App() {
+  const [section] = useSection()          // 'board' | 'settings' | null
+  useBandAction('new-deal', () => openNewDeal())
+  return section === 'settings' ? <Settings /> : <Board />
+}
+\`\`\`
+
+Switching sections never reloads your frame, so keep state you want to survive
+a tab change above the switch. Labels are one to three words. Never draw your
+own tab bar or page title — the band already names where the person is.
 
 ## icon.svg — optional
 

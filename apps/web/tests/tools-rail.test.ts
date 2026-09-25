@@ -36,6 +36,10 @@ function install(slug: string, overrides: Partial<InstalledToolDto> = {}): Insta
     enabled: true,
     degraded: false,
     types: {},
+    name: slug,
+    version: 1,
+    nav: null,
+    actions: [],
     ...overrides,
   }
 }

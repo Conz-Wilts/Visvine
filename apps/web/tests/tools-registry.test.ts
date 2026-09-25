@@ -300,7 +300,7 @@ test('a config column missing its surfaces still names the tool', () => {
   assert.equal(config.name, 'board')
   assert.equal(config.title, 'Board')
   assert.equal(config.version, 0)
-  assert.deepEqual(config.surfaces, { rail: null, types: [] })
+  assert.deepEqual(config.surfaces, { rail: null, types: [], nav: null, actions: [] })
   assert.deepEqual(config.perimeter, EMPTY_PERIMETER)
 })
 
@@ -475,6 +475,10 @@ test('the install shapes carry what the rail, the page and the banner need', () 
     enabled: true,
     degraded: true,
     types: claims,
+    name: 'deal-pipeline',
+    version: 3,
+    nav: { style: 'tabs', sections: [{ id: 'board', label: 'Board' }] },
+    actions: [{ id: 'new-deal', label: 'New deal' }],
   }
   const installed: InstallResult = { ok: true, install, downgraded: [], conflicts: [conflict] }
   const updated: InstallUpdateResult = { ok: true, install }

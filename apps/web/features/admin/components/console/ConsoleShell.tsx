@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { clsx } from 'clsx';
 import SaveStatus from './SaveStatus';
-import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff, TAB_MOTION } from '@visvine/ui';
+import BandTabList from '@/features/shared/components/pane/BandTabList';
 import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrollbarMask';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useShellBand } from '@/features/desktop/lib/chrome';
@@ -75,93 +75,15 @@ export default function ConsoleShell({
     router.replace(`${pathname}?section=${id}`, { scroll: false });
   };
 
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
-  // Transitions arm only once the first frame is painted, so a bar mounting
-  // mid-navigation appears finished instead of sliding its underline out from
-  // width 0. Same arming as PageTabBar/PaneTabBar.
-  const [armed, setArmed] = useState(false);
-  const motion = armed ? `transition-all ${TAB_MOTION}` : '';
-
-  // The underline rect of the pane-top bar this one replaced, claimed at mount.
-  const { handoff, firstMeasure } = useTabIndicatorHandoff(HANDOFF_KEY);
-
-  const tabsKey = sections.map((s) => `${s.id} ${tabLabel(s)}`).join('|');
-
-  // Measure BEFORE paint so the underline is already under the active tab on
-  // the first frame rather than being placed one frame later.
-  useLayoutEffect(() => {
-    const idx = sections.findIndex((s) => s.id === active);
-    const btn = tabRefs.current[idx];
-    if (!btn) return;
-    const target = { left: btn.offsetLeft, width: btn.offsetWidth };
-    publishTabIndicator(HANDOFF_KEY, target);
-    return applyTabIndicator({
-      handoff,
-      target,
-      firstMeasure,
-      setIndicator: setIndicatorStyle,
-      setArmed,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, tabsKey, handoff]);
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setArmed(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-
-  function handleKeyDown(e: React.KeyboardEvent, idx: number) {
-    if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      const next = (idx + 1) % sections.length;
-      select(sections[next].id);
-      tabRefs.current[next]?.focus();
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      const prev = (idx - 1 + sections.length) % sections.length;
-      select(sections[prev].id);
-      tabRefs.current[prev]?.focus();
-    }
-  }
-
   const tablist = (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className={
-        shellTabsHost
-          ? // Scrolls when the section names outgrow the band, without ever
-            // drawing a bar for it (the underline sits on rounded offsets and
-            // can overhang by a subpixel).
-            'relative flex min-w-0 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
-          : 'relative flex flex-1 overflow-x-auto'
-      }
-    >
-      {sections.map((s, idx) => (
-        <button
-          key={s.id}
-          ref={(el) => { tabRefs.current[idx] = el; }}
-          role="tab"
-          id={`tab-${s.id}`}
-          aria-selected={active === s.id}
-          aria-controls={`panel-${s.id}`}
-          onClick={() => select(s.id)}
-          onKeyDown={(e) => handleKeyDown(e, idx)}
-          className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
-            handoff ? 'tabbar-label-enter' : ''
-          } ${active === s.id ? 'text-fg' : 'text-fg-muted hover:text-fg'}`}
-        >
-          {tabLabel(s)}
-        </button>
-      ))}
-
-      {/* Animated green underline indicator */}
-      <div
-        className={`absolute bottom-0 ${shellTabsHost ? 'h-[3px]' : 'h-0.5'} bg-accent ${motion}`}
-        style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
-      />
-    </div>
+    <BandTabList
+      tabs={sections.map((s) => ({ id: s.id, label: tabLabel(s) }))}
+      activeId={active}
+      onSelect={select}
+      ariaLabel={ariaLabel}
+      handoffKey={HANDOFF_KEY}
+      inBand={!!shellTabsHost}
+    />
   );
 
   // Autosave state: in the band it rides the trailing host beside the account

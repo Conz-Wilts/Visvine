@@ -67,13 +67,22 @@ import {
   type ToolVersionSummary,
 } from '@/lib/tools/registry'
 import {
+  applyUpgrade as applyUpgradeService,
   installVersion as installVersionService,
   listInstalls as listInstallsService,
+  setInstallEnabled as setInstallEnabledService,
+  setTypeClaims as setTypeClaimsService,
+  uninstall as uninstallService,
   spaceFacts as spaceFactsService,
   type InstallResult,
   type InstallSummary,
+  type InstallUpdateResult,
   type SpaceFacts,
+  type TypeClaimChoice,
+  type UninstallResult,
 } from '@/lib/tools/installs'
+
+type Actor = { userId: string; email: string }
 
 /**
  * The filenames an author addresses, in the order they matter.
@@ -139,8 +148,14 @@ export interface AppToolDeps {
     spaceId: string,
     versionId: string,
     actor: { userId: string; email: string },
+    opts?: { placement?: 'rail' | 'more' },
   ): Promise<InstallResult>
   listInstalls(spaceId: string): Promise<InstallSummary[]>
+  /** The four changes `update_install` makes, each admin-gated by the service. */
+  setInstallEnabled(spaceId: string, installId: string, actor: Actor, enabled: boolean): Promise<InstallUpdateResult>
+  setTypeClaims(spaceId: string, installId: string, actor: Actor, claims: Record<string, TypeClaimChoice>): Promise<InstallUpdateResult>
+  applyUpgrade(spaceId: string, installId: string, actor: Actor): Promise<InstallUpdateResult>
+  uninstall(spaceId: string, installId: string, actor: Actor): Promise<UninstallResult>
   /** The newest APPROVED version of a marketplace key, for `install_tool { key }`. */
   latestApprovedVersion(key: string): Promise<ToolVersionSummary | null>
   /**
@@ -172,6 +187,10 @@ const liveDeps: AppToolDeps = {
   publishTool: publishToolService,
   installVersion: installVersionService,
   listInstalls: listInstallsService,
+  setInstallEnabled: setInstallEnabledService,
+  setTypeClaims: setTypeClaimsService,
+  applyUpgrade: applyUpgradeService,
+  uninstall: uninstallService,
   latestApprovedVersion: async (key) => {
     // versionHistory is newest-first, so the first listed row is the newest.
     // LISTED, not merely approved: `install_tool { key }` names a tool by its
@@ -328,6 +347,7 @@ interface InstallToolArgs {
   space_id: string
   version_id?: string
   key?: string
+  placement?: 'rail' | 'more'
 }
 
 // ── handlers ──────────────────────────────────────────────────────────────────
@@ -673,10 +693,12 @@ async function installTool(ctx: ActionCaller, args: InstallToolArgs, deps: AppTo
     }
     versionId = latest.id
   }
-  const result = await deps.installVersion(target.context.spaceId, versionId, {
-    userId: ctx.userId,
-    email: ctx.email,
-  })
+  const result = await deps.installVersion(
+    target.context.spaceId,
+    versionId,
+    { userId: ctx.userId, email: ctx.email },
+    args.placement ? { placement: args.placement } : {},
+  )
   if (!result.ok) refuse(result)
   return {
     slug: result.install.slug,
@@ -697,6 +719,59 @@ async function installTool(ctx: ActionCaller, args: InstallToolArgs, deps: AppTo
   }
 }
 
+interface UpdateInstallArgs {
+  space_id: string
+  tool: string
+  enabled?: boolean
+  type_claims?: Record<string, TypeClaimChoice>
+  apply_upgrade?: boolean
+  uninstall?: boolean
+}
+
+/**
+ * The four things an admin does to a Tool the space runs, one per call —
+ * switch it on or off, answer its type claims, move it onto the offered
+ * upgrade, or uninstall it. Each is its own decision with its own refusals.
+ */
+async function updateInstall(ctx: ActionCaller, args: UpdateInstallArgs, deps: AppToolDeps = liveDeps) {
+  const acts = [
+    args.enabled !== undefined,
+    args.type_claims !== undefined,
+    args.apply_upgrade === true,
+    args.uninstall === true,
+  ].filter(Boolean).length
+  if (acts !== 1) {
+    throw new ActionError(400, 'Pass exactly one of enabled, type_claims, apply_upgrade or uninstall.')
+  }
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  const spaceId = target.context.spaceId
+  const installs = await deps.listInstalls(spaceId)
+  const install = installs.find((row) => row.id === args.tool || row.slug === args.tool || row.key === args.tool)
+  if (!install) throw new ActionError(404, `This space runs no tool "${args.tool}".`)
+  const actor = { userId: ctx.userId, email: ctx.email }
+  if (args.uninstall) {
+    const removed = await deps.uninstall(spaceId, install.id, actor)
+    if (!removed.ok) refuse(removed)
+    return { slug: install.slug, uninstalled: true }
+  }
+  const result =
+    args.enabled !== undefined
+      ? await deps.setInstallEnabled(spaceId, install.id, actor, args.enabled)
+      : args.type_claims !== undefined
+        ? await deps.setTypeClaims(spaceId, install.id, actor, args.type_claims)
+        : await deps.applyUpgrade(spaceId, install.id, actor)
+  if (!result.ok) refuse(result)
+  return {
+    slug: result.install.slug,
+    version: result.install.version,
+    enabled: result.install.enabled,
+    type_claims: result.install.typeClaims,
+    upgrade_waiting: result.install.pendingVersion ? `v${result.install.pendingVersion.version}` : null,
+    href: inSpace(spaceId, `/t/${result.install.slug}`),
+  }
+}
+
 /**
  * The handlers on their own, for tests and for scripts/verify-*.ts: no server,
  * no transport, plain JSON in and out. `registerAppTools` is these same
@@ -712,6 +787,7 @@ export const appToolHandlers = {
   previewTool,
   publishTool,
   installTool,
+  updateInstall,
 }
 
 
@@ -922,10 +998,11 @@ export const APP_ACTIONS = [
   defineAction({
     name: 'install_tool',
     scope: 'tools:install',
-    summary: 'Install an approved marketplace version into a space. Space admins only.',
+    summary: 'Install an approved version of a tool into a space. Space admins only.',
     description:
-      'Install an approved marketplace version into a space. SPACE ADMINS ONLY. Identify it by version_id, ' +
-      'or by key (`<source-space-id>/<name>`) to take the newest approved version. Returns the install ' +
+      'Install an approved version of a tool into a space — this space\'s own, or one listed for every ' +
+      'space. SPACE ADMINS ONLY. Identify it by version_id, or by key (`<source-space-id>/<name>`) to take ' +
+      'the newest LISTED version. `placement` puts its rail row on the rail (default) or in More. Returns the install ' +
       'slug and its `/t/<slug>` page, the requirements this space does not satisfy (which never block the ' +
       'install — the tool runs degraded behind a banner and unsatisfied reads come back empty), and any ' +
       'type-page claims that were downgraded to a tab or refused because another install owns them.',
@@ -935,8 +1012,33 @@ export const APP_ACTIONS = [
       key: z
         .string()
         .optional()
-        .describe("The tool's marketplace key, e.g. 'space_abc/deal-pipeline' — installs its newest approved version"),
+        .describe("The tool's key, e.g. 'space_abc/deal-pipeline' — installs its newest listed version"),
+      placement: z.enum(['rail', 'more']).optional().describe('On the rail (default) or tucked into More'),
     },
     run: (ctx, args) => installTool(ctx, args),
+  }),
+
+  defineAction({
+    name: 'update_install',
+    scope: 'tools:install',
+    summary: 'Switch an installed tool on or off, answer its type claims, apply its upgrade, or uninstall it.',
+    description:
+      'Change a tool this space runs. SPACE ADMINS ONLY. Name it by slug, key or install id, and pass exactly ' +
+      'one of: `enabled` (switch it on or off — its rail row stays placed), `type_claims` ({ type: page | tab } ' +
+      'for the type surfaces it declared), `apply_upgrade: true` (move onto the approved version waiting for it, ' +
+      'after reading what it adds), or `uninstall: true` (its rail row and stored state go; notes it wrote stay).',
+    annotations: { destructiveHint: true },
+    input: {
+      space_id: spaceArg,
+      tool: z.string().min(1).describe('The install to change: its slug, its key or its id'),
+      enabled: z.boolean().optional().describe('On or off'),
+      type_claims: z
+        .record(z.string(), z.enum(['page', 'tab', 'none']))
+        .optional()
+        .describe('For each type it declared: its page, a tab on the page, or none'),
+      apply_upgrade: z.boolean().optional().describe('Move onto the offered upgrade'),
+      uninstall: z.boolean().optional().describe('Remove it from the space'),
+    },
+    run: (ctx, args) => updateInstall(ctx, args),
   }),
 ]

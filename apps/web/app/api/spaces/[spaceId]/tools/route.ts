@@ -31,8 +31,10 @@ const installSchema = z.object({
   versionId: z.string().min(1),
   /** Defaults to the Tool's own name, de-duplicated against this space. */
   slug: z.string().min(1).max(63).optional(),
-  /** The admin's answer to the type surfaces the Tool declared. */
-  typeClaims: z.record(z.string(), z.enum(['page', 'tab'])).optional(),
+  /** The admin's answer to the type surfaces the Tool declared; `none` leaves one. */
+  typeClaims: z.record(z.string(), z.enum(['page', 'tab', 'none'])).optional(),
+  /** On the rail, or tucked into More. */
+  placement: z.enum(['rail', 'more']).optional(),
 })
 
 /**
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     spaceId,
     body.versionId,
     { userId: ctx.principal.userId, email: ctx.principal.email },
-    { slug: body.slug, typeClaims: body.typeClaims },
+    { slug: body.slug, typeClaims: body.typeClaims, placement: body.placement },
   )
   if (!result.ok) return bad(result.error, result.status)
 

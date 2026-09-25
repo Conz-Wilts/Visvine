@@ -13,12 +13,14 @@
  *   • whether the working copy COMPILES, and where it broke (`file:line:col`);
  *   • what the declared perimeter costs — its reach, and which of the things it
  *     names this space actually has;
- *   • where it stands in the marketplace, and what publishing it would mean.
+ *   • its versions: what was published, what the space's admins decided, and
+ *     whether one was withdrawn.
  *
  * Every member gets this tab, like an agent's and unlike a connector's: members
  * author Tools, and the authoring route is grant-gated rather than admin-gated.
- * The one action that isn't a member's — Publish — is hidden rather than
- * offered-and-refused, and the server refuses it regardless.
+ * Anyone who can edit the Tool publishes it into this space — an admin's lands
+ * approved, a member's waits on Console → Approvals — and an admin installs an
+ * approved version from here.
  *
  * Mirrors ConnectorPageContent's shape: a status header, then flat sections
  * separated by a rule rather than a grid of cards, because everything here is
@@ -47,6 +49,7 @@ import type { ToolVersionSummary } from '@/lib/tools/registry';
 import { describeRequirements } from '@/lib/tools/requirements';
 import BuildDiagnostics from '@/features/tools/components/BuildDiagnostics';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
+import InstallSheet from '@/features/tools/components/InstallSheet';
 import { TONE_CHIP, TONE_CLASSES, type Tone } from '@/features/shared/lib/statusTone';
 import { fetchAuthoredTool, publishTool, revokeToolVersion } from '@/features/tools/lib/client';
 
@@ -145,14 +148,6 @@ function VersionTrail({
   /** An admin of this space may pull an approved version back. */
   onWithdraw?: (version: ToolVersionSummary) => void;
 }) {
-  if (versions.length === 0) {
-    return (
-      <p className="text-sm text-fg-muted">
-        Never published. Publishing snapshots the working copy as an immutable version and queues it for a
-        Visvine super-admin, who reads the declared reach and a code diff before anyone can install it.
-      </p>
-    );
-  }
   return (
     <ul className="flex flex-col divide-y divide-line-subtle">
       {versions.map((version) => (
@@ -191,9 +186,9 @@ function VersionTrail({
 }
 
 /**
- * Publishing is the one act here with consequences outside this space: it
- * snapshots code and a declared reach, hands both to a super-admin, and makes
- * the result installable everywhere. So it is a dialog showing exactly that
+ * Publishing snapshots the working copy — its code and its declared reach — as
+ * an immutable version of this space: approved as it lands when an admin
+ * publishes, waiting on the space's admins otherwise. A dialog showing that
  * reach, not a button that fires.
  */
 function PublishDialog({
@@ -207,7 +202,7 @@ function PublishDialog({
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
-  const [note, setNote] = useState('');
+  const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -218,10 +213,12 @@ function PublishDialog({
     setBusy(true);
     setError(null);
     try {
-      const res = await publishTool(spaceId, tool.name, note.trim() || undefined);
+      const res = await publishTool(spaceId, tool.name, undefined, notes.trim() || undefined);
       onDone(
         res.warning ??
-          `Published v${res.version.version} — waiting for a Visvine super-admin to review it.`,
+          (res.version.status === 'approved'
+            ? `Published v${res.version.version} · approved in this space`
+            : `Published v${res.version.version} · waiting on an admin`),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not publish');
@@ -258,10 +255,10 @@ function PublishDialog({
 
         <Textarea
           rows={3}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          aria-label="Note for the reviewer"
-          placeholder="Note for the reviewer"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          aria-label="What changed"
+          placeholder="What changed"
         />
 
         {error && <p className="border-l-2 border-danger-bright pl-3 text-[13px] text-danger-strong">{error}</p>}
@@ -311,7 +308,7 @@ function statusOf(view: AuthoredToolView): { label: string; tone: Tone; hint: st
 
 export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const name = nodeId.startsWith('tool:') ? nodeId.slice('tool:'.length) : nodeId;
-  const { currentSpace, loading: spaceLoading, isAdmin, spaces } = useSpace();
+  const { currentSpace, loading: spaceLoading, isAdmin, spaces, refreshSpace } = useSpace();
   const spaceId = currentSpace?.id;
   // A house with rooms may install this Tool into them (lib/tools/share.ts).
   const hasSubspaces = !!spaceId && spaces.some((s) => s.parentId === spaceId);
@@ -338,6 +335,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [installing, setInstalling] = useState<ToolVersionSummary | null>(null);
   const [withdrawing, setWithdrawing] = useState<ToolVersionSummary | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [copied, copy] = useCopied(2000);
@@ -423,7 +421,10 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const missing = requirements ? describeRequirements(requirements) : [];
   const pending = versions.find((version) => version.status === 'pending') ?? null;
   const config = tool.config;
-  const publishable = isAdmin && !!tool.build?.ok && !tool.invalid;
+  const publishable = view.canEdit && !!tool.build?.ok && !tool.invalid;
+  // The newest version this space approved and still stands behind: what an
+  // admin installs when the Tool is not yet running here.
+  const installable = versions.find((version) => version.status === 'approved' && !version.revokedAt) ?? null;
 
   return (
     <div className="profile-content-fade flex flex-col">
@@ -445,22 +446,21 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
             {copied ? <CheckIcon className="h-3.5 w-3.5 text-accent-strong" /> : <CopyIcon className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy MCP hint'}
           </button>
-          {isAdmin && (
+          {view.canEdit && (
             <button
               type="button"
               onClick={() => setPublishing(true)}
-              disabled={!publishable || !!pending}
-              title={
-                pending
-                  ? `v${pending.version} is already waiting for review — withdraw it before publishing again.`
-                  : publishable
-                    ? undefined
-                    : 'It has to compile before it can be published.'
-              }
+              disabled={!publishable}
+              title={publishable ? undefined : 'It has to compile before it can be published.'}
               className={HEADER_BUTTON}
             >
               <UploadIcon className="h-3.5 w-3.5" />
               Publish
+            </button>
+          )}
+          {isAdmin && !view.installId && installable && (
+            <button type="button" onClick={() => setInstalling(installable)} className={HEADER_BUTTON}>
+              Install
             </button>
           )}
         </div>
@@ -518,7 +518,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
             <div className="sm:col-span-2">
               <dt className="text-fg-muted">Description</dt>
               <dd className="text-fg">
-                {config.description || <span className="text-fg-muted">none — the marketplace card shows this</span>}
+                {config.description || <span className="text-fg-muted">none</span>}
               </dd>
             </div>
             <div>
@@ -627,18 +627,29 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
         </ul>
       </Section>
 
-      {/* ══ MARKETPLACE — where this Tool stands outside the space ══ */}
-      <Section
-        title="Publishing"
-        meta={pending ? `v${pending.version} in review` : versions.length > 0 ? `${versions.length} version${versions.length === 1 ? '' : 's'}` : undefined}
-      >
-        <VersionTrail versions={versions} onWithdraw={isAdmin ? setWithdrawing : undefined} />
-        {!isAdmin && versions.length === 0 && (
-          <p className="mt-3 text-[12px] text-fg-muted">
-            Members author tools; publishing one is a space admin&apos;s call.
-          </p>
-        )}
-      </Section>
+      {/* ══ VERSIONS — what was published, and what this space decided ══ */}
+      {versions.length > 0 && (
+        <Section
+          title="Versions"
+          meta={pending ? `v${pending.version} waiting` : `${versions.length} version${versions.length === 1 ? '' : 's'}`}
+        >
+          <VersionTrail versions={versions} onWithdraw={isAdmin ? setWithdrawing : undefined} />
+        </Section>
+      )}
+
+      {installing && spaceId && (
+        <InstallSheet
+          spaceId={spaceId}
+          version={installing}
+          onClose={() => setInstalling(null)}
+          onInstalled={(message) => {
+            setInstalling(null);
+            setNotice(message);
+            void refreshSpace();
+            void reload();
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={!!withdrawing}

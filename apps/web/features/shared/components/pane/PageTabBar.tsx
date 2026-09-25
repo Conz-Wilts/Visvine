@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useShellBand } from '@/features/desktop/lib/chrome';
-import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff, TAB_MOTION } from '@visvine/ui';
+import { TAB_MOTION } from '@visvine/ui';
+import BandTabList from './BandTabList';
 import { motion as motionTokens } from '@visvine/tokens';
 
 export type PageTab = 'about' | 'context' | 'raw' | 'preview';
@@ -71,102 +72,25 @@ export default function PageTabBar({
   // (no host) the bar draws its own row where it stands.
   const { shellTabsHost } = useContextPanel();
   useShellBand(!!shellTabsHost);
-  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
-  // Transitions are ARMED only after the bar's first frame is on screen. This bar
-  // mounts mid-navigation (the Directory's Grid/Context bar unmounts and this one
-  // takes its place at the identical position), and an unarmed first frame is what
-  // makes that read as one continuous bar: without it the indicator slides out
-  // from width 0 and the attached toolbar row unfolds from 0fr, so the bar plays
-  // an entrance animation the user sees as a flash. Once armed, a real tab change
-  // animates as designed.
+  // The attached tray's own transitions arm once the first frame is painted,
+  // so a bar that mounts open STARTS open rather than unfolding into place.
   const [armed, setArmed] = useState(false);
-  const motion = armed ? `transition-all ${TAB_MOTION}` : '';
-
-  // The underline rect of the pane-top bar this one just replaced, claimed once
-  // at mount. Null outside a fresh navigation, and for un-keyed bars.
-  const { handoff, firstMeasure } = useTabIndicatorHandoff(handoffKey);
-
-  // Measure BEFORE paint, so the underline is already sitting under the active tab
-  // on that first frame rather than being placed a frame later.
-  useLayoutEffect(() => {
-    const idx = tabs.findIndex((t) => t.id === activeTab);
-    const btn = tabRefs.current[idx];
-    if (!btn) return;
-    const target = { left: btn.offsetLeft, width: btn.offsetWidth };
-    if (handoffKey) publishTabIndicator(handoffKey, target);
-    return applyTabIndicator({
-      handoff,
-      target,
-      firstMeasure,
-      setIndicator: setIndicatorStyle,
-      setArmed,
-    });
-  }, [activeTab, tabs, handoff, handoffKey, firstMeasure]);
-
-  // One frame later the measured position is painted, so turning transitions on
-  // now can't retroactively animate it.
   useEffect(() => {
     const id = requestAnimationFrame(() => setArmed(true));
     return () => cancelAnimationFrame(id);
   }, []);
 
-  function handleKeyDown(e: React.KeyboardEvent, idx: number) {
-    if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      const next = (idx + 1) % tabs.length;
-      onTabChange(tabs[next].id);
-      tabRefs.current[next]?.focus();
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      const prev = (idx - 1 + tabs.length) % tabs.length;
-      onTabChange(tabs[prev].id);
-      tabRefs.current[prev]?.focus();
-    }
-  }
-
   // The tab set itself. In the shell it is portalled into the top band, so it
   // carries no border or background of its own — the band is the chrome.
   const tablist = (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className={
-        shellTabsHost
-          ? // Scrolls when the words outgrow the band, but never shows a bar
-            // for it: the underline is placed from rounded offsets, so it can
-            // poke past the edge by a subpixel and draw a permanent scrollbar.
-            'relative flex min-w-0 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
-          : // Standing on its own, the tablist keeps flex-1 so it spans the
-            // row — a shrink-to-fit box with overflow-x-auto grows a stray
-            // scrollbar.
-            'relative flex flex-1 overflow-x-auto'
-      }
-    >
-      {tabs.map((tab, idx) => (
-        <button
-          key={tab.id}
-          ref={(el) => { tabRefs.current[idx] = el; }}
-          role="tab"
-          id={`tab-${tab.id}`}
-          aria-selected={activeTab === tab.id}
-          aria-controls={`panel-${tab.id}`}
-          onClick={() => onTabChange(tab.id)}
-          onKeyDown={(e) => handleKeyDown(e, idx)}
-          className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
-            handoff ? 'tabbar-label-enter' : ''
-          } text-fg`}
-        >
-          {tab.label}
-        </button>
-      ))}
-
-      {/* Animated green underline indicator */}
-      <div
-        className={`absolute bottom-0 ${shellTabsHost ? 'h-[3px]' : 'h-0.5'} bg-accent ${motion}`}
-        style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
-      />
-    </div>
+    <BandTabList
+      tabs={tabs}
+      activeId={activeTab}
+      onSelect={(id) => onTabChange(id as PageTab)}
+      ariaLabel={ariaLabel}
+      handoffKey={handoffKey}
+      inBand={!!shellTabsHost}
+    />
   );
 
   /* The attached region. Always mounted — a conditional mount would snap

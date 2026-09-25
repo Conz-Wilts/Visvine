@@ -36,6 +36,10 @@ function install(slug: string, types: TypeClaims, overrides: Partial<InstalledTo
     enabled: true,
     degraded: false,
     types,
+    name: slug,
+    version: 1,
+    nav: null,
+    actions: [],
     ...overrides,
   }
 }

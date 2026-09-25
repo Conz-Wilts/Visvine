@@ -16,6 +16,7 @@ import { fetchJson, fetchJsonBody } from '@/lib/fetchJson'
 import type {
   ApprovalDecisionResponse,
   ApprovalQueueResponse,
+  InstallCreatedResponse,
   AuthoredToolView,
   InstallUpdatedResponse,
   InstallsResponse,
@@ -105,14 +106,18 @@ export function deleteAuthoredTool(spaceId: string, name: string): Promise<{ ok:
   )
 }
 
-/**
- * Publish the working copy as the next version, INTO THIS SPACE.
- *
- * An admin's publish is approved as it lands; a member's waits for one of their
- * admins in the Approvals tab. Neither offers it to anyone else — that is
- * `listOnMarketplace`. A working copy that does not compile comes back 409 with
- * its diagnostics.
- */
+/** Install an approved version into this space (admins), placed and with its type claims answered. */
+export function installToolVersion(
+  spaceId: string,
+  input: {
+    versionId: string
+    placement?: 'rail' | 'more'
+    typeClaims?: Record<string, 'page' | 'tab' | 'none'>
+  },
+): Promise<InstallCreatedResponse> {
+  return fetchJsonBody<InstallCreatedResponse>(`/api/spaces/${encodeURIComponent(spaceId)}/tools`, 'POST', input)
+}
+
 /** Pull an approved version back — it stops wherever it runs (admins of the space that made it). */
 export function revokeToolVersion(spaceId: string, versionId: string, reason?: string): Promise<{ ok: true }> {
   return fetchJsonBody<{ ok: true }>(
@@ -122,6 +127,13 @@ export function revokeToolVersion(spaceId: string, versionId: string, reason?: s
   )
 }
 
+/**
+ * Publish the working copy as the next version, INTO THIS SPACE.
+ *
+ * An admin's publish is approved as it lands; a member's waits for one of their
+ * admins in Console → Approvals. Neither offers it to any other space. A
+ * working copy that does not compile comes back 409 with its diagnostics.
+ */
 export function publishTool(
   spaceId: string,
   name: string,

@@ -6,7 +6,7 @@
  * properties the app is *currently painted with* — including whatever accent
  * ThemeContext wrote onto `:root` a moment ago — and posts them across as a flat
  * map, which the frame runtime sets back onto its own `:root`. That is the whole
- * mechanism behind "marketplace Tools don't look like twelve different
+ * mechanism behind "installed Tools don't look like twelve different
  * websites".
  *
  * Every token goes over twice: under the name the app's variable had when the

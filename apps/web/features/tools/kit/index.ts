@@ -11,9 +11,11 @@ export * from './components';
 
 export {
   LIVE_QUERY_POLL_MS,
+  useBandAction,
   useLiveQuery,
   usePagedList,
   useQuery,
+  useSection,
   useSubject,
   useTheme,
   useVisvine,

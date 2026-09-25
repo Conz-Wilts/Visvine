@@ -6,7 +6,7 @@
  *
  * This is the half of the Tool loop that used to be missing. A member edits a
  * Tool, publishes it, and the version waits HERE rather than going anywhere
- * near the marketplace; an admin reads what it reaches, approves, and the
+ * near another space; an admin reads what it reaches, approves, and the
  * space's installs of that Tool are offered the upgrade (which is still applied
  * by hand, over on Installed). Rejecting keeps the version and its note, so the
  * author reads why rather than guessing.
@@ -19,7 +19,8 @@ import { useState } from 'react';
 import { Chip, EmptyState, Skeleton, Textarea, Button } from '@visvine/ui';
 import { ClipboardListIcon } from '@/features/shared/icons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
-import { reviewSpaceVersion } from '@/features/tools/lib/client';
+import { fetchInstalls, reviewSpaceVersion } from '@/features/tools/lib/client';
+import InstallSheet from '@/features/tools/components/InstallSheet';
 import { timeAgo } from '@/lib/date';
 import type { ApprovalQueueItem } from '@/lib/tools/api';
 import { color } from '@visvine/tokens';
@@ -76,6 +77,9 @@ function QueueRow({
 }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  // Approved and not yet running here: the next act is installing it, so the
+  // sheet opens straight away rather than sending the admin elsewhere.
+  const [installing, setInstalling] = useState(false);
 
   const decide = async (decision: 'approved' | 'rejected') => {
     if (!spaceId || busy) return;
@@ -92,6 +96,13 @@ function QueueRow({
             }`
           : `${item.title} v${item.version} rejected. The author can read your note.`,
       );
+      if (decision === 'approved') {
+        const installed = await fetchInstalls(spaceId).then((r) => r.installs.some((i) => i.key === item.key)).catch(() => true);
+        if (!installed) {
+          setInstalling(true);
+          return;
+        }
+      }
       onDone();
     } catch (err) {
       onToast('error', err instanceof Error ? err.message : 'The decision did not go through.');
@@ -161,6 +172,21 @@ function QueueRow({
           </Button>
         </div>
       </div>
+      {installing && spaceId && (
+        <InstallSheet
+          spaceId={spaceId}
+          version={item}
+          onClose={() => {
+            setInstalling(false);
+            onDone();
+          }}
+          onInstalled={(message) => {
+            setInstalling(false);
+            onToast('success', message);
+            onDone();
+          }}
+        />
+      )}
     </section>
   );
 }

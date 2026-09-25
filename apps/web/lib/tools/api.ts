@@ -192,6 +192,10 @@ export interface AuthoredToolView {
   requirements: ToolRequirements | null
   /** Every version published from this working copy, newest first. */
   versions: ToolVersionSummary[]
+  /** Whether the viewer may edit the working copy — and so publish it. */
+  canEdit: boolean
+  /** The install of this Tool in this space, when it runs here. */
+  installId: string | null
 }
 
 export interface PublishResponse {

@@ -12,7 +12,7 @@ import { Button } from '@visvine/ui';
  * with a report path — never a broken app shell", so this card is deliberately
  * modest: it occupies the space the Tool would have, says what happened in one
  * sentence, and offers exactly two moves — try again, or go look at the Tool
- * itself. No stack trace: the viewer of a marketplace Tool is not its author,
+ * itself. No stack trace: the viewer of an installed Tool is not its author,
  * and the author reads the compile/run diagnostics on the Tool's own page.
  */
 export default function ToolErrorCard({
@@ -26,7 +26,7 @@ export default function ToolErrorCard({
   /** The Tool's name, so the card says which one failed. */
   title: string;
   message: string;
-  /** Where to go to look into it — the Tool's page or its marketplace entry. */
+  /** Where to go to look into it — the Tool's page or its install in the console. */
   reportHref: string;
   reportLabel?: string;
   onReload: () => void;

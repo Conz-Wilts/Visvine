@@ -91,6 +91,8 @@ export interface HostInit {
   install: ToolInstallInfo
   degraded: ToolDegraded | null
   viewer: ToolViewer
+  /** The active section when the page draws the Tool's own sections. */
+  section?: string | null
 }
 
 /**
@@ -134,6 +136,8 @@ export interface HostBridgeOptions {
    * held. The host removes the frame; the Tool is never told.
    */
   onRevoked?: (message: string) => void
+  /** The Tool asked to switch its own section. The page decides whether it is one. */
+  onSection?: (section: string) => void
   /**
    * Injected by tests; defaults to the real POST. Whatever it resolves is run
    * through `readResponse` — there is exactly one place a bridge answer is
@@ -153,6 +157,10 @@ export interface HostBridge {
    * empty. Paths only; the Tool re-reads through the bridge.
    */
   notifyChanged(paths: string[]): void
+  /** Tell the frame the person chose another section. */
+  setSection(section: string | null): void
+  /** Tell the frame the person pressed one of its band buttons. */
+  sendAction(id: string): void
   /** Stop listening and stop posting. Safe to call twice. */
   dispose(): void
 }
@@ -226,6 +234,7 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
     onError,
     navigate,
     onRevoked,
+    onSection,
     send = postBridge,
   } = options
 
@@ -233,6 +242,7 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
   let handshakeDone = false
   let theme: Record<string, string> = {}
   let subject: ToolSubject | null = null
+  let section: string | null = null
 
   /**
    * An opaque-origin frame can only be addressed with `'*'`; a frame that ever
@@ -279,6 +289,7 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
     const payload = init()
     theme = payload.theme
     subject = payload.subject
+    section = payload.section ?? null
     post({
       type: 'visvine:init',
       version: PROTOCOL_VERSION,
@@ -287,6 +298,7 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
       install: payload.install,
       degraded: payload.degraded,
       viewer: payload.viewer,
+      section,
     })
     onReady()
   }
@@ -326,6 +338,9 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
         // anything that resolves outside `/`.
         if (isInAppPath(message.path)) navigate(message.path)
         break
+      case 'visvine:section':
+        onSection?.(message.section)
+        break
     }
   }
 
@@ -347,6 +362,16 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
     notifyChanged(paths) {
       if (!handshakeDone || paths.length === 0) return
       post({ type: 'visvine:changed', paths })
+    },
+
+    setSection(next) {
+      if (next === section) return
+      section = next
+      if (handshakeDone) post({ type: 'visvine:route', section: next })
+    },
+
+    sendAction(id) {
+      if (handshakeDone) post({ type: 'visvine:action', id })
     },
 
     dispose() {

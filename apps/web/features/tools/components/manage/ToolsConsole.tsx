@@ -171,13 +171,22 @@ export function ToolApprovalsPanel({
   queue: ApprovalQueueItem[] | null;
   onReviewed: () => void;
 }) {
-  const { currentSpace } = useSpace();
+  const { currentSpace, refreshSpace } = useSpace();
   const spaceId = currentSpace?.id ?? null;
   const { toasts, toast, dismiss } = usePanelToasts();
 
   return (
     <>
-      <ApprovalsTab spaceId={spaceId} queue={queue} onReviewed={onReviewed} onToast={toast} />
+      <ApprovalsTab
+        spaceId={spaceId}
+        queue={queue}
+        onReviewed={() => {
+          onReviewed();
+          // An install from the sheet adds a rail row, which rides the space record.
+          void refreshSpace();
+        }}
+        onToast={toast}
+      />
       <ToastHost toasts={toasts} onDismiss={dismiss} />
     </>
   );

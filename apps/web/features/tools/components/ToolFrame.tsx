@@ -79,6 +79,9 @@ export default function ToolFrame({
   title,
   mode,
   className,
+  section = null,
+  onSection,
+  actionRef,
 }: {
   target: BridgeTarget;
   /** What the Tool is being shown about, when it owns a type page. */
@@ -87,6 +90,12 @@ export default function ToolFrame({
   title: string;
   mode: 'page' | 'tab' | 'preview';
   className?: string;
+  /** The active one of the Tool's own sections, when its page draws them. */
+  section?: string | null;
+  /** The Tool asked to switch its section; the page decides. */
+  onSection?: (section: string) => void;
+  /** Filled with a way to tell the Tool a band button was pressed. */
+  actionRef?: React.RefObject<((id: string) => void) | null>;
 }) {
   const router = useSpaceRouter();
   const { theme } = useTheme();
@@ -124,6 +133,10 @@ export default function ToolFrame({
   // be long after the bridge was created and the prop may have moved on.
   const subjectRef = useRef(subject);
   subjectRef.current = subject;
+  const sectionRef = useRef(section);
+  sectionRef.current = section;
+  const onSectionRef = useRef(onSection);
+  onSectionRef.current = onSection;
 
   const targetKey = useMemo(() => JSON.stringify(target), [target]);
 
@@ -205,6 +218,7 @@ export default function ToolFrame({
         install: mint.install,
         degraded: mint.degraded,
         viewer: mint.viewer,
+        section: sectionRef.current,
       }),
       maxHeight: () => paneHeightRef.current,
       onReady: () => setStatus('ready'),
@@ -212,10 +226,13 @@ export default function ToolFrame({
       onError: (frameError) => setError(frameError.message),
       navigate: (path) => router.push(path),
       onRevoked: setStopped,
+      onSection: (next) => onSectionRef.current?.(next),
     });
     bridgeRef.current = bridge;
+    if (actionRef) actionRef.current = (id) => bridge.sendAction(id);
     return () => {
       bridgeRef.current = null;
+      if (actionRef) actionRef.current = null;
       bridge.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -288,6 +305,13 @@ export default function ToolFrame({
     if (status !== 'ready') return;
     bridgeRef.current?.setSubject(subject);
   }, [subject, status]);
+
+  // A section chosen on the band or the side list reaches the Tool without the
+  // frame reloading: same frame, same token, a route message.
+  useEffect(() => {
+    if (status !== 'ready') return;
+    bridgeRef.current?.setSection(section);
+  }, [section, status]);
 
   // The changes stream: note paths inside the Tool's perimeter that changed,
   // relayed to the frame as `visvine:changed`. Same-origin with the cookie,

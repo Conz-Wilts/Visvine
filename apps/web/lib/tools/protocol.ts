@@ -216,6 +216,11 @@ export interface ToolInitMessage {
   install: ToolInstallInfo
   degraded: ToolDegraded | null
   viewer: ToolViewer
+  /**
+   * The Tool's active section when its page draws `surfaces.nav`, else null.
+   * Absent from a host older than sections.
+   */
+  section?: string | null
 }
 
 export type HostMessage =
@@ -230,6 +235,10 @@ export type HostMessage =
    * that cares re-reads; the message carries paths, never content.
    */
   | { type: 'visvine:changed'; paths: string[] }
+  /** The person chose another of the Tool's sections on the band or the side list. */
+  | { type: 'visvine:route'; section: string | null }
+  /** The person pressed one of the Tool's band buttons. */
+  | { type: 'visvine:action'; id: string }
 
 export type FrameMessage =
   | { type: 'visvine:ready'; version: number }
@@ -238,6 +247,8 @@ export type FrameMessage =
   | { type: 'visvine:error'; message: string; stack?: string }
   /** The host validates the path with `isInAppPath` before routing anywhere. */
   | { type: 'visvine:navigate'; path: string }
+  /** Switch the Tool's own section; the host moves only to one the Tool declared. */
+  | { type: 'visvine:section'; section: string }
 
 // ── REST envelope ──
 
@@ -355,7 +366,8 @@ export function isHostMessage(value: unknown): value is HostMessage {
         isSubjectOrNull(value.subject) &&
         isInstallInfo(value.install) &&
         isDegraded(value.degraded) &&
-        isViewer(value.viewer)
+        isViewer(value.viewer) &&
+        (value.section === undefined || value.section === null || typeof value.section === 'string')
       )
     case 'visvine:result':
       if (typeof value.id !== 'string') return false
@@ -368,6 +380,10 @@ export function isHostMessage(value: unknown): value is HostMessage {
       return isSubjectOrNull(value.subject)
     case 'visvine:changed':
       return isStringArray(value.paths)
+    case 'visvine:route':
+      return value.section === null || typeof value.section === 'string'
+    case 'visvine:action':
+      return typeof value.id === 'string'
     default:
       return false
   }
@@ -393,6 +409,8 @@ export function isFrameMessage(value: unknown): value is FrameMessage {
       )
     case 'visvine:navigate':
       return typeof value.path === 'string'
+    case 'visvine:section':
+      return typeof value.section === 'string' && value.section.length <= 32
     default:
       return false
   }

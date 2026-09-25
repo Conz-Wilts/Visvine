@@ -9,6 +9,7 @@ import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes
 import { toolIndexPath } from '@/lib/tools/config'
 import { toolFolderIn } from '@/lib/tools/location'
 import prisma from '@/lib/prisma'
+import { principalCanWrite } from '@/lib/notes/shared/permissions'
 import type {
   AuthoredToolDetail,
   AuthoredToolView,
@@ -38,7 +39,8 @@ export async function GET(
   const tool = await describeAuthoredTool(ctx.principal, ctx.resolved, name)
   if (!tool) return bad('Tool not found', 404)
 
-  const [requirements, versions] = await Promise.all([
+  const key = toolKey(ctx.resolved.spaceId, name)
+  const [requirements, versions, install] = await Promise.all([
     // Null when the config doesn't parse: there is no declared reach to check,
     // and an empty checklist would read as "nothing missing".
     tool.config
@@ -46,10 +48,15 @@ export async function GET(
       : null,
     // Keyed on the RESOLVED space, which is what publish stamps on the row —
     // the URL segment may be a spelling of it that never reaches the registry.
-    versionHistory(toolKey(ctx.resolved.spaceId, name)),
+    versionHistory(key),
+    prisma.appToolInstall.findUnique({
+      where: { app_tool_install_identity: { spaceId: ctx.resolved.spaceId, key } },
+      select: { id: true },
+    }),
   ])
+  const canEdit = principalCanWrite(ctx.principal, tool.path)
 
-  const body: AuthoredToolView = { tool, requirements, versions }
+  const body: AuthoredToolView = { tool, requirements, versions, canEdit, installId: install?.id ?? null }
   return NextResponse.json(body)
 }
 

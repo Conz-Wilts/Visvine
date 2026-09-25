@@ -459,7 +459,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   // config edit: it uninstalls through the Tools REST surface (rail key, install
   // row and stored state in one transaction server-side), and — when the Tool
   // was authored in this space — deletes the working copy with it, which is the
-  // whole "remove a created tool" ask. Published marketplace versions stay.
+  // whole "remove a created tool" ask. Published versions stay.
   const [removeInstallError, setRemoveInstallError] = useState<string | null>(null);
 
   const installOf = (key: string) =>
@@ -712,8 +712,8 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         </div>
       </SettingsSection>
 
-      {/* Tools reached elsewhere in the app (the marketplace icon, an install's
-          own rail row) rather than a "Tools" row here — see NAV_HIDDEN_FEATURE_KEYS.
+      {/* Tools reached elsewhere in the app (an install's own rail row) rather
+          than a "Tools" row here — see NAV_HIDDEN_FEATURE_KEYS.
           Still an on/off switch like any other tool, just not a draggable one. */}
       {unplaceableFeatures.length > 0 && (
         <SettingsSection

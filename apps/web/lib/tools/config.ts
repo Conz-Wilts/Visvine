@@ -282,6 +282,30 @@ export interface ToolTypeSurface {
   mode: 'page' | 'tab'
 }
 
+/** One of a Tool's own sections, drawn by the host on its page. */
+interface ToolNavSection {
+  id: string
+  label: string
+  /** Shown to the space's admins only. */
+  admin?: boolean
+}
+
+/**
+ * A Tool's own navigation on its page, drawn by the HOST in the app's style:
+ * `tabs` on the shell's top band (the default), or a `side` list beside the
+ * content like the app's own panels. One section or none draws nothing.
+ */
+export interface ToolNav {
+  style: 'tabs' | 'side'
+  sections: ToolNavSection[]
+}
+
+/** A button on the band's trailing end; pressing it tells the Tool. */
+export interface ToolBandAction {
+  id: string
+  label: string
+}
+
 export interface ToolConfig {
   name: string
   title: string
@@ -292,6 +316,10 @@ export interface ToolConfig {
     /** A sidebar rail row and its own full-pane page, or null for neither. */
     rail: { label: string; icon: string } | null
     types: ToolTypeSurface[]
+    /** The Tool's own sections on its page; absent or null for none. */
+    nav?: ToolNav | null
+    /** At most {@link TOOL_BAND_ACTIONS_MAX} band buttons; absent for none. */
+    actions?: ToolBandAction[]
   }
   perimeter: ToolPerimeter
   /**
@@ -471,6 +499,92 @@ function parseRail(
   return { ok: true, rail: { label, icon } }
 }
 
+/** A section or action id: short, lower-case, hyphenated. */
+const TOOL_NAV_ID_RE = /^[a-z0-9-]{1,32}$/
+
+/** Most tabs a Tool may put on the band; a side list may hold more. */
+export const TOOL_NAV_TABS_MAX = 7
+const TOOL_NAV_SIDE_MAX = 50
+/** Most buttons a Tool may put on the band. */
+export const TOOL_BAND_ACTIONS_MAX = 2
+/** A label names; it does not explain — one to three words. */
+const TOOL_LABEL_MAX = 24
+
+function parseLabel(raw: unknown, where: string): { ok: true; label: string } | { ok: false; error: string } {
+  const label = trimmedString(raw).replace(/\s+/g, ' ')
+  if (!label) return { ok: false, error: `${where} needs a label` }
+  if (label.length > TOOL_LABEL_MAX || label.split(' ').length > 3) {
+    return { ok: false, error: `${where} label ${JSON.stringify(label)} is too long — a label is one to three words` }
+  }
+  return { ok: true, label }
+}
+
+/** `surfaces.nav` → the Tool's own sections, or null. */
+export function parseToolNav(raw: unknown): { ok: true; nav: ToolNav | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || raw === false) return { ok: true, nav: null }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, error: '`surfaces.nav` must be a map with `style` and `sections`' }
+  }
+  const block = raw as Record<string, unknown>
+  const style = trimmedString(block.style).toLowerCase() || 'tabs'
+  if (style !== 'tabs' && style !== 'side') {
+    return { ok: false, error: '`surfaces.nav.style` must be tabs or side' }
+  }
+  if (!Array.isArray(block.sections)) return { ok: false, error: '`surfaces.nav.sections` must be a list' }
+  const max = style === 'tabs' ? TOOL_NAV_TABS_MAX : TOOL_NAV_SIDE_MAX
+  if (block.sections.length > max) {
+    return {
+      ok: false,
+      error:
+        style === 'tabs'
+          ? `At most ${TOOL_NAV_TABS_MAX} sections fit on the band — use \`style: side\` for more`
+          : `At most ${TOOL_NAV_SIDE_MAX} sections in a side list`,
+    }
+  }
+  const sections: ToolNavSection[] = []
+  const seen = new Set<string>()
+  for (const entry of block.sections) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return { ok: false, error: 'Each `surfaces.nav.sections` entry is { id, label }' }
+    }
+    const section = entry as Record<string, unknown>
+    const id = trimmedString(section.id).toLowerCase()
+    if (!TOOL_NAV_ID_RE.test(id)) {
+      return { ok: false, error: `Bad section id ${JSON.stringify(section.id)} — lower-case letters, digits and hyphens` }
+    }
+    if (seen.has(id)) return { ok: false, error: `Section "${id}" is declared twice` }
+    seen.add(id)
+    const label = parseLabel(section.label, `Section "${id}"`)
+    if (!label.ok) return label
+    sections.push({ id, label: label.label, ...(section.admin === true ? { admin: true } : {}) })
+  }
+  return { ok: true, nav: { style, sections } }
+}
+
+/** `surfaces.actions` → band buttons. */
+export function parseToolBandActions(raw: unknown): { ok: true; actions: ToolBandAction[] } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, actions: [] }
+  if (!Array.isArray(raw)) return { ok: false, error: '`surfaces.actions` must be a list of { id, label }' }
+  if (raw.length > TOOL_BAND_ACTIONS_MAX) {
+    return { ok: false, error: `At most ${TOOL_BAND_ACTIONS_MAX} band actions` }
+  }
+  const actions: ToolBandAction[] = []
+  const seen = new Set<string>()
+  for (const entry of raw) {
+    const action = (entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {}) as Record<string, unknown>
+    const id = trimmedString(action.id).toLowerCase()
+    if (!TOOL_NAV_ID_RE.test(id)) {
+      return { ok: false, error: `Bad action id ${JSON.stringify(action.id)} — lower-case letters, digits and hyphens` }
+    }
+    if (seen.has(id)) return { ok: false, error: `Action "${id}" is declared twice` }
+    seen.add(id)
+    const label = parseLabel(action.label, `Action "${id}"`)
+    if (!label.ok) return label
+    actions.push({ id, label: label.label })
+  }
+  return { ok: true, actions }
+}
+
 /**
  * `surfaces.types` → claims. An entry is either `{ type, mode }` or a bare type
  * name, which means `mode: tab` — the reading that can never take a page away
@@ -543,6 +657,8 @@ export function parseToolConfig(fm: NoteFrontmatter, name: string): ParseToolCon
 
   let rail: { label: string; icon: string } | null = null
   let types: ToolTypeSurface[] = []
+  let nav: ToolNav | null = null
+  let actions: ToolBandAction[] = []
   if (fm.surfaces !== undefined && fm.surfaces !== null) {
     if (typeof fm.surfaces !== 'object' || Array.isArray(fm.surfaces)) {
       return { ok: false, error: '`surfaces` must be a map with `rail` and `types`' }
@@ -552,8 +668,14 @@ export function parseToolConfig(fm: NoteFrontmatter, name: string): ParseToolCon
     if (!parsedRail.ok) return parsedRail
     const parsedTypes = parseTypeSurfaces(surfaces.types)
     if (!parsedTypes.ok) return parsedTypes
+    const parsedNav = parseToolNav(surfaces.nav)
+    if (!parsedNav.ok) return parsedNav
+    const parsedActions = parseToolBandActions(surfaces.actions)
+    if (!parsedActions.ok) return parsedActions
     rail = parsedRail.rail
     types = parsedTypes.types
+    nav = parsedNav.nav
+    actions = parsedActions.actions
   }
 
   const perimeter = parseToolPerimeter(fm.perimeter)
@@ -571,7 +693,7 @@ export function parseToolConfig(fm: NoteFrontmatter, name: string): ParseToolCon
       title,
       description,
       version: version.version,
-      surfaces: { rail, types },
+      surfaces: { rail, types, nav, actions },
       perimeter: perimeter.perimeter,
       tags: tags.tags,
       previewUrl: preview.previewUrl,

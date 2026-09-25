@@ -56,6 +56,12 @@ version: 3                                   # bumped by publish; 0 = never publ
 surfaces:
   rail: { label: Deals, icon: kanban }       # sidebar row + full page, or null for neither
   types: [{ type: deal, mode: page }]        # page or tab on a context type's page
+  nav:                                       # the Tool's own sections, drawn by the app
+    style: tabs                              # tabs on the band (≤7) or side (a list, ≤50)
+    sections:
+      - { id: board, label: Board }
+      - { id: settings, label: Settings, admin: true }
+  actions: [{ id: new-deal, label: New deal }]   # ≤2 buttons on the band's trailing end
 perimeter:
   read:  ["deals/**", "people/*/index.md"]
   write: ["deals/**"]
@@ -76,6 +82,9 @@ What this Tool is for, in a paragraph or two — author-facing docs, not config.
   `mode: page` is refused outright at parse time for a built-in type
   (person/space/event/resource/section/channel/connector/agent/tool/index) —
   see [Type pages](#type-pages) for what actually happens at install time.
+- `surfaces.nav` and `surfaces.actions` are chrome the APP draws — see
+  [The page](#the-page). Ids are `^[a-z0-9-]{1,32}$`; a label is one to three
+  words (≤24 characters), because a label names and does not explain.
 - `perimeter` is five deny-by-default lists (`lib/tools/perimeter.ts`): `read`/`write`
   are context-note globs, `types`/`connectors`/`agents` are name lists. **Empty
   means none** — a Tool that declares nothing can only draw its own UI.
@@ -201,7 +210,8 @@ other action uses — so a Tool's notes obey the caller's real grants.
 | `check_tool` | `tools:author` | Rebuilds and returns a lint report: config errors, compile diagnostics, `describePerimeter`, `computeRequirements` against this space, and warnings (empty perimeter, a downgraded page claim, a missing description). `render: true` also mounts the working copy headlessly and folds its console errors into the warnings (`runtime` block, no image). |
 | `preview_tool` | `tools:author` | The two preview URLs plus current build status. `screenshot: true` renders the preview headlessly as the caller and returns the image + console errors — see [Preview](#preview). |
 | `publish_tool` | `tools:author` | `publishTool` — publishes into the tool's OWN space and never the marketplace; an admin's is approved as it lands, a member's queues for one. Accepts `release_notes` (≤2KB); the response carries the preview links and says where the version went. |
-| `install_tool` | `tools:install` | `installVersion` — admin-only; returns the install plus any type-claim conflicts and unmet requirements. |
+| `install_tool` | `tools:install` | `installVersion` — admin-only; `placement: rail \| more`; returns the install plus any type-claim conflicts and unmet requirements. |
+| `update_install` | `tools:install` | Exactly one of `enabled`, `type_claims` (`page \| tab \| none` per declared type), `apply_upgrade`, `uninstall` — the four admin decisions on an install, each through its own service function (`setInstallEnabled` / `setTypeClaims` / `applyUpgrade` / `uninstall`). |
 
 **The scope is the boundary**, and with one server it is the only one. Each is
 declared on the action's own definition and read through `scopeForAction` — the
@@ -685,6 +695,43 @@ no `/tools` destination: the Space Console owns those decisions (Tools =
 placement + the installed versions + the super-admin review queue at the
 bottom, Approvals = what a member published; a working copy is published from
 its own tool page), and cross-space install is the `install_tool` action.
+
+**The install sheet** (`features/tools/components/InstallSheet.tsx`) is where
+an admin installs without MCP: opened from Approvals as a version is approved,
+and from Install on the Tool tab of a Tool the space made. It asks two things —
+placement (Rail or More) and, per declared type, Page · Tab · None — then calls
+`POST /api/spaces/<id>/tools` with `version_id`, `placement` and `type_claims`.
+A claim answered None is left out of resolution (`installs.ts#requestedClaims`).
+
+**Anyone who can edit a Tool publishes it from its Tool tab**
+(`ToolPageContent.tsx`, `canEdit` on `AuthoredToolView`): an admin's lands
+approved, a member's lands pending and goes to Approvals. The same tab lists
+the versions and lets an admin withdraw one.
+
+### The page
+
+`/t/<slug>` is `features/tools/components/ToolPage.tsx`. The host draws the
+chrome and every state; the Tool draws its content.
+
+- **Sections.** `surfaces.nav` with `style: tabs` puts the sections on the
+  shell's top band (`BandTabList`, the same tab set the Directory, a note, a
+  profile and the Space Console use, so the underline slides between them);
+  `style: side` draws a list beside the frame. One section or none draws
+  nothing. Sections marked `admin: true` are dropped for everyone else. The
+  active section is `?section=<id>`, changed with `router.replace`, so a press
+  never remounts the page, re-mints the frame token or reloads the frame: the
+  host posts `visvine:route { section }` and the kit's `useSection()` re-renders.
+  A Tool asks for a section with `visvine:section`; the page moves only to one
+  the Tool declared.
+- **Band buttons.** Up to two `surfaces.actions` sit at the band's trailing end;
+  a press posts `visvine:action { id }`, read with `useBandAction(id, fn)`.
+- **The ⋯ menu.** About (`ToolAbout.tsx` over
+  `GET /api/spaces/<id>/tools/<installId>/about`, `lib/tools/about.ts`: the
+  release, the publisher, the reach in words, egress — None or the connectors
+  it names — and how many spaces run it), Edit where the space made it, Manage
+  for admins, and Report (`ToolReport.tsx`, into `app_tool_incidents`).
+- A change to `nav` or `actions` is a surface change (`surfacesUnchanged`), so a
+  trusted publisher's re-publish that adds a tab is still read by a person.
 
 **An admin's lock is the Tool's lock.** A row an admin locks
 (`featureConfig.adminOnly['tool:<slug>']`) takes the rail row, the page and the

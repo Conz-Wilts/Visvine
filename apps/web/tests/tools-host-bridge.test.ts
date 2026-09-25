@@ -136,6 +136,7 @@ test('ready is answered with the init payload, once', () => {
     install: INIT.install,
     degraded: INIT.degraded,
     viewer: INIT.viewer,
+    section: null,
   })
   assert.equal(h.events.ready, 1)
 
@@ -562,4 +563,33 @@ test('every other refusal still reaches the Tool as its result', async () => {
   await flush()
   assert.deepEqual(revoked, [])
   assert.deepEqual(h.frame.types(), ['visvine:init', 'visvine:result'])
+})
+
+// ── sections and band buttons ──
+
+test('the active section rides the handshake, and a change is posted as a route', () => {
+  const h = harness({ init: () => ({ ...INIT, section: 'board' }) })
+  h.fromFrame(READY)
+  assert.equal((h.frame.messages[0] as { section?: string }).section, 'board')
+  h.bridge.setSection('board')
+  h.bridge.setSection('forecast')
+  assert.deepEqual(h.frame.messages.slice(1), [{ type: 'visvine:route', section: 'forecast' }])
+})
+
+test('a band button press reaches the frame only after the handshake', () => {
+  const h = harness()
+  h.bridge.sendAction('new-deal')
+  assert.equal(h.frame.posted.length, 0)
+  h.fromFrame(READY)
+  h.bridge.sendAction('new-deal')
+  assert.deepEqual(h.frame.messages[1], { type: 'visvine:action', id: 'new-deal' })
+})
+
+test("a Tool's request for a section goes to the page, which decides", () => {
+  const asked: string[] = []
+  const h = harness({ onSection: (section) => asked.push(section) })
+  h.fromFrame(READY)
+  h.fromFrame({ type: 'visvine:section', section: 'forecast' })
+  h.fromFrame({ type: 'visvine:section', section: 42 })
+  assert.deepEqual(asked, ['forecast'])
 })

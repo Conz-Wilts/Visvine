@@ -43,7 +43,7 @@ import {
 } from '@/lib/featureAccess'
 import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
 import type { SpaceFeatureConfig } from '@/lib/types/space'
-import { TOOL_NAME_RE, type ToolTypeSurface } from './config'
+import { TOOL_NAME_RE, type ToolBandAction, type ToolNav, type ToolTypeSurface } from './config'
 import { diffPerimeter, type PerimeterDiff } from './perimeter'
 import {
   decodeToolConfig,
@@ -68,6 +68,9 @@ export type TypeClaimMode = 'page' | 'tab'
 
 /** The admin-confirmed claims of one install, keyed by lower-case type name. */
 export type TypeClaims = Record<string, TypeClaimMode>
+
+/** An admin's answer to one declared type surface: take it as a page or tab, or leave it. */
+export type TypeClaimChoice = TypeClaimMode | 'none'
 
 /** One install, as the marketplace's Installed tab and the admin console read it. */
 export interface InstallSummary {
@@ -121,6 +124,13 @@ export interface InstalledToolDto {
   sharedFrom?: { id: string; name: string } | null
   /** Why it no longer runs, drawn on its page instead of the frame. */
   stopped?: string | null
+  /** The Tool's name — its folder in the space that wrote it. */
+  name: string
+  /** The published version it runs. */
+  version: number
+  /** The Tool's own sections and band buttons, drawn by the host on its page. */
+  nav: ToolNav | null
+  actions: ToolBandAction[]
 }
 
 export type InstallResult =
@@ -325,6 +335,28 @@ export function orderWithRail(config: SpaceFeatureConfig, key: string): string[]
   return base.includes(key) ? [...base] : [...base, key]
 }
 
+/**
+ * The feature config with an installed Tool's rail row placed: on the rail (the
+ * default) or tucked into More. Explicitly on, so a re-install never inherits
+ * an old "off" from a space that had this slug before.
+ */
+export function featureConfigWithRail(
+  config: SpaceFeatureConfig,
+  key: string,
+  placement: 'rail' | 'more' = 'rail',
+): SpaceFeatureConfig {
+  const more = config.more ?? []
+  return mergeFeatureConfig(config, {
+    order: orderWithRail(config, key),
+    enabled: { [key]: true },
+    ...(placement === 'more'
+      ? { more: more.includes(key) ? more : [...more, key] }
+      : more.includes(key)
+        ? { more: more.filter((entry) => entry !== key) }
+        : {}),
+  })
+}
+
 /** The same three lists with a Tool's rail key taken out of all of them. */
 export function featureConfigWithoutRail(config: SpaceFeatureConfig, key: string): SpaceFeatureConfig {
   const without = (list: string[] | undefined) =>
@@ -513,6 +545,10 @@ function toClientDto(row: InstallRow, holds: HoldLookup): InstalledToolDto {
     types: parseTypeClaims(row.typeClaims),
     sharedFrom: row.sharedFromSpace,
     stopped: stoppedOf(row, holds),
+    name: row.version.name,
+    version: row.version.version,
+    nav: config.surfaces.nav ?? null,
+    actions: config.surfaces.actions ?? [],
   }
 }
 
@@ -586,7 +622,12 @@ export async function installVersion(
   spaceId: string,
   versionId: string,
   actor: { userId: string; email: string },
-  opts: { slug?: string; typeClaims?: TypeClaims } = {},
+  opts: {
+    slug?: string
+    typeClaims?: Record<string, TypeClaimChoice>
+    /** Where its rail row goes: on the rail (the default) or tucked into More. */
+    placement?: 'rail' | 'more'
+  } = {},
 ): Promise<InstallResult> {
   const refusal = await refuseNonAdmin(spaceId, actor, 'install a tool')
   if (refusal) return refusal
@@ -665,15 +706,7 @@ export async function installVersion(
         select: INSTALL_SELECT,
       })
       if (!config.surfaces.rail) return {}
-      const key = toolRailKey(slug)
-      return {
-        featureConfig: mergeFeatureConfig(stored.featureConfig, {
-          order: orderWithRail(stored.featureConfig, key),
-          // Explicitly on, so a re-install never inherits an old "off" from a
-          // space that had this slug before.
-          enabled: { [key]: true },
-        }),
-      }
+      return { featureConfig: featureConfigWithRail(stored.featureConfig, toolRailKey(slug), opts.placement) }
     })
   } catch (err) {
     return refusalOf(err)
@@ -709,14 +742,18 @@ async function followInRooms(houseId: string, name: string): Promise<void> {
   await share.syncSharedToolInstallsQuietly(houseId, name)
 }
 
-/** The modes to resolve: what the Tool declared, overridden by the admin's pick. */
-function requestedClaims(
+/**
+ * The modes to resolve: what the Tool declared, overridden by the admin's pick.
+ * A claim the admin answered `none` is left out.
+ */
+export function requestedClaims(
   declared: readonly ToolTypeSurface[],
-  override: TypeClaims | undefined,
+  override: Record<string, TypeClaimChoice> | undefined,
 ): ToolTypeSurface[] {
-  return declared.map((claim) => {
+  return declared.flatMap((claim) => {
     const asked = override?.[claim.type]
-    return asked ? { type: claim.type, mode: asked } : claim
+    if (asked === 'none') return []
+    return [asked ? { type: claim.type, mode: asked } : claim]
   })
 }
 

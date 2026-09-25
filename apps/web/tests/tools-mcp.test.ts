@@ -190,6 +190,10 @@ function deps(over: Partial<AppToolDeps> = {}): AppToolDeps {
     publishTool: unexpected('publishTool'),
     installVersion: unexpected('installVersion'),
     listInstalls: unexpected('listInstalls'),
+    setInstallEnabled: unexpected('setInstallEnabled'),
+    setTypeClaims: unexpected('setTypeClaims'),
+    applyUpgrade: unexpected('applyUpgrade'),
+    uninstall: unexpected('uninstall'),
     latestApprovedVersion: unexpected('latestApprovedVersion'),
     spaceFacts: unexpected('spaceFacts'),
     appOrigin: () => 'https://visvine.test',
@@ -677,6 +681,116 @@ test('install_tool names the install already holding a claimed type page', async
   assert.deepEqual(result.conflicts, ['"deal" page is already owned by the pipeline tool'])
 })
 
+test('install_tool carries the placement to the service', async () => {
+  const seen: unknown[] = []
+  await appToolHandlers.installTool(
+    CTX,
+    { space_id: SPACE, version_id: 'ver_1', placement: 'more' },
+    deps({
+      installVersion: async (_spaceId, _versionId, _actor, opts) => {
+        seen.push(opts)
+        return { ok: true, install: install(), downgraded: [], conflicts: [] }
+      },
+    }),
+  )
+  assert.deepEqual(seen, [{ placement: 'more' }])
+})
+
+// ── update_install ───────────────────────────────────────────────────────────
+
+test('update_install takes exactly one change', async () => {
+  const none = await refusal(appToolHandlers.updateInstall(CTX, { space_id: SPACE, tool: 'board' }, deps()), 400)
+  assert.match(none.message, /exactly one/)
+  await refusal(
+    appToolHandlers.updateInstall(CTX, { space_id: SPACE, tool: 'board', enabled: false, uninstall: true }, deps()),
+    400,
+  )
+  // `apply_upgrade: false` asks for nothing, so it is not a second change.
+  const seen: unknown[] = []
+  await appToolHandlers.updateInstall(
+    CTX,
+    { space_id: SPACE, tool: 'board', enabled: false, apply_upgrade: false },
+    deps({
+      listInstalls: async () => [install()],
+      setInstallEnabled: async (...args) => {
+        seen.push(args)
+        return { ok: true, install: install({ enabled: false }) }
+      },
+    }),
+  )
+  assert.equal(seen.length, 1)
+})
+
+test('update_install finds the install by slug, key or id, and 404s anything else', async () => {
+  for (const name of ['board', `${SPACE}/board`, 'inst_1']) {
+    const calls: unknown[] = []
+    const result = await appToolHandlers.updateInstall(
+      CTX,
+      { space_id: SPACE, tool: name, enabled: false },
+      deps({
+        listInstalls: async () => [install()],
+        setInstallEnabled: async (spaceId, installId, actor, enabled) => {
+          calls.push([spaceId, installId, actor, enabled])
+          return { ok: true, install: install({ enabled: false }) }
+        },
+      }),
+    )
+    assert.deepEqual(calls, [[SPACE, 'inst_1', { userId: 'user_1', email: 'ada@local.dev' }, false]])
+    assert.equal(result.enabled, false)
+  }
+  const err = await refusal(
+    appToolHandlers.updateInstall(
+      CTX,
+      { space_id: SPACE, tool: 'ghost', enabled: true },
+      deps({ listInstalls: async () => [install()] }),
+    ),
+    404,
+  )
+  assert.match(err.message, /ghost/)
+})
+
+test('update_install answers type claims, applies an upgrade and uninstalls through the service', async () => {
+  const calls: string[] = []
+  const d = deps({
+    listInstalls: async () => [install()],
+    setTypeClaims: async (_s, _i, _a, claims) => {
+      calls.push(`claims ${JSON.stringify(claims)}`)
+      return { ok: true, install: install({ typeClaims: { deal: 'page' } }) }
+    },
+    applyUpgrade: async () => {
+      calls.push('upgrade')
+      return { ok: true, install: install({ version: 4 }) }
+    },
+    uninstall: async () => {
+      calls.push('uninstall')
+      return { ok: true }
+    },
+  })
+  const claimed = await appToolHandlers.updateInstall(CTX, { space_id: SPACE, tool: 'board', type_claims: { deal: 'page', person: 'none' } }, d)
+  assert.deepEqual(claimed.type_claims, { deal: 'page' })
+  const upgraded = await appToolHandlers.updateInstall(CTX, { space_id: SPACE, tool: 'board', apply_upgrade: true }, d)
+  assert.equal(upgraded.version, 4)
+  assert.equal(upgraded.href, '/s/space_1/t/board')
+  const removed = await appToolHandlers.updateInstall(CTX, { space_id: SPACE, tool: 'board', uninstall: true }, d)
+  assert.deepEqual(removed, { slug: 'board', uninstalled: true })
+  assert.deepEqual(calls, ['claims {"deal":"page","person":"none"}', 'upgrade', 'uninstall'])
+})
+
+test("update_install passes the service's refusal through — a member is refused by the service, not here", async () => {
+  const err = await refusal(
+    appToolHandlers.updateInstall(
+      CTX,
+      { space_id: SPACE, tool: 'board', apply_upgrade: true },
+      deps({
+        listInstalls: async () => [install()],
+        applyUpgrade: async () => ({ ok: false, status: 403, error: 'Only a space admin can upgrade a tool.' }),
+      }),
+    ),
+    403,
+  )
+  assert.match(err.message, /admin/)
+})
+
 // ── the `tools` feature gate ─────────────────────────────────────────────────
 
 test('every space-scoped handler refuses when the tools feature key is off, before touching the service', async () => {
@@ -708,6 +822,10 @@ test('every space-scoped handler refuses when the tools feature key is off, befo
     [
       'install_tool',
       () => appToolHandlers.installTool(CTX, { space_id: SPACE, version_id: 'ver_1' }, forbidden),
+    ],
+    [
+      'update_install',
+      () => appToolHandlers.updateInstall(CTX, { space_id: SPACE, tool: 'board', enabled: false }, forbidden),
     ],
   ]
   for (const [name, run] of cases) {

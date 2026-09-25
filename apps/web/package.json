@@ -68,6 +68,7 @@
     "verify:tools": "tsx scripts/verify-tools-e2e.ts",
     "verify:tools:escape": "tsx scripts/verify-tools-escape.ts",
     "verify:tools:desktop": "tsx scripts/verify-tools-desktop.ts",
+    "verify:tools:shell": "tsx scripts/verify-tools-shell.ts",
     "vm:redteam": "tsx scripts/vm-redteam.ts"
   },
   "dependencies": {

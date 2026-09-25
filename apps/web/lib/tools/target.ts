@@ -34,7 +34,16 @@ import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { EMPTY_PERIMETER, parseToolPerimeter, type ToolPerimeter } from './perimeter'
-import { parseToolConfig, parseToolPreviewUrl, parseToolTags, toolIndexPath, TOOL_NAME_RE, type ToolConfig } from './config'
+import {
+  parseToolBandActions,
+  parseToolConfig,
+  parseToolNav,
+  parseToolPreviewUrl,
+  parseToolTags,
+  toolIndexPath,
+  TOOL_NAME_RE,
+  type ToolConfig,
+} from './config'
 import { toolFolderIn } from './location'
 import type { BridgeError, BridgeTarget, ToolDegraded, ToolInstallInfo, ToolSubject } from './protocol'
 import { toolRailKey } from '@/lib/featureAccess'
@@ -210,6 +219,8 @@ function configOfJson(raw: unknown, name: string, perimeter: ToolPerimeter): Too
             return [{ type: claim.type, mode: claim.mode === 'page' ? ('page' as const) : ('tab' as const) }]
           })
         : [],
+      nav: ((n) => (n.ok ? n.nav : null))(parseToolNav(surfaces.nav)),
+      actions: ((a) => (a.ok ? a.actions : []))(parseToolBandActions(surfaces.actions)),
     },
     perimeter,
     // Marketplace metadata; a hostile value falls back to none, like the rest.

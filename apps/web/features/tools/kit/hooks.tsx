@@ -65,6 +65,15 @@ export interface VisvineApi {
   degraded: ToolDegraded | null;
   /** Ask Visvine to navigate. In-app paths only; the host refuses the rest. */
   navigate(path: string): void;
+  /**
+   * The active one of this Tool's own sections (`surfaces.nav`), drawn by
+   * Visvine on the band or in a side list; null when it declares none.
+   */
+  section: string | null;
+  ui: {
+    /** Switch to one of this Tool's declared sections. */
+    navigate(to: { section: string }): void;
+  };
 }
 
 interface VisvineContextValue {
@@ -98,13 +107,16 @@ export function VisvineProvider({
 }) {
   const [subject, setSubject] = useState<ToolSubject | null>(init.subject);
   const [theme, setTheme] = useState<Record<string, string>>(init.theme);
+  const [section, setSection] = useState<string | null>(init.section ?? null);
 
   useEffect(() => {
     const offSubject = client.onSubject(setSubject);
     const offTheme = client.onTheme(setTheme);
+    const offRoute = client.onRoute(setSection);
     return () => {
       offSubject();
       offTheme();
+      offRoute();
     };
   }, [client]);
 
@@ -153,8 +165,12 @@ export function VisvineProvider({
       install: init.install,
       degraded: init.degraded,
       navigate: (path) => client.navigate(path),
+      section,
+      ui: {
+        navigate: (to) => client.section(to.section),
+      },
     }),
-    [client, subject, init.viewer, init.install, init.degraded],
+    [client, subject, section, init.viewer, init.install, init.degraded],
   );
 
   const value = useMemo(() => ({ api, theme, client }), [api, theme, client]);
@@ -178,6 +194,34 @@ export function useVisvineMaybe(): VisvineApi | null {
 /** What this Tool is being shown about, kept current as the host re-points it. */
 export function useSubject(): ToolSubject | null {
   return useVisvineContext().api.subject;
+}
+
+/**
+ * The active one of this Tool's own sections and a way to switch it. The
+ * sections are drawn by Visvine (the band's tabs or a side list, from
+ * `surfaces.nav`), so a Tool draws only the content for the one that is on.
+ */
+export function useSection(): [string | null, (id: string) => void] {
+  const { api, client } = useVisvineContext();
+  const go = useCallback((id: string) => client.section(id), [client]);
+  return [api.section, go];
+}
+
+/**
+ * Run `handler` when the person presses the band button `id` this Tool
+ * declared in `surfaces.actions`.
+ */
+export function useBandAction(id: string, handler: () => void): void {
+  const { client } = useVisvineContext();
+  const latest = useRef(handler);
+  latest.current = handler;
+  useEffect(
+    () =>
+      client.onAction((pressed) => {
+        if (pressed === id) latest.current();
+      }),
+    [client, id],
+  );
 }
 
 /**
