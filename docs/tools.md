@@ -217,8 +217,8 @@ install binds to the house's suggestions its room has (`share.ts#roomBindings`).
 
 **Modules and dependencies.** `src/<module>.tsx` notes beside `ui.md` compile
 into the one bundle, resolved in memory by the compiler's import guard
-(`compile.ts#importGuard`, `./src/<name>` from ui.tsx, `./<name>` between
-modules; nothing relative ever reaches a disk), at most 24, snapshotted into
+(`compile.ts#importGuard`, `./<name>` from ui.tsx and between modules —
+`./src/<name>` from ui.tsx too; nothing relative ever reaches a disk), at most 24, snapshotted into
 the version (`app_tool_versions.modules`) and scanned by the checks like
 `ui.tsx`. Third-party code is one curated list
 (`@visvine/tool-protocol/dependencies`: zod, date-fns, clsx), each pinned to
@@ -277,6 +277,8 @@ other action uses — so a Tool's notes obey the caller's real grants.
 | `check_tool` | `tools:author` | Rebuilds and runs [the checks](#checks) a publish runs — `checks`: `status`, `blocking` (what stops a publish), `flags`, `notes`, `risk` — recorded against the working copy, plus `describePerimeter`, `computeRequirements` against this space and the surfaces. `ready_to_publish` is false only when something blocks. `render: true` also mounts the working copy headlessly and folds its console errors into the warnings (`runtime` block, no image); a failed render is not ready either. |
 | `preview_tool` | `tools:author` | The two preview URLs plus current build status. `screenshot: true` renders the preview headlessly as the caller and returns the image + console errors — see [Preview](#preview). |
 | `publish_tool` | `tools:author` | `publishTool` — publishes into the tool's OWN space and never the marketplace; an admin's is approved as it lands, a member's queues for one. Accepts `release_notes` (≤2KB); the response carries the preview links and says where the version went. |
+| `check_package` | `tools:author` | A `.vvtool` built (`buildSources.ts#buildFromSources`) and checked (`runStaticChecks`) exactly as a working copy would be — written nowhere. What `visvine-tool check --remote` asks. |
+| `push_tool` | `tools:author` | A `.vvtool` into the space as the working copy of the Tool it names (`package#pushPackage`): made when absent, brought in line when the caller may edit it — only changed files written, each through `writeToolFile`; a module or icon the package lost is removed. A name taken elsewhere is refused, never renamed. What `visvine-tool push` asks. |
 | `install_tool` | `tools:install` | `installVersion` — admin-only; `placement: rail \| more`; returns the install plus any type-claim conflicts and unmet requirements. |
 | `update_install` | `tools:install` | Exactly one of `enabled`, `type_claims` (`page \| tab \| none` per declared type), `apply_upgrade`, `uninstall` — the four admin decisions on an install, each through its own service function (`setInstallEnabled` / `setTypeClaims` / `applyUpgrade` / `uninstall`). |
 
@@ -757,6 +759,74 @@ as a browser does after the fact; WebRTC is held to proxied TCP
 (`disable_non_proxied_udp`); a permission is never granted from inside a Tool
 frame, even on the app's own origin; the preload bridge is never injected into
 sub-frames.
+
+## Your own repo — the starter and `visvine-tool`
+
+A Tool can be built outside the app, in the author's own editor and with
+their own coding agent: `packages/tool-starter` is the template repo (a GitHub
+template), `@visvine/tool-cli` the `visvine-tool` command, `@visvine/tool-kit`
+the kit's types and offline runtime. All three are built from this repo's own
+code by `pnpm --filter @visvine/web tools:packages`
+(`scripts/build-tool-packages.ts`), so what they check and draw is what the
+server checks and draws.
+
+```
+tool-starter/
+├── visvine-tool.json    the manifest — index.md's frontmatter keys, as JSON
+├── src/ui.tsx           the entry; src/<name>.tsx|ts modules, imported as ./<name>
+├── src/data.js          handlers
+├── fixtures/            space.json, notes/, resources/ — the offline space
+├── AGENTS.md            the agent's manual — the loop, then TOOL_AUTHOR_GUIDE
+├── COMPONENTS.md        the kit's catalog
+├── CLAUDE.md            @AGENTS.md
+├── .mcp.json            Visvine's MCP server
+└── .github/workflows/check.yml
+```
+
+`AGENTS.md`, `COMPONENTS.md` and the kit's `index.d.ts` are generated
+(`lib/tools/starterDocs.ts`) from `sdkDocs.ts` and `catalog.ts` and committed;
+`tests/tools-starter.test.ts` fails when one drifts.
+
+**The CLI** (`packages/tool-cli/src`): `init`, `dev`, `check`, `pack` run
+offline; `login`, `whoami`, `spaces`, `push`, `publish` reach one server
+through its MCP endpoint, as the named action tools.
+
+- `check` reads the folder with the server's package reader
+  (`layout.ts#readPackageFiles`), builds it with `buildFromSources` and runs
+  `runStaticChecks` — bundled into the CLI, not reimplemented. `--remote` asks
+  `check_package` as well, which knows the space's advisories.
+- `dev` serves the Tool in the production frame (`frameDocument.ts`,
+  `csp.ts#frameCsp`, the runtime vendor files from the kit) on `127.0.0.1`,
+  inside a host page on `localhost` running the app's own `createHostBridge`
+  with its `send` pointed at the offline runtime. The runtime
+  (`packages/tool-kit/src/mock.ts`) answers every bridge method from
+  `fixtures/`, asking the same gates the server asks
+  (`@visvine/tool-protocol` — perimeter, reach, collections, the `data.js`
+  argument table `isolate.ts`) over the manifest's reach with each slot bound
+  from `space.json` or its suggestion; `data.js` runs in `node:vm`. Writes
+  stay in memory and are announced like the change stream. Beside the Tool:
+  the kit's components drawn from the catalog, and every call with its answer.
+- `login` is OAuth 2.1 + PKCE as a native client: dynamic registration, the
+  consent page, a loopback listener (`http://127.0.0.1:<port>/callback`,
+  RFC 8252 — the consent page's `form-action` allows loopback for exactly
+  this). The token is saved under `~/.config/visvine`, per server, readable by
+  its owner alone; there is no refresh grant, so an expired one means signing
+  in again. Against a local development server no sign-in is needed.
+- `push` packs the folder (`project.ts`) and asks `push_tool`; `publish` pushes
+  and asks `publish_tool` with CHANGELOG.md's newest section. The space is
+  `--space`, `VISVINE_SPACE`, the one this folder last pushed to
+  (`.visvine/link.json`), or the only one the person has.
+
+**Deploy keys** (`lib/tools/deployKeys.ts`, rules in
+`shared/deployKeys.ts`, `app_tool_deploy_keys`) are CI's way in. Whoever may
+edit a Tool mints one on its Tool tab — shown once, stored as a SHA-256. It is
+an MCP bearer (`vvtk_…`) that acts as its minter with `context:read` +
+`tools:author`, and `runAction` holds every call to that Tool in that space:
+`push_tool`, `check_package`, `read_tool`, `check_tool`, `preview_tool`,
+`publish_tool` — anything else is refused before its body runs. A publish made
+with a key waits for a space admin even when an admin minted it
+(`publishTool`'s `awaitApproval`). Revoking, deleting the Tool, or the
+minter's account going ends it; losing their access ends what it can do.
 
 ## Runtime architecture
 
@@ -1383,6 +1453,10 @@ pnpm --filter @visvine/web verify:tools:monitoring  # a sleeper listed through V
                                                   # then a second — the listing suspended, a bridge call revoked at once, an open
                                                   # frame elsewhere taken down within a minute; the review console; telemetry,
                                                   # the anomaly rules, a forced rescan, a verified publisher
+pnpm --filter @visvine/web verify:tools:starter  # a fresh clone of the starter with the kit and the CLI from their packed tarballs:
+                                                  # check, the types, dev offline in the real frame; login through the real
+                                                  # consent; push, the preview in the app, publish; a deploy key pushing,
+                                                  # checking, publishing pending and refused beyond its tool; pack → import; init
 pnpm --filter @visvine/web verify:tools:collections  # a poll holding 10,000 votes through the bridge: the tally per answer, every
                                                   # row paged once, no author shown; schema, size, quota and write: own; a vote
                                                   # reaching another viewer's open frame live; the admin's export; a member's
@@ -1427,7 +1501,9 @@ telemetry,monitor,rescan,advisories,reviewConsole,collections}.ts`, the collecti
 `lib/tools/shared/collections.ts`, the monitoring rules
 `lib/tools/shared/monitoring.ts`, the going-global
 rules `lib/tools/shared/{listing,reachWords}.ts`, packages `lib/tools/package/`
-(the pure layout in `shared/layout.ts`), the signing ring `lib/crypto/signing.ts`,
+(the pure layout in `shared/layout.ts`), the build step `lib/tools/buildSources.ts`,
+deploy keys `lib/tools/deployKeys.ts`, the author's repo `packages/tool-starter`,
+`packages/tool-cli`, `packages/tool-kit` (docs from `lib/tools/starterDocs.ts`), the signing ring `lib/crypto/signing.ts`,
 Visvine's global stages `lib/tools/review/` (the pure halves in `shared/`), the pure contract in `packages/tool-protocol`
 (`protocol`, `perimeter`, `manifest`, `bindings`, `reach`, `dependencies`, `schema`), the change bus `lib/notes/changes.ts`, runtime
 routes under `app/api/tools/runtime/*` (the report sink included) and

@@ -34,6 +34,7 @@ import type {
   SpaceListingsResponse,
 } from '@/lib/tools/api'
 import type { TypeClaims } from '@/lib/tools/installs'
+import type { DeployKeySummary } from '@/lib/tools/deployKeys'
 import type { BindableSpace } from '@visvine/tool-protocol/bindings'
 
 /** One version opened — the detail drawer's long description, reach and trail. */
@@ -313,6 +314,26 @@ export function moveListing(
 /** Where a working copy downloads as a `.vvtool`. */
 export function workingCopyExportUrl(spaceId: string, name: string): string {
   return `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/export`
+}
+
+// ── deploy keys ──────────────────────────────────────────────────────────────
+
+function deployKeysUrl(spaceId: string, name: string): string {
+  return `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/keys`
+}
+
+/** A Tool's live deploy keys, for someone who can edit it. */
+export function fetchDeployKeys(spaceId: string, name: string): Promise<{ keys: DeployKeySummary[] }> {
+  return fetchJson(deployKeysUrl(spaceId, name))
+}
+
+/** A new deploy key — the only time the key itself is ever sent. */
+export function mintDeployKey(spaceId: string, name: string, label: string): Promise<{ key: string; summary: DeployKeySummary }> {
+  return fetchJsonBody(deployKeysUrl(spaceId, name), 'POST', { label })
+}
+
+export function revokeDeployKey(spaceId: string, name: string, keyId: string): Promise<{ ok: true }> {
+  return fetchJsonBody(`${deployKeysUrl(spaceId, name)}/${encodeURIComponent(keyId)}`, 'DELETE', {})
 }
 
 /** Where an install's collection rows download, for its space's admins. */

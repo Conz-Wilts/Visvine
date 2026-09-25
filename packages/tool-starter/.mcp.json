@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "visvine": {
+      "type": "http",
+      "url": "https://visvine.com/api/mcp"
+    }
+  }
+}

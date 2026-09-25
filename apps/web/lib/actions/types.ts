@@ -49,6 +49,11 @@ export interface ActionCaller {
    * runs a Tool for them (lib/tools/clientClass.ts).
    */
   client?: 'app' | 'mobile'
+  /**
+   * Set when the call came with a Tool's deploy key (lib/tools/deployKeys.ts):
+   * the person who minted it, held to that one Tool's actions.
+   */
+  deployKey?: { id: string; label: string; spaceId: string; tool: string }
 }
 
 /** The caller as the reader a resource's gate and record of use take. */

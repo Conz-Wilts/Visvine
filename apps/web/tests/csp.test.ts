@@ -77,10 +77,11 @@ test('the viewer may frame only the providers whose embeds it builds, play media
 test('form-action widens only for the OAuth consent endpoint', () => {
   assert.deepEqual(directive(buildCsp(PROD), 'form-action'), ["'self'"])
   // The approve response is a 303 to the client's registered callback on
-  // another origin; under 'self' the browser kills that hop.
+  // another origin — an https site or a native client's loopback port; under
+  // 'self' the browser kills that hop.
   assert.deepEqual(
     directive(buildCsp({ ...PROD, allowCrossOriginFormPost: true }), 'form-action'),
-    ["'self'", 'https:'],
+    ["'self'", 'https:', 'http://127.0.0.1:*', 'http://localhost:*'],
   )
 })
 

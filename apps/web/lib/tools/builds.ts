@@ -28,62 +28,28 @@
  * which is how tools-builds.test.ts exercises the orchestration with no DB.
  */
 import type { Prisma, AppToolBuild } from '@prisma/client'
-import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { composeToolIndex } from './indexFacts'
-import {
-  compileToolData,
-  compileToolUi,
-  sourceHash,
-  type CompileDiagnostic,
-  type CompileResult,
-} from './compile'
+import { compileToolData, compileToolUi, sourceHash, type CompileResult } from './compile'
 import {
   MAX_TOOL_MODULES,
-  TOOL_CUSTOM_RAIL_ICON,
   TOOL_MODULE_DIR,
-  TOOL_SOURCE_FILES,
-  manifestOf,
-  parseToolConfig,
-  toolModuleFileOf,
   toolDataPath,
   toolFolderPath,
   toolIconPath,
   toolIndexPath,
   toolUiPath,
-  unwrapSource,
   type ToolConfig,
 } from './config'
-import { sanitizeToolIcon } from './iconSvg'
+import { buildFromSources, type BuildDiagnostic, type ToolSources } from './buildSources'
+
+export type { BuildDiagnostic, ToolSources } from './buildSources'
+export { toolDiagnosticLine } from './buildSources'
 
 /** Matches store.ts's SHARED_OWNER_KEY. Tools only ever live in shared context. */
 const SHARED_OWNER_KEY = 'shared'
 
-/** The author-facing name of the index note, for diagnostics. */
-const INDEX_FILENAME = 'index.md'
 
-/**
- * A compile diagnostic with the file it came from. `CompileDiagnostic` alone
- * carries a line and a column but not a name — the compiler is handed one
- * source at a time — and a build holds diagnostics from two files at once, so
- * the file is stamped on as they are collected (see {@link toolDiagnosticLine}).
- */
-export interface BuildDiagnostic extends CompileDiagnostic {
-  /** The author-facing filename: `index.md`, `ui.tsx` or `data.js`. */
-  file: string
-}
 
-/** The three notes a Tool is made of; null for one that doesn't exist. */
-export interface ToolSources {
-  index: string | null
-  ui: string | null
-  data: string | null
-  /** `icon.md`, when the author shipped their own rail glyph. */
-  icon: string | null
-  /** The module notes under `src/`, by their path relative to the folder (`src/chart.md`). */
-  modules?: Record<string, string>
-  /** Where they were read from. Not part of the source hash. */
-  folder?: string
-}
 
 /** What a rebuild persists. The row's own keys, minus the generated ones. */
 export interface ToolBuildInput {
@@ -264,37 +230,6 @@ export async function readToolSources(
 
 // ── the rebuild ───────────────────────────────────────────────────────────────
 
-function diagnosticsOf(result: CompileResult, file: string): BuildDiagnostic[] {
-  const messages = result.ok ? [] : result.errors
-  return messages.map((d) => ({ ...d, file: d.file ?? file }))
-}
-
-function warningsOf(result: CompileResult, file: string): BuildDiagnostic[] {
-  return result.warnings.map((d) => ({ ...d, file: d.file ?? file }))
-}
-
-function missingSource(file: string, path: string): BuildDiagnostic {
-  return {
-    file,
-    message: `${file} is missing — write it at ${path}`,
-    line: null,
-    column: null,
-    text: null,
-  }
-}
-
-function unreadableSource(file: string, path: string): BuildDiagnostic {
-  return {
-    file,
-    message:
-      `${path} is not a ${file} source note — its body must be one fenced code block ` +
-      'under `type: tool-source`. Write it through the tool service rather than by hand.',
-    line: null,
-    column: null,
-    text: null,
-  }
-}
-
 /**
  * Re-derive one Tool's build from its notes, and store it.
  *
@@ -312,140 +247,7 @@ export async function rebuildTool(
   const existing = await deps.loadBuild(spaceId, name)
   if (existing && buildIsCurrent(existing, hash)) return existing
 
-  const errors: BuildDiagnostic[] = []
-  const warnings: BuildDiagnostic[] = []
-
-  // The config. A Tool with no index note is not a Tool — but it still gets a
-  // row, because that row is where the author reads why nothing runs.
-  let config: ToolConfig | null = null
-  let configError: string | null = null
-  if (sources.index === null) {
-    configError = `${toolIndexPath(name)} does not exist — a tool is its index note beside its sources`
-  } else {
-    const parsed = parseToolConfig(parseFrontmatter(sources.index), name)
-    if (parsed.ok) config = parsed.config
-    else configError = parsed.error
-  }
-
-  // src/ — the Tool's own modules, unwrapped and handed to the ui compile.
-  const modules: Record<string, string> = {}
-  for (const [relative, note] of Object.entries(sources.modules ?? {})) {
-    const unwrapped = unwrapSource(note)
-    const file = unwrapped ? toolModuleFileOf(relative, unwrapped.lang) : null
-    if (!unwrapped || !file) {
-      errors.push({
-        file: relative.replace(/\.md$/, '.tsx'),
-        message: `${relative} is not a module — a module is src/<name>.tsx or .ts, written through the tool service`,
-        line: null,
-        column: null,
-        text: null,
-      })
-      continue
-    }
-    modules[file] = unwrapped.code
-  }
-
-  // ui.tsx — required: the runtime mounts its default export.
-  let uiBundle: string | null = null
-  let sizeBytes = 0
-  const ui = TOOL_SOURCE_FILES.ui
-  if (sources.ui === null) {
-    errors.push(missingSource(ui.authorName, toolUiPath(name, sources.folder)))
-  } else {
-    const unwrapped = unwrapSource(sources.ui)
-    if (!unwrapped || unwrapped.lang !== ui.lang) {
-      errors.push(unreadableSource(ui.authorName, toolUiPath(name, sources.folder)))
-    } else {
-      const result = await deps.compileUi(unwrapped.code, {
-        modules,
-        dependencies: config ? Object.keys(manifestOf(config).dependencies) : [],
-      })
-      errors.push(...diagnosticsOf(result, ui.authorName))
-      warnings.push(...warningsOf(result, ui.authorName))
-      if (result.ok) {
-        uiBundle = result.bundle
-        sizeBytes += result.sizeBytes
-      }
-    }
-  }
-
-  // data.js — optional, but a broken one is still broken. A Tool that reads
-  // nothing but its own props is a legitimate Tool; a Tool whose data layer
-  // does not parse is not.
-  let dataBundle: string | null = null
-  const data = TOOL_SOURCE_FILES.data
-  if (sources.data !== null) {
-    const unwrapped = unwrapSource(sources.data)
-    if (!unwrapped || unwrapped.lang !== data.lang) {
-      errors.push(unreadableSource(data.authorName, toolDataPath(name, sources.folder)))
-    } else {
-      const result = await deps.compileData(unwrapped.code)
-      errors.push(...diagnosticsOf(result, data.authorName))
-      warnings.push(...warningsOf(result, data.authorName))
-      if (result.ok) {
-        dataBundle = result.bundle
-        sizeBytes += result.sizeBytes
-      }
-    }
-  }
-
-  // icon.svg — optional, and not code. Sanitizing here rather than at render
-  // time is what makes the stored value the trusted one: nothing downstream
-  // (the rail, the marketplace card, the review queue) re-parses author markup,
-  // it renders what this step approved. See lib/tools/iconSvg.ts.
-  let iconSvg: string | null = null
-  const iconFile = TOOL_SOURCE_FILES.icon
-  if (sources.icon !== null) {
-    const unwrapped = unwrapSource(sources.icon)
-    if (!unwrapped || unwrapped.lang !== iconFile.lang) {
-      errors.push(unreadableSource(iconFile.authorName, toolIconPath(name, sources.folder)))
-    } else {
-      const result = sanitizeToolIcon(unwrapped.code)
-      if (result.ok) iconSvg = result.svg
-      else {
-        errors.push({
-          file: iconFile.authorName,
-          message: result.error,
-          line: null,
-          column: null,
-          text: null,
-        })
-      }
-    }
-  }
-
-  // Naming `custom` without shipping the glyph would leave a hole in the rail,
-  // which is chrome a Tool is not allowed to touch — so it is an error the
-  // author sees, not a silent fallback to a shape they did not pick.
-  if (config?.surfaces.rail?.icon === TOOL_CUSTOM_RAIL_ICON && iconSvg === null) {
-    errors.push({
-      file: INDEX_FILENAME,
-      message:
-        `\`surfaces.rail.icon: ${TOOL_CUSTOM_RAIL_ICON}\` needs an ${iconFile.authorName} — ` +
-        `upload one, or pick a built-in icon instead.`,
-      line: null,
-      column: null,
-      text: null,
-    })
-  }
-
-  const ok = configError === null && uiBundle !== null && errors.length === 0
-  return deps.saveBuild({
-    spaceId,
-    name,
-    sourceHash: hash,
-    ok,
-    // A failed build keeps no bundle: whatever is stored is what the runtime
-    // may serve, so half a Tool must never be servable.
-    uiBundle: ok ? uiBundle : null,
-    dataBundle: ok ? dataBundle : null,
-    errors,
-    warnings,
-    sizeBytes,
-    config,
-    configError,
-    iconSvg: ok ? iconSvg : null,
-  })
+  return deps.saveBuild({ spaceId, name, sourceHash: hash, ...(await buildFromSources(name, sources, deps)) })
 }
 
 /** The stored build for one Tool, or null when it has never compiled. */
@@ -483,7 +285,7 @@ function asDiagnostics(value: unknown): BuildDiagnostic[] {
     const d = entry as Record<string, unknown>
     if (typeof d.message !== 'string') continue
     out.push({
-      file: typeof d.file === 'string' ? d.file : INDEX_FILENAME,
+      file: typeof d.file === 'string' ? d.file : 'index.md',
       message: d.message,
       line: typeof d.line === 'number' ? d.line : null,
       column: typeof d.column === 'number' ? d.column : null,
@@ -506,16 +308,4 @@ export function toBuildSummary(row: AppToolBuild): BuildSummary {
     sourceHash: row.sourceHash,
     iconSvg: row.iconSvg,
   }
-}
-
-/**
- * One diagnostic as an editor-shaped line: `ui.tsx:12:5 message`, or
- * `ui.tsx message` when the compiler had no location to give (a size cap, a
- * missing default export). esbuild's line is 1-based and its column 0-based;
- * both are passed through as they are, so the numbers mean what an editor
- * jumping to them would mean.
- */
-export function toolDiagnosticLine(d: BuildDiagnostic): string {
-  const at = d.line === null ? '' : `:${d.line}:${d.column ?? 0}`
-  return `${d.file}${at} ${d.message}`
 }

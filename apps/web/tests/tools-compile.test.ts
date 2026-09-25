@@ -344,6 +344,16 @@ test('a tool\'s own modules compile into the one bundle, from ui.tsx and from ea
   assert.match(result.ok ? result.bundle : '', /toFixed\(2\)/)
 })
 
+test('from ui.tsx a module is ./<name> — the package view — as well as ./src/<name>', async () => {
+  const result = await compileToolUi(`import { fmt } from './format'\nexport default function App() { return <p>{fmt(1)}</p> }`, {
+    modules: { 'src/format.ts': `export const fmt = (n: number) => n.toFixed(2)` },
+  })
+  assert.equal(result.ok, true, result.ok ? '' : JSON.stringify(result.errors))
+  const missing = await compileToolUi(`import { x } from './nope'\nexport default function App() { return <p>{x}</p> }`, { modules: {} })
+  assert.equal(missing.ok, false)
+  assert.match(!missing.ok ? missing.errors[0].message : '', /no module src\/nope\.tsx/)
+})
+
 test('a relative import reaches no disk: a missing module, or one outside src/, is refused', async () => {
   for (const specifier of ['./src/nope', '../secrets', './src/../../etc/passwd', './index']) {
     const result = await compileToolUi(`import x from '${specifier}'\nexport default function App() { return <p>{String(x)}</p> }`, { modules: {} })

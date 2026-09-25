@@ -13,18 +13,38 @@ import type { AuthInfo, CallToolResult } from '@modelcontextprotocol/server'
 import { verifyAccessToken } from '@/lib/mcp/tokens'
 import { devMcpAuthInfo, isDevMcpBypassEnabled } from '@/lib/mcp/devIdentity'
 import type { ActionCaller } from '@/lib/actions/types'
+import { verifyDeployKey } from '@/lib/tools/deployKeys'
+import { DEPLOY_KEY_SCOPES, isDeployKey } from '@/lib/tools/shared/deployKeys'
 
 /**
  * The verifier `withMcpAuth` calls on every request.
  *
  * No token at all is an error everywhere except local development, where it
  * means "act as the seeded dev user" (lib/mcp/devIdentity.ts) so `pnpm mcp:dev`
- * needs no auth setup. A token that IS presented is verified either way.
+ * needs no auth setup. A token that IS presented is verified either way. A
+ * Tool's deploy key (`vvtk_…`, lib/tools/deployKeys.ts) acts as the person who
+ * minted it with the Tool actions' scopes, and names the one Tool it may
+ * touch — `runAction` holds every call to it.
  */
 export function mcpBearerVerifier() {
   return async (_req: Request, bearerToken?: string): Promise<AuthInfo | undefined> => {
     if (!bearerToken) {
       return isDevMcpBypassEnabled() ? devMcpAuthInfo() : undefined
+    }
+    if (isDeployKey(bearerToken)) {
+      const key = await verifyDeployKey(bearerToken)
+      if (!key) return undefined
+      return {
+        token: bearerToken,
+        clientId: `deploy-key:${key.id}`,
+        scopes: [...DEPLOY_KEY_SCOPES],
+        extra: {
+          userId: key.user.id,
+          name: key.user.name,
+          email: key.user.email,
+          deployKey: { id: key.id, label: key.label, spaceId: key.spaceId, tool: key.tool },
+        },
+      }
     }
     const v = await verifyAccessToken(bearerToken)
     if (!v) return undefined
@@ -42,12 +62,14 @@ function callerFromAuthInfo(info: AuthInfo | undefined): ActionCaller | null {
   const extra = info?.extra as Record<string, unknown> | undefined
   const userId = typeof extra?.userId === 'string' ? extra.userId : null
   if (!userId) return null
+  const key = extra?.deployKey as ActionCaller['deployKey'] | undefined
   return {
     userId,
     name: typeof extra?.name === 'string' ? extra.name : '',
     email: typeof extra?.email === 'string' ? extra.email : '',
     scopes: info?.scopes ?? [],
     via: 'mcp',
+    ...(key ? { deployKey: key } : {}),
   }
 }
 

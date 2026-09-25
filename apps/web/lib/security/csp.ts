@@ -77,9 +77,11 @@ export interface CspOptions {
   /**
    * `/api/oauth/authorize` only. form-action governs the whole redirect chain a
    * submission takes, and the consent form's approve response is a 303 to the
-   * MCP client's callback on another origin. Under `'self'` the browser kills
-   * that hop and the flow dies before a code is delivered. The endpoint has
-   * already checked the target against the client's registered redirect_uris.
+   * MCP client's callback on another origin — an https site, or a native
+   * client's loopback listener (`http://127.0.0.1:<port>`, RFC 8252: Claude
+   * Code, `visvine-tool login`). Under `'self'` the browser kills that hop and
+   * the flow dies before a code is delivered. The endpoint has already checked
+   * the target against the client's registered redirect_uris.
    */
   allowCrossOriginFormPost?: boolean
   /**
@@ -91,6 +93,9 @@ export interface CspOptions {
    */
   isSecureOrigin?: boolean
 }
+
+/** A native client's loopback redirect, on whatever port it listened on. */
+const LOOPBACK_CALLBACKS = 'http://127.0.0.1:* http://localhost:*'
 
 export function buildCsp({
   nonce,
@@ -117,7 +122,7 @@ export function buildCsp({
     // they mint their own policy (lib/tools/csp.ts) — they never reach here.
     "frame-ancestors 'none'",
     `frame-src ${frameSrc}`,
-    `form-action ${allowCrossOriginFormPost ? "'self' https:" : "'self'"}`,
+    `form-action ${allowCrossOriginFormPost ? `'self' https: ${LOOPBACK_CALLBACKS}` : "'self'"}`,
     ...(isSecureOrigin ? ['upgrade-insecure-requests'] : []),
   ].join('; ')
 }

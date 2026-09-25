@@ -24,7 +24,8 @@ import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import { joinFrontmatter } from '@/lib/notes/shared/markdown'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { MANIFEST_FACT_KEYS, parseManifestFacts, type ToolManifestFacts } from '@visvine/tool-protocol/manifest'
-import { MAX_TOOL_MODULES, parseToolConfig, TOOL_MODULE_RE, TOOL_NAME_RE, type ToolConfig } from '../../config'
+import { MAX_TOOL_MODULES, parseToolConfig, TOOL_MODULE_RE, TOOL_NAME_RE, wrapSource, type ToolConfig } from '../../config'
+import { composeToolIndex } from '../../indexFacts'
 import { scanSourceText } from '../../checks/textRules'
 
 export const PACKAGE_EXTENSION = '.vvtool'
@@ -208,7 +209,7 @@ export function decodePackage(bytes: Uint8Array): DecodeResult {
 }
 
 /** A package read back: what becomes a working copy, and what came with it. */
-interface ReadPackage {
+export interface PackageRead {
   name: string
   /** The index note to write — prose frontmatter and the docs. */
   indexNote: string
@@ -232,7 +233,7 @@ interface ReadPackage {
   ignored: string[]
 }
 
-export type ReadResult = { ok: true; pkg: ReadPackage } | { ok: false; error: string }
+export type ReadResult = { ok: true; pkg: PackageRead } | { ok: false; error: string }
 
 /** Folders and files a package is allowed to hold that import never reads. */
 function isIgnored(path: string): boolean {
@@ -339,7 +340,7 @@ export function readPackageFiles(files: Record<string, string>, opts: { name?: s
     if (minified) return { ok: false, error: `${file}:${minified.line ?? 1} is minified — a package carries sources, never a build.` }
   }
 
-  let signature: ReadPackage['signature'] = null
+  let signature: PackageRead['signature'] = null
   const signatureText = kept[PACKAGE_SIGNATURE]
   if (signatureText !== undefined) {
     let parsed: Record<string, unknown> | null = null
@@ -401,5 +402,18 @@ export function readPackageFiles(files: Record<string, string>, opts: { name?: s
       manifestText,
       ignored: ignored.sort(),
     },
+  }
+}
+
+/** A package's sources as the notes a working copy keeps them in — what a build reads. */
+export function packageNotes(pkg: PackageRead): { index: string; ui: string; data: string | null; icon: string | null; modules: Record<string, string> } {
+  return {
+    index: composeToolIndex(pkg.indexNote, pkg.facts),
+    ui: wrapSource(pkg.ui, 'tsx'),
+    data: pkg.data === null ? null : wrapSource(pkg.data, 'js'),
+    icon: pkg.iconSvg === null ? null : wrapSource(pkg.iconSvg, 'svg'),
+    modules: Object.fromEntries(
+      Object.entries(pkg.modules).map(([file, code]) => [file.replace(/\.tsx?$/, '.md'), wrapSource(code, file.endsWith('.tsx') ? 'tsx' : 'ts')]),
+    ),
   }
 }

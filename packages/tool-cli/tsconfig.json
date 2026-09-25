@@ -1,0 +1,14 @@
+{
+  "extends": "@visvine/config/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../../apps/web/*"],
+      "@visvine/tool-kit/mock": ["../tool-kit/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

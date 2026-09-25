@@ -563,7 +563,7 @@ export function shouldAutoApprove(input: {
  * wrote by hand. Only a column-0 `version:` matches, so a `version:` nested
  * inside `surfaces:` or `perimeter:` is left alone.
  */
-function bumpIndexVersion(markdown: string, version: number): string | null {
+export function bumpIndexVersion(markdown: string, version: number): string | null {
   const { frontmatter, body } = splitFrontmatter(markdown)
   if (frontmatter === null) return null
   const lines = frontmatter.split('\n')
@@ -614,10 +614,17 @@ export async function publishTool(
     releaseNotes?: string
     /** The static stages; replaced only by a verify script that needs a hostile Tool to reach the runtime. */
     checks?: (input: StaticCheckInput) => Promise<CheckReport>
+    /**
+     * Set when no person pressed Publish — a deploy key's call names itself
+     * here — so even an admin's version waits for a space admin to approve it.
+     */
+    awaitApproval?: string
   } = {},
 ): Promise<PublishResult> {
   if (!TOOL_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad tool name.' }
   const isSpaceAdmin = principalIsSuperAdmin(p)
+  // An admin's publish is the space's approval — when an admin made it.
+  const approves = isSpaceAdmin && !opts.awaitApproval
   const folder = await toolFolderIn(context.spaceId, name)
   if (!isSpaceAdmin && !principalCanWrite(p, toolIndexPath(name, folder))) {
     return {
@@ -745,11 +752,12 @@ export async function publishTool(
         uiBundle: buildRow.uiBundle ?? '',
         dataBundle: buildRow.dataBundle ?? '',
         sizeBytes: build.sizeBytes,
-        // An admin publishing IS the space's approval; a member's publish waits
-        // for one. Nothing marketplace-facing is set either way.
-        status: isSpaceAdmin ? 'approved' : 'pending',
-        reviewedBy: isSpaceAdmin ? p.userId : null,
-        reviewedAt: isSpaceAdmin ? new Date() : null,
+        // An admin publishing IS the space's approval; a member's publish, or
+        // one a deploy key made, waits for one. Nothing marketplace-facing is
+        // set either way.
+        status: approves ? 'approved' : 'pending',
+        reviewedBy: approves ? p.userId : null,
+        reviewedAt: approves ? new Date() : null,
         reviewNote: opts.note?.trim() ? opts.note.trim() : null,
         // Marketplace metadata: the author's release notes (clipped, never
         // refused — a long changelog is not a reason to fail a publish) and
@@ -773,12 +781,12 @@ export async function publishTool(
     name: p.name,
     action: 'tool',
     path: indexPath,
-    detail: isSpaceAdmin
+    detail: approves
       ? `published and approved v${created.version} in this space`
-      : `published v${created.version} — awaiting a space admin`,
+      : `published v${created.version}${opts.awaitApproval ? ` with ${opts.awaitApproval}` : ''} — awaiting a space admin`,
   })
 
-  if (isSpaceAdmin) {
+  if (approves) {
     // Installs of this Tool pinned to an older version are offered this one.
     // Only in the space that wrote it, because that is the whole reach of a
     // space verdict — anywhere else is waiting on the marketplace.

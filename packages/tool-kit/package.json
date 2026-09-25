@@ -1,0 +1,50 @@
+{
+  "name": "@visvine/tool-kit",
+  "version": "2.0.0",
+  "description": "The kit a Visvine Tool is written against: its types, and the offline runtime visvine-tool dev runs a Tool on",
+  "license": "MIT",
+  "type": "module",
+  "types": "./index.d.ts",
+  "main": "./index.js",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./mock": {
+      "types": "./mock.d.ts",
+      "default": "./dist/mock.js"
+    },
+    "./runtime/*": "./runtime/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.d.ts",
+    "index.js",
+    "mock.d.ts",
+    "dist",
+    "runtime",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@types/react": ">=19"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@visvine/config": "workspace:*",
+    "@visvine/tool-protocol": "workspace:*",
+    "typescript": "^5",
+    "yaml": "^2.8.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -105,23 +105,25 @@ model Space {
   channels        Conversation[]
   channelSections ChannelSection[]
 
-  appToolBuilds      AppToolBuild[]
-  appToolCheckRuns   AppToolCheckRun[]
-  contextRecords     ContextRecord[]
-  appToolConfigs     AppToolConfig[]
+  appToolBuilds        AppToolBuild[]
+  appToolCheckRuns     AppToolCheckRun[]
+  contextRecords       ContextRecord[]
+  appToolConfigs       AppToolConfig[]
   appToolConfigChanges AppToolConfigChange[]
-  contextRecordFields ContextRecordField[]
-  appToolInstalls    AppToolInstall[]
-  appToolRecords     AppToolRecord[]
-  sharedToolInstalls AppToolInstall[]      @relation("SharedToolInstalls")
-  resources          Resource[]
-  resourceShares     ResourceShare[]
-  resourceFolders    ResourceFolder[]
-  projectionJobs     NoteProjectionJob[]
-  cleanSchedule      ContextCleanSchedule?
-  cleanRuns          ContextCleanRun[]
-  noteChunks         ContextNoteChunk[]
-  profileEntries     ProfileSectionEntry[]
+  contextRecordFields  ContextRecordField[]
+  appToolInstalls      AppToolInstall[]
+  appToolRecords       AppToolRecord[]
+  sharedToolInstalls   AppToolInstall[]      @relation("SharedToolInstalls")
+  resources            Resource[]
+  resourceShares       ResourceShare[]
+  resourceFolders      ResourceFolder[]
+  projectionJobs       NoteProjectionJob[]
+  cleanSchedule        ContextCleanSchedule?
+  cleanRuns            ContextCleanRun[]
+  noteChunks           ContextNoteChunk[]
+  profileEntries       ProfileSectionEntry[]
+
+  appToolDeployKeys AppToolDeployKey[]
 
   @@index([personalOwnerId])
   @@index([parentId])
@@ -923,76 +925,76 @@ model AppToolBuild {
 /// A Tool written in a private space therefore stays in it: nothing is offered
 /// to the world without a second, explicit act.
 model AppToolVersion {
-  id                     String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  id                     String             @id @default(dbgenerated("(gen_random_uuid())::text"))
   key                    String // `<sourceSpaceId>/<name>`
   name                   String
   version                Int
   title                  String
   description            String?
-  authorUserId           String?          @map("author_user_id")
-  sourceSpaceId          String           @map("source_space_id") // no FK — must outlive the source space
+  authorUserId           String?            @map("author_user_id")
+  sourceSpaceId          String             @map("source_space_id") // no FK — must outlive the source space
   config                 Json // validated ToolConfig at publish time
   perimeter              Json // declared reach: note globs / types / connectors / agents
-  indexSource            String           @map("index_source") // index.md body (docs) at publish time
-  uiSource               String           @map("ui_source") // ui.tsx source at publish time
-  dataSource             String           @map("data_source") // data.js source at publish time
+  indexSource            String             @map("index_source") // index.md body (docs) at publish time
+  uiSource               String             @map("ui_source") // ui.tsx source at publish time
+  dataSource             String             @map("data_source") // data.js source at publish time
   /// The interface's own modules at publish time, by file (`src/chart.tsx`) —
   /// read by review and export beside ui.tsx; bundled into `uiBundle`.
-  modules                Json             @default("{}")
+  modules                Json               @default("{}")
   /// The Tool's own rail glyph, sanitized at build time (lib/tools/iconSvg.ts)
   /// and snapshotted here so an install carries it. Null = uses a built-in.
-  iconSvg                String?          @map("icon_svg")
-  uiBundle               String           @map("ui_bundle") // compiled ESM
-  dataBundle             String           @map("data_bundle") // compiled ESM
-  sizeBytes              Int              @map("size_bytes")
+  iconSvg                String?            @map("icon_svg")
+  uiBundle               String             @map("ui_bundle") // compiled ESM
+  dataBundle             String             @map("data_bundle") // compiled ESM
+  sizeBytes              Int                @map("size_bytes")
   /// The source space's own verdict: pending | approved | rejected | withdrawn.
   /// An admin publishing approves as they publish; a member publishing queues.
-  status                 String           @default("pending") // pending | approved | rejected | withdrawn
-  submittedAt            DateTime         @default(now()) @map("submitted_at")
-  reviewedBy             String?          @map("reviewed_by")
-  reviewedAt             DateTime?        @map("reviewed_at")
-  reviewNote             String?          @map("review_note")
+  status                 String             @default("pending") // pending | approved | rejected | withdrawn
+  submittedAt            DateTime           @default(now()) @map("submitted_at")
+  reviewedBy             String?            @map("reviewed_by")
+  reviewedAt             DateTime?          @map("reviewed_at")
+  reviewNote             String?            @map("review_note")
   /// Visvine's verdict on a global listing, and NULL while nobody has asked for
   /// one — the column that keeps a private space's Tool private. Same four
   /// values as `status`, decided by a super-admin in the review queue.
-  marketplaceStatus      String?          @map("marketplace_status")
-  marketplaceSubmittedAt DateTime?        @map("marketplace_submitted_at")
-  marketplaceReviewedBy  String?          @map("marketplace_reviewed_by")
-  marketplaceReviewedAt  DateTime?        @map("marketplace_reviewed_at")
-  marketplaceReviewNote  String?          @map("marketplace_review_note")
+  marketplaceStatus      String?            @map("marketplace_status")
+  marketplaceSubmittedAt DateTime?          @map("marketplace_submitted_at")
+  marketplaceReviewedBy  String?            @map("marketplace_reviewed_by")
+  marketplaceReviewedAt  DateTime?          @map("marketplace_reviewed_at")
+  marketplaceReviewNote  String?            @map("marketplace_review_note")
   /// Marketplace metadata, snapshotted at publish (migration 20260821130000):
   /// the author's own "what changed" text, the index.md `tags:` list and the
   /// `preview:` image URL. Immutable like every other snapshot column.
-  releaseNotes           String?          @map("release_notes")
-  tags                   String[]         @default([])
-  previewUrl             String?          @map("preview_url")
+  releaseNotes           String?            @map("release_notes")
+  tags                   String[]           @default([])
+  previewUrl             String?            @map("preview_url")
   /// Pulled after approval — by the source space's admins, or by a Visvine
   /// reviewer. Separate from `status` (the review's outcome): a revoked version
   /// was approved, and stops everywhere it runs, rooms included, at its next
   /// bridge call (lib/tools/verdicts.ts).
-  revokedAt              DateTime?        @map("revoked_at")
-  revokedBy              String?          @map("revoked_by")
-  revokeReason           String?          @map("revoke_reason")
+  revokedAt              DateTime?          @map("revoked_at")
+  revokedBy              String?            @map("revoked_by")
+  revokeReason           String?            @map("revoke_reason")
   /// The global listing this version belongs to once it was offered for one —
   /// kept across a transfer, so a version written by another publisher still
   /// upgrades the installs that follow the listing.
-  listingId              String?          @map("listing_id")
+  listingId              String?            @map("listing_id")
   /// A space admin asking Visvine to list this version, and the author's
   /// consent to it. Visvine's queue (`marketplaceStatus: pending`) starts only
   /// once both are set; an admin who is the author co-signs as they ask.
-  listingRequestedBy     String?          @map("listing_requested_by")
-  listingRequestedAt     DateTime?        @map("listing_requested_at")
-  cosignedBy             String?          @map("cosigned_by")
-  cosignedAt             DateTime?        @map("cosigned_at")
+  listingRequestedBy     String?            @map("listing_requested_by")
+  listingRequestedAt     DateTime?          @map("listing_requested_at")
+  cosignedBy             String?            @map("cosigned_by")
+  cosignedAt             DateTime?          @map("cosigned_at")
   /// The license the author co-signed under: an SPDX id or `proprietary`.
   license                String?
   /// SHA-256 of each package file (`src/ui.tsx`, `visvine-tool.json`, …) and of
   /// the whole (lib/tools/package) — what an export's CHECKSUMS carries.
-  digests                Json             @default("{}")
-  packageDigest          String?          @map("package_digest")
-  createdAt              DateTime         @default(now()) @map("created_at")
-  author                 User?            @relation("AppToolVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
-  listing                AppToolListing?  @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  digests                Json               @default("{}")
+  packageDigest          String?            @map("package_digest")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  author                 User?              @relation("AppToolVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  listing                AppToolListing?    @relation(fields: [listingId], references: [id], onDelete: SetNull)
   installs               AppToolInstall[]
   checkRuns              AppToolCheckRun[]
   reviewRuns             AppToolReviewRun[]
@@ -1013,32 +1015,32 @@ model AppToolVersion {
 /// admin-triggered upgrade — deliberately NOT a foreign key, so an admin can
 /// still see "an upgrade is available" even if that row were ever withdrawn.
 model AppToolInstall {
-  id                String         @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId           String         @map("space_id")
-  versionId         String         @map("version_id")
+  id                String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId           String             @map("space_id")
+  versionId         String             @map("version_id")
   key               String
   slug              String // rail slug: tool:<slug>
-  enabled           Boolean        @default(true)
-  installedBy       String         @map("installed_by")
-  requirements      Json           @default("{}") // { connectors: string[]; types: string[]; agents: string[] } — MISSING items at last check
-  typeClaims        Json           @default("{}") @map("type_claims") // { [typeName]: 'page' | 'tab' }
+  enabled           Boolean            @default(true)
+  installedBy       String             @map("installed_by")
+  requirements      Json               @default("{}") // { connectors: string[]; types: string[]; agents: string[] } — MISSING items at last check
+  typeClaims        Json               @default("{}") @map("type_claims") // { [typeName]: 'page' | 'tab' }
   /// What each of the version's binding slots is bound to here — a folder,
   /// type, connector or agent of this space (@visvine/tool-protocol bindings).
-  bindings          Json           @default("{}")
+  bindings          Json               @default("{}")
   /// The values of the version's install-time settings, as an admin set them.
-  settings          Json           @default("{}")
-  pendingVersionId  String?        @map("pending_version_id")
+  settings          Json               @default("{}")
+  pendingVersionId  String?            @map("pending_version_id")
   /// Set when this install is the HOUSE's Tool shared down into this room
   /// (lib/tools/share.ts): the room runs it, the house owns it.
-  sharedFromSpaceId String?        @map("shared_from_space_id")
+  sharedFromSpaceId String?            @map("shared_from_space_id")
   /// The listing this install follows when it came from one: upgrades are
   /// offered by listing, so they keep coming after the listing is transferred.
-  listingId         String?        @map("listing_id")
-  createdAt         DateTime       @default(now()) @map("created_at")
-  updatedAt         DateTime       @updatedAt @map("updated_at")
-  space             Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  sharedFromSpace   Space?         @relation("SharedToolInstalls", fields: [sharedFromSpaceId], references: [id], onDelete: Cascade)
-  version           AppToolVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  listingId         String?            @map("listing_id")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  space             Space              @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  sharedFromSpace   Space?             @relation("SharedToolInstalls", fields: [sharedFromSpaceId], references: [id], onDelete: Cascade)
+  version           AppToolVersion     @relation(fields: [versionId], references: [id], onDelete: Restrict)
   state             AppToolState[]
   consents          AppToolConsent[]
   telemetry         AppToolTelemetry[]
@@ -1080,6 +1082,32 @@ model AppToolRecord {
   @@index([detachedAt])
   @@index([userId])
   @@map("app_tool_records")
+}
+
+/// A deploy key: a token that pushes and checks ONE Tool from outside the app
+/// — a CI job, a terminal — acting as the person who minted it, through the
+/// Tool actions alone (lib/tools/deployKeys.ts). Only its hash is kept; the key
+/// is shown once. A publish made with one waits for a space admin.
+model AppToolDeployKey {
+  id         String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String    @map("space_id")
+  /// The Tool's name — its folder's, which it keeps wherever it is filed.
+  toolName   String    @map("tool_name")
+  label      String
+  /// `vvtk_` and the next eight characters: what a list shows.
+  prefix     String
+  keyHash    String    @unique @map("key_hash")
+  createdBy  String    @map("created_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
+  revokedBy  String?   @map("revoked_by")
+  space      Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  creator    User      @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, toolName])
+  @@index([createdBy])
+  @@map("app_tool_deploy_keys")
 }
 
 /// A member's answer to a listed Tool's first-use notice: "this Tool from
@@ -1325,29 +1353,29 @@ model AppToolPublisher {
 /// (lib/tools/telemetry.ts). Rolled into one row per install and day when the
 /// day is over, and kept 90 days.
 model AppToolTelemetry {
-  id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
-  installId   String         @map("install_id")
-  versionId   String         @map("version_id")
-  day         DateTime       @db.Date
+  id           String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  installId    String         @map("install_id")
+  versionId    String         @map("version_id")
+  day          DateTime       @db.Date
   /// The server instance that counted these, or `day` once rolled up.
-  instance    String
-  calls       Int            @default(0)
-  refusals    Int            @default(0)
+  instance     String
+  calls        Int            @default(0)
+  refusals     Int            @default(0)
   /// method → { calls, refusals: { code: n } }.
-  methods     Json           @default("{}")
-  bytesRead   BigInt         @default(0) @map("bytes_read")
-  bytesWritten BigInt        @default(0) @map("bytes_written")
+  methods      Json           @default("{}")
+  bytesRead    BigInt         @default(0) @map("bytes_read")
+  bytesWritten BigInt         @default(0) @map("bytes_written")
   /// Distinct note paths read in each flush, summed — an upper bound.
-  paths       Int            @default(0)
-  dataMs      Int            @default(0) @map("data_ms")
-  aiTokens    Int            @default(0) @map("ai_tokens")
-  cspReports  Int            @default(0) @map("csp_reports")
-  navigations Int            @default(0)
-  frameErrors Int            @default(0) @map("frame_errors")
+  paths        Int            @default(0)
+  dataMs       Int            @default(0) @map("data_ms")
+  aiTokens     Int            @default(0) @map("ai_tokens")
+  cspReports   Int            @default(0) @map("csp_reports")
+  navigations  Int            @default(0)
+  frameErrors  Int            @default(0) @map("frame_errors")
   /// Distinct viewers in each flush, summed — an upper bound.
-  viewers     Int            @default(0)
-  updatedAt   DateTime       @updatedAt @map("updated_at")
-  install     AppToolInstall @relation(fields: [installId], references: [id], onDelete: Cascade)
+  viewers      Int            @default(0)
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  install      AppToolInstall @relation(fields: [installId], references: [id], onDelete: Cascade)
 
   @@unique([installId, day, instance], name: "app_tool_telemetry_identity")
   @@index([day])
@@ -1869,6 +1897,8 @@ model User {
   profileSections         ProfileSection[]
   following               Follow[]                 @relation("FollowsGiven")
   followers               Follow[]                 @relation("FollowsReceived")
+
+  appToolDeployKeys AppToolDeployKey[]
 
   @@map("users")
 }

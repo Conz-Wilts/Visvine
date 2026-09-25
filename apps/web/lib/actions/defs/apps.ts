@@ -1,5 +1,5 @@
 /**
- * The authoring loop over MCP: nine tools that let an external coding agent
+ * The authoring loop over MCP: the tools that let an external coding agent
  * (Claude Code, Cursor) build a Visvine Tool without a checkout of this repo.
  *
  *   learn    get_tool_sdk               the guide, the .d.ts and the bridge surface
@@ -7,6 +7,7 @@
  *   verify   check_tool, read_tool      compile + lint, read back what is stored
  *   see it   preview_tool, list_tools   where it renders, what exists here
  *   ship     publish_tool, install_tool the review gate and the marketplace
+ *   files    push_tool, check_package   a folder of work, as a .vvtool package
  *
  * The loop this surface is designed for — and the reason every write answers
  * with a fresh build rather than an "ok" — is:
@@ -37,6 +38,8 @@ import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
 import { toBuildSummary, rebuildTool, toolDiagnosticLine, type BuildSummary } from '@/lib/tools/builds'
 import { manifestOf, TOOL_MODULE_RE, type ToolConfig } from '@/lib/tools/config'
+import { checkPackage, pushPackage } from '@/lib/tools/package'
+import { PACKAGE_LIMITS } from '@/lib/tools/package/shared/layout'
 import { appOrigin as liveAppOrigin } from '@/lib/tools/origin'
 import { describePerimeter } from '@/lib/tools/perimeter'
 import { runStaticChecks, type StaticCheckInput } from '@/lib/tools/checks/analyze'
@@ -579,6 +582,54 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
   }
 }
 
+/** A package's base64 at most — the package limit, encoded. */
+const PACKAGE_BASE64_MAX = Math.ceil((PACKAGE_LIMITS.maxPackageBytes * 4) / 3) + 4
+
+async function checkPackageAction(
+  ctx: ActionCaller,
+  args: { space_id: string; content_base64: string; name?: string },
+  deps: AppToolDeps = liveDeps,
+) {
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  const result = await checkPackage(Buffer.from(args.content_base64, 'base64'), { name: args.name })
+  if (!result.ok) refuse(result)
+  const checks = checksView(result.report)
+  return {
+    name: result.name,
+    build: buildReport(result.build),
+    perimeter: result.build.config ? describePerimeter(result.build.config.perimeter) : [],
+    surfaces: describeSurfaces(result.build.config),
+    checks,
+    ...(result.ignored.length ? { ignored: result.ignored } : {}),
+    ready_to_publish: result.build.ok && checks.blocking.length === 0,
+  }
+}
+
+async function pushToolAction(
+  ctx: ActionCaller,
+  args: { space_id: string; content_base64: string; name?: string },
+  deps: AppToolDeps = liveDeps,
+) {
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  const result = await pushPackage(target.principal, target.context, Buffer.from(args.content_base64, 'base64'), { name: args.name })
+  if (!result.ok) refuse(result)
+  const build = buildReport(result.build)
+  return {
+    name: result.name,
+    created: result.created,
+    changed: result.changed,
+    removed: result.removed,
+    build,
+    ...previewLinks(result.name, deps.appOrigin(), target.context.spaceId),
+    ...(result.ignored.length ? { ignored: result.ignored } : {}),
+    next: build.ok
+      ? 'Look at it at preview_url; publish it with publish_tool.'
+      : 'It does not compile yet — each error is `file:line:column message`. Fix them and push again.',
+  }
+}
+
 async function getToolSdk(_ctx: ActionCaller, _args: Record<string, never>) {
   return {
     guide: TOOL_AUTHOR_GUIDE,
@@ -698,6 +749,7 @@ async function publishTool(ctx: ActionCaller, args: PublishToolArgs, deps: AppTo
   const result = await deps.publishTool(target.principal, target.context, args.name, {
     note: args.note,
     releaseNotes: args.release_notes,
+    ...(ctx.deployKey ? { awaitApproval: `the deploy key “${ctx.deployKey.label}”` } : {}),
   })
   if (!result.ok) {
     if (result.report) {
@@ -1110,6 +1162,41 @@ export const APP_ACTIONS = [
         .describe('Also render the preview headlessly and report runtime console errors (slower — a browser launches)'),
     },
     run: (ctx, args) => checkTool(ctx, args),
+  }),
+
+  defineAction({
+    name: 'check_package',
+    scope: 'tools:author',
+    summary: 'Build and check a .vvtool package — the compile and checks a push and a publish would run — writing nothing.',
+    description:
+      'Build a `.vvtool` package (visvine-tool.json, src/ui.tsx, src/data.js, src/<module>.tsx, README.md, …) ' +
+      'exactly as a working copy is built, and run the same compatibility and security checks a publish runs — ' +
+      'without writing anything anywhere. What `visvine-tool check` asks. `ready_to_publish` is the verdict.',
+    input: {
+      space_id: spaceArg,
+      content_base64: z.string().max(PACKAGE_BASE64_MAX).describe('The package, base64'),
+      name: z.string().optional().describe('Check it under this name instead of the manifest\'s'),
+    },
+    annotations: { readOnlyHint: true },
+    run: (ctx, args) => checkPackageAction(ctx, args),
+  }),
+
+  defineAction({
+    name: 'push_tool',
+    scope: 'tools:author',
+    summary: 'A .vvtool package into a space as its working copy — made, or brought in line — answering with the build.',
+    description:
+      'Push a `.vvtool` package as the working copy of the tool it names in `space_id`: made when the space has no ' +
+      'tool of that name, updated in place when it has one you may edit. Only what changed is written, each file ' +
+      'through the same gates as write_tool; a module or icon the package no longer carries is removed. A name taken ' +
+      'elsewhere is refused — change it in visvine-tool.json. Answers with the build and where to preview it; ' +
+      'publish_tool publishes it. What `visvine-tool push` asks.',
+    input: {
+      space_id: spaceArg,
+      content_base64: z.string().max(PACKAGE_BASE64_MAX).describe('The package, base64'),
+      name: z.string().optional().describe('Push it under this name instead of the manifest\'s'),
+    },
+    run: (ctx, args) => pushToolAction(ctx, args),
   }),
 
   defineAction({

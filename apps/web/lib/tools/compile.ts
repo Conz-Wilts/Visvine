@@ -77,8 +77,10 @@ const DATA_FILENAME = 'data.js'
 
 /**
  * A Tool's own modules (`src/<name>.tsx`, config.ts#TOOL_MODULE_RE) are
- * imported from ui.tsx as `./src/<name>` and from each other as `./<name>`,
- * resolved from memory by the guard below — never from a disk.
+ * imported from each other as `./<name>` and from ui.tsx as `./<name>` too —
+ * a package keeps its entry beside them, as `src/ui.tsx` — or as
+ * `./src/<name>`, the working copy's view, where ui.tsx sits above `src/`.
+ * Resolved from memory by the guard below — never from a disk.
  */
 const MODULE_NAMESPACE = 'tool-src'
 
@@ -196,12 +198,16 @@ function importGuard(modules: Readonly<Record<string, string>>, dependencies: Re
         if (args.path.startsWith('./') || args.path.startsWith('../')) {
           // Relative to the importing file inside the Tool's own folder — never
           // a disk: ui.tsx sits at the root, a module under src/.
-          const from = args.namespace === MODULE_NAMESPACE ? posix.dirname(args.importer) : '.'
+          const fromEntry = args.namespace !== MODULE_NAMESPACE
+          const from = fromEntry ? '.' : posix.dirname(args.importer)
           const joined = posix.normalize(posix.join(from, args.path))
-          const found = [joined, `${joined}.tsx`, `${joined}.ts`].find((candidate) => TOOL_MODULE_RE.test(candidate) && candidate in modules)
+          const bases = fromEntry ? [joined, posix.normalize(posix.join('src', args.path))] : [joined]
+          const found = bases
+            .flatMap((base) => [base, `${base}.tsx`, `${base}.ts`])
+            .find((candidate) => TOOL_MODULE_RE.test(candidate) && candidate in modules)
           if (found) return { path: found, namespace: MODULE_NAMESPACE }
           return {
-            errors: [{ text: `Cannot import ${JSON.stringify(args.path)} — there is no module ${joined}.tsx. ${IMPORT_RULE}, and a tool's own modules as ./src/<name>` }],
+            errors: [{ text: `Cannot import ${JSON.stringify(args.path)} — there is no module ${bases[bases.length - 1]}.tsx. ${IMPORT_RULE}, and a tool's own modules as ./<name>` }],
           }
         }
         if (isCuratedDependency(args.path)) {

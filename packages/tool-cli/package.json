@@ -1,0 +1,34 @@
+{
+  "name": "@visvine/tool-cli",
+  "version": "0.1.0",
+  "description": "visvine-tool: build a Visvine Tool in your own editor — dev against fixtures, check, push, publish",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "visvine-tool": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@visvine/tool-kit": "workspace:^",
+    "esbuild": "^0.28.2"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@types/node": "^20",
+    "@visvine/config": "workspace:*",
+    "@visvine/tool-protocol": "workspace:*",
+    "typescript": "^5"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

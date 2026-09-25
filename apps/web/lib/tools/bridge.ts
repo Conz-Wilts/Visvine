@@ -104,6 +104,7 @@ import { declaresTool, toolFolderOfIndex } from './config'
 import { actingReachOf, actsAsViewer, consentCovers, consentSentence, isActingMethod, type ActingReach } from './shared/listing'
 import { consentFor } from './consents'
 import { recordReviewEvent } from './review/events'
+import { ISOLATE_METHODS, ISOLATE_PARAMS } from '@visvine/tool-protocol/isolate'
 import { countRows, deleteRow, getRow, insertRow, listRows, updateRow, type CollectionAnswer } from './collections'
 import { collectionDenial, LIST_LIMIT_MAX } from './shared/collections'
 import { manifestOf } from './config'
@@ -1484,8 +1485,8 @@ export async function handleBridgeCall(
  * out, a refusal as a thrown Error carrying the message. This is what makes
  * `visvine.context.read(path)` mean the same thing in `ui.tsx` and `data.js`.
  *
- * `data.call` is deliberately absent (a handler calling handlers would nest
- * isolates) and so is `subject.get` — `data.js` gets `subject` as a global.
+ * Which methods, and how positional arguments become params, is one table
+ * (@visvine/tool-protocol/isolate) the offline runtime reads too.
  */
 export function bridgeCapabilities(t: ResolvedTarget, deps: BridgeDeps = REAL_DEPS): IsolateCapabilities {
   const call = async (method: BridgeMethod, params: unknown): Promise<unknown> => {
@@ -1493,45 +1494,7 @@ export function bridgeCapabilities(t: ResolvedTarget, deps: BridgeDeps = REAL_DE
     if (response.ok) return response.value
     throw new Error(response.error.message)
   }
-  return {
-    'context.list': (args) =>
-      call('context.list', {
-        ...(args[0] === undefined ? {} : { glob: args[0] }),
-        ...(args[1] === undefined ? {} : { cursor: args[1] }),
-      }),
-    'context.read': (args) => call('context.read', { path: args[0] }),
-    'context.search': (args) =>
-      call('context.search', {
-        query: args[0],
-        ...(args[1] === undefined ? {} : { k: args[1] }),
-        ...(args[2] === undefined ? {} : { cursor: args[2] }),
-      }),
-    'context.write': (args) => call('context.write', { path: args[0], content: args[1] }),
-    'context.append': (args) => call('context.append', { path: args[0], text: args[1] }),
-    // `connectors.call(name, code)` or `connectors.call(name, { action, args } | { code })`.
-    'connectors.call': (args) =>
-      call('connectors.call', {
-        name: args[0],
-        ...(typeof args[1] === 'string' ? { code: args[1] } : (args[1] as object | undefined) ?? {}),
-      }),
-    'agents.run': (args) => call('agents.run', { name: args[0] }),
-    'state.get': (args) => call('state.get', { key: args[0], ...(args[1] === undefined ? {} : { scope: args[1] }) }),
-    'state.set': (args) => call('state.set', { key: args[0], value: args[1], ...(args[2] === undefined ? {} : { scope: args[2] }) }),
-    'context.links': (args) => call('context.links', { path: args[0] }),
-    'records.query': (args) => call('records.query', args[0] ?? {}),
-    'records.get': (args) => call('records.get', args[0] ?? {}),
-    'records.update': (args) => call('records.update', args[0] ?? {}),
-    'resources.list': (args) => call('resources.list', args[0] ?? {}),
-    'resources.get': (args) => call('resources.get', { id: args[0] }),
-    'resources.read': (args) => call('resources.read', { id: args[0], ...(args[1] === undefined ? {} : { offset: args[1] }) }),
-    'actions.run': (args) => call('actions.run', { name: args[0], ...(args[1] === undefined ? {} : { input: args[1] }) }),
-    'ai.complete': (args) => call('ai.complete', typeof args[0] === 'string' ? { prompt: args[0] } : (args[0] ?? {})),
-    'ai.decide': (args) => call('ai.decide', args[0] ?? {}),
-    'collections.insert': (args) => call('collections.insert', { collection: args[0], data: args[1] }),
-    'collections.list': (args) => call('collections.list', { collection: args[0], ...((args[1] as object | undefined) ?? {}) }),
-    'collections.get': (args) => call('collections.get', { collection: args[0], id: args[1] }),
-    'collections.update': (args) => call('collections.update', { collection: args[0], id: args[1], data: args[2] }),
-    'collections.delete': (args) => call('collections.delete', { collection: args[0], id: args[1] }),
-    'collections.count': (args) => call('collections.count', { collection: args[0], ...((args[1] as object | undefined) ?? {}) }),
-  }
+  return Object.fromEntries(
+    ISOLATE_METHODS.map((method) => [method, (args: unknown[]) => call(method, ISOLATE_PARAMS[method]!(args))]),
+  )
 }

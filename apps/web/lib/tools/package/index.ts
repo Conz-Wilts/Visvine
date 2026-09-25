@@ -21,11 +21,18 @@ import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
 import { publicSigningKeys, signBytes, signingConfigured, verifyBytes } from '@/lib/crypto/signing'
+import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { CHILDREN_OPEN, stripDuplicateTitleHeading } from '@/lib/notes/shared/indexNote'
+import type { ResolvedContext } from '@/lib/notes/resolve'
 import { manifestOf, type ToolConfig } from '../config'
 import { composeToolIndex } from '../indexFacts'
-import { getBuild } from '../builds'
-import { createTool, describeAuthoredTool, writeToolFile, type ToolFileName } from '../service'
-import { decodeToolConfig, toolKey, versionHistory, type RegistryError } from '../registry'
+import { getBuild, toBuildSummary, type BuildSummary } from '../builds'
+import { buildFromSources } from '../buildSources'
+import { runStaticChecks } from '../checks/analyze'
+import type { CheckReport } from '../checks/findings'
+import { advisoriesFor } from '../advisories'
+import { createTool, deleteToolIcon, describeAuthoredTool, writeToolFile, type ToolFileName } from '../service'
+import { bumpIndexVersion, decodeToolConfig, toolKey, versionHistory, type RegistryError } from '../registry'
 import { decodeListingState } from '../verdicts'
 import {
   checksumsText,
@@ -38,8 +45,10 @@ import {
   PACKAGE_EXTENSION,
   PACKAGE_MANIFEST,
   PACKAGE_SIGNATURE,
+  packageNotes,
   readPackageFiles,
   signedMessage,
+  type PackageRead,
   type PackageSource,
 } from './shared/layout'
 
@@ -285,6 +294,178 @@ export async function importPackage(
     buildOk,
     problems,
   }
+}
+
+// ── pushing ─────────────────────────────────────────────────────────────────
+
+/**
+ * Build a package the way the server builds a working copy — the same
+ * `buildFromSources`, over the package's files instead of notes, saved nowhere.
+ */
+async function buildInMemory(pkg: PackageRead): Promise<BuildSummary> {
+  const notes = packageNotes(pkg)
+  const built = await buildFromSources(pkg.name, {
+    index: notes.index,
+    ui: notes.ui,
+    data: notes.data,
+    icon: notes.icon,
+    folder: `tools/${pkg.name}`,
+    modules: notes.modules,
+  })
+  return { ...built, updatedAt: new Date().toISOString(), sourceHash: '' }
+}
+
+export type CheckPackageResult =
+  | { ok: true; name: string; build: BuildSummary; report: CheckReport; ignored: string[] }
+  | RegistryError
+
+/**
+ * A package built and checked — the compile and the static stages a push and
+ * a publish would run — with nothing written anywhere.
+ */
+export async function checkPackage(bytes: Uint8Array, opts: { name?: string } = {}): Promise<CheckPackageResult> {
+  const decoded = decodePackage(bytes)
+  if (!decoded.ok) return { ok: false, status: 400, error: decoded.error }
+  const read = readPackageFiles(decoded.files, opts)
+  if (!read.ok) return { ok: false, status: 400, error: read.error }
+  const pkg = read.pkg
+  const build = await buildInMemory(pkg)
+  const config = build.config ?? pkg.config
+  const report = await runStaticChecks({
+    index: packageNotes(pkg).index,
+    ui: pkg.ui,
+    data: pkg.data,
+    modules: pkg.modules,
+    config,
+    build: { ok: build.ok, errors: build.errors, warnings: build.warnings, configError: build.configError },
+    advisories: await advisoriesFor(Object.keys(manifestOf(config).dependencies)),
+  })
+  return { ok: true, name: pkg.name, build, report, ignored: pkg.ignored }
+}
+
+export type PushResult =
+  | {
+      ok: true
+      name: string
+      /** It did not exist here, and the push made it. */
+      created: boolean
+      /** The files the push wrote, and the ones it removed. */
+      changed: string[]
+      removed: string[]
+      build: BuildSummary | null
+      ignored: string[]
+    }
+  | RegistryError
+
+/** A value with every object's keys in one order — the facts row is JSONB, which keeps its own. */
+function sortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortedKeys)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortedKeys((value as Record<string, unknown>)[key])]))
+  }
+  return value
+}
+
+/**
+ * Two index notes that say the same thing: the same frontmatter in any key
+ * order, the same docs — beside what the store keeps on every index itself
+ * (its `node:`, the child list it maintains, no heading repeating the title).
+ */
+function sameIndex(a: string | null, b: string): boolean {
+  if (a === null) return false
+  const norm = (text: string) => {
+    const { node: _node, ...frontmatter } = parseFrontmatter(text) as Record<string, unknown>
+    const body = splitFrontmatter(text).body
+    const at = body.indexOf(CHILDREN_OPEN)
+    const docs = stripDuplicateTitleHeading(at === -1 ? body : body.slice(0, at), String(frontmatter.title ?? ''))
+    return `${JSON.stringify(sortedKeys(frontmatter))}\n${docs.trim()}`
+  }
+  return norm(a) === norm(b)
+}
+
+/** The same source, as a note keeps it — its trailing whitespace is the note's, not the code's. */
+function sameSource(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? null) === null ? (b ?? null) === null : (b ?? null) !== null && a!.trimEnd() === b!.trimEnd()
+}
+
+/**
+ * A package into a space as a working copy — made when the space has no Tool
+ * of its name, brought in line with it when it has one the pusher may edit.
+ * Only what changed is written, each file through the author's own service
+ * and gates; a module or an icon the package no longer carries is removed.
+ * Unlike an import, a push never takes another name: the name is the
+ * author's, and one taken elsewhere is refused for them to change.
+ */
+export async function pushPackage(
+  p: ContextPrincipal,
+  context: Context,
+  bytes: Uint8Array,
+  opts: { name?: string } = {},
+): Promise<PushResult> {
+  const decoded = decodePackage(bytes)
+  if (!decoded.ok) return { ok: false, status: 400, error: decoded.error }
+  const read = readPackageFiles(decoded.files, opts)
+  if (!read.ok) return { ok: false, status: 400, error: read.error }
+  const pkg = read.pkg
+  const name = pkg.name
+
+  let current = await describeAuthoredTool(p, context, name)
+  let created = false
+  if (!current) {
+    const made = await createTool(p, context, { name, title: pkg.config.title, description: pkg.config.description })
+    if (!made.ok) {
+      if (made.status === 409) return { ok: false, status: 409, error: `The name "${name}" is taken — choose another in ${PACKAGE_MANIFEST}.` }
+      return made
+    }
+    created = true
+    current = await describeAuthoredTool(p, context, name)
+    if (!current) return { ok: false, status: 500, error: `${name} was made but cannot be read back.` }
+  }
+
+  // The registry's number is the space's, written back on each publish; a
+  // package's own says nothing about this space's versions.
+  const existingVersion = Number(parseFrontmatter(current.sources['index.md'] ?? '').version) || 0
+  const index = composeToolIndex(bumpIndexVersion(pkg.indexNote, existingVersion) ?? pkg.indexNote, pkg.facts)
+
+  const writes: Array<[ToolFileName, string]> = []
+  if (!sameIndex(current.sources['index.md'], index)) writes.push(['index.md', index])
+  for (const [file, code] of Object.entries(pkg.modules)) {
+    if (!sameSource(current.modules[file], code)) writes.push([file as ToolFileName, code])
+  }
+  const removedModules = Object.keys(current.modules).filter((file) => !(file in pkg.modules))
+  const data = pkg.data?.trim() ? pkg.data : null
+  const hadData = current.sources['data.js']?.trim() ? current.sources['data.js'] : null
+  if (!sameSource(hadData, data)) writes.push(['data.js', data ?? ''])
+  if (pkg.iconSvg !== null && !sameSource(current.sources['icon.svg'], pkg.iconSvg)) writes.push(['icon.svg', pkg.iconSvg])
+  // ui.tsx last: modules first, so the entry's imports resolve when it rebuilds.
+  if (!sameSource(current.sources['ui.tsx'], pkg.ui)) writes.push(['ui.tsx', pkg.ui])
+
+  const changed: string[] = []
+  const removed: string[] = []
+  let build: BuildSummary | null = null
+  for (const file of removedModules) {
+    const written = await writeToolFile(p, context, name, file as ToolFileName, '')
+    if (!written.ok) return { ok: false, status: written.status, error: `${file}: ${written.error}` }
+    removed.push(file)
+    build = written.build
+  }
+  for (const [file, content] of writes) {
+    const written = await writeToolFile(p, context, name, file, content)
+    if (!written.ok) return { ok: false, status: written.status, error: `${file}: ${written.error}` }
+    changed.push(file)
+    build = written.build
+  }
+  if (pkg.iconSvg === null && current.sources['icon.svg'] !== null) {
+    const cleared = await deleteToolIcon(p, context as ResolvedContext, name)
+    if (!cleared.ok) return { ok: false, status: cleared.status, error: `icon.svg: ${cleared.error}` }
+    removed.push('icon.svg')
+    build = cleared.build
+  }
+  if (!build) {
+    const row = await getBuild(context.spaceId, name)
+    build = row ? toBuildSummary(row) : null
+  }
+  return { ok: true, name, created, changed, removed, build, ignored: pkg.ignored }
 }
 
 /** The keys that verify Visvine's signatures, for anyone checking a package offline. */

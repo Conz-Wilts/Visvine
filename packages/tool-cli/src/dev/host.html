@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>visvine-tool dev</title>
+<style>
+:root{--fg:#1b1b1b;--muted:#6b6b6b;--line:#e8e8e6;--surface:#fff;--subtle:#f6f6f4;--accent:#78d870;--danger:#c93b3b;--warn:#a86a00;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--fg:#ededeb;--muted:#9a9a97;--line:#2c2c2a;--surface:#161615;--subtle:#1f1f1d;--danger:#f07070;--warn:#e0a640;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--surface);color:var(--fg);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2}
+header h1{margin:0;font-size:14px;font-weight:600}
+.tabs{display:flex;gap:4px}
+.tabs button,.seg button{border:0;background:none;color:var(--muted);font:inherit;padding:4px 10px;border-radius:6px;cursor:pointer}
+.tabs button[aria-selected=true],.seg button[aria-selected=true]{background:var(--subtle);color:var(--fg)}
+.spacer{flex:1}
+.status{font-size:12px;color:var(--muted)}
+.status.bad{color:var(--danger)}
+.seg{display:flex;gap:2px;font-size:12px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 300px;min-height:calc(100vh - 49px)}
+#stage{padding:20px 24px;min-width:0}
+#nav{display:flex;gap:4px;margin-bottom:12px}
+#nav:empty{display:none}
+#frame-slot iframe{display:block;width:100%;border:0;min-height:320px}
+aside{border-left:1px solid var(--line);padding:16px;font-size:12px;overflow:auto;max-height:calc(100vh - 49px);position:sticky;top:49px}
+aside h2{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--muted)}
+#calls{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+#calls li{word-break:break-word}
+#calls .no{color:var(--danger)}
+#calls .msg{display:block;color:var(--muted);font-family:system-ui,sans-serif}
+.errors{margin:0;padding:16px 20px;border-left:2px solid var(--danger);background:var(--subtle);font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}
+.degraded{margin:0 0 12px;padding:8px 12px;border-left:2px solid var(--warn);font-size:12px;color:var(--warn)}
+.degraded:empty{display:none}
+#toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:3}
+#toasts div{background:var(--fg);color:var(--surface);padding:8px 12px;border-radius:8px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.15)}
+@media (max-width:760px){main{grid-template-columns:1fr}aside{border-left:0;border-top:1px solid var(--line);position:static;max-height:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Tool</h1>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-view="tool" aria-selected="true">Tool</button>
+    <button role="tab" data-view="gallery" aria-selected="false">Components</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="seg" role="radiogroup" aria-label="Viewer">
+    <button data-admin="true" aria-selected="true">Admin</button>
+    <button data-admin="false" aria-selected="false">Member</button>
+  </div>
+  <span id="status" class="status">building…</span>
+</header>
+<main>
+  <section id="stage">
+    <div id="nav"></div>
+    <p id="degraded" class="degraded"></p>
+    <div id="frame-slot"></div>
+  </section>
+  <aside>
+    <h2>Calls</h2>
+    <ul id="calls"></ul>
+  </aside>
+</main>
+<div id="toasts"></div>
+<script type="module" src="/__host.js"></script>
+</body>
+</html>

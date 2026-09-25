@@ -14,10 +14,14 @@
  * caller's membership and grants live, through the same `resolveContext` /
  * `principalOf` the web routes use. Removing someone bites on their next call
  * regardless of what their token says.
+ *
+ * A Tool's deploy key is narrower still: it may ask only that Tool's own
+ * actions, in its own space (lib/tools/shared/deployKeys.ts).
  */
 import { actionByName, schemaOf } from '@/lib/actions/registry'
 import { listMySpaces } from '@/lib/actions/resolve'
 import { ActionError, type ActionCaller, type ActionDef } from '@/lib/actions/types'
+import { deployKeyDenial } from '@/lib/tools/shared/deployKeys'
 
 export interface ActionOutcome {
   action: ActionDef
@@ -60,6 +64,10 @@ export async function runAction(
 
   if (!caller.scopes.includes(def.scope)) {
     throw new ActionError(403, `The '${name}' action requires the '${def.scope}' scope`)
+  }
+  if (caller.deployKey) {
+    const denial = deployKeyDenial(caller.deployKey, def.name, input)
+    if (denial) throw new ActionError(403, denial)
   }
 
   const parsed = schemaOf(def).safeParse(input ?? {})

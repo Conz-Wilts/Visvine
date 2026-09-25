@@ -1,0 +1,22 @@
+{
+  "$schema": "https://visvine.com/schemas/tool-manifest-2.json",
+  "manifestVersion": 2,
+  "name": "my-tool",
+  "title": "Board",
+  "description": "The notes in one folder, newest first, with a quick add.",
+  "release": "0.1.0",
+  "license": "MIT",
+  "sdk": "^2",
+  "platforms": ["web", "desktop"],
+  "entry": { "ui": "src/ui.tsx", "data": "src/data.js" },
+  "surfaces": {
+    "rail": { "label": "Board", "icon": "grid" },
+    "types": []
+  },
+  "bindings": {
+    "notes": { "kind": "folder", "label": "Notes", "suggest": "board" }
+  },
+  "permissions": {
+    "context": { "read": ["$notes/**"], "write": ["$notes/**"] }
+  }
+}

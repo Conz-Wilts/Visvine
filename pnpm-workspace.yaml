@@ -1,6 +1,9 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  # A Tool author's repo, not a package of this one: it installs the kit and
+  # the CLI from npm, as a fresh clone of it would.
+  - '!packages/tool-starter'
 
 # pnpm 10+ reads these here, NOT from the `pnpm` field in package.json — that
 # field is silently ignored, which is how the advisory overrides below stopped

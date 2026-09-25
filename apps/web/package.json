@@ -75,6 +75,8 @@
     "verify:tools:global": "tsx scripts/verify-tools-global.ts",
     "verify:tools:monitoring": "tsx scripts/verify-tools-monitoring.ts",
     "verify:tools:collections": "tsx scripts/verify-tools-collections.ts",
+    "tools:packages": "tsx scripts/build-tool-packages.ts",
+    "verify:tools:starter": "tsx scripts/verify-tools-starter.ts",
     "verify:records": "tsx scripts/verify-records.ts",
     "vm:redteam": "tsx scripts/vm-redteam.ts"
   },

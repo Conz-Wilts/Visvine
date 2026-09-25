@@ -37,6 +37,7 @@ import * as store from '@/lib/notes/store'
 import { SHARED_OWNER_KEY, type Actor, type Context } from '@/lib/notes/store'
 import { sourceRequirements, type ToolRequirements } from './requirements'
 import { removeInstallForTool, spaceFacts } from './installs'
+import { dropDeployKeys } from './deployKeys'
 import { latestPublications, toolKey, type ToolPublicationSummary } from './registry'
 import { toolFolderIn } from './location'
 import {
@@ -676,6 +677,8 @@ export async function deleteTool(
   // not keep a console entry pointing at it. Other spaces run the published
   // snapshot and keep theirs.
   await removeInstallForTool(context.spaceId, name)
+  // Its deploy keys name a Tool that is gone.
+  await dropDeployKeys(context.spaceId, name)
 
   // The node goes first, while its metadata still points at the index note —
   // that pointer is how removeEntityNode finds it. Links cascade with it.

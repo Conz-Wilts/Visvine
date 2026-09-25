@@ -681,7 +681,7 @@ like anything else:
 \`\`\`
 tools/<name>/index.md        frontmatter = the manifest, body = docs for humans
 tools/<name>/ui.tsx          the React component (compiled on write)
-tools/<name>/src/<name>.tsx  optional: more modules, imported as './src/<name>'
+tools/<name>/src/<name>.tsx  optional: more modules, imported as './<name>'
 tools/<name>/data.js         optional: server-side handlers (sandboxed isolate)
 tools/<name>/icon.svg        optional: your own sidebar glyph
 \`\`\`
@@ -867,7 +867,7 @@ Rules:
 - \`export default\` a component. It takes no props — everything arrives through
   \`useVisvine()\`.
 - Import only \`react\`, \`react-dom\`, \`react-dom/client\`, \`@visvine/tool-kit\`, your
-  own modules (\`./src/<name>\`), and the dependencies your manifest declares.
+  own modules (\`./<name>\`), and the dependencies your manifest declares.
   There is no package install step and no npm at runtime; any other import fails
   to compile.
 - Do not render your own page chrome. The app supplies the navbar, the sidebar,
@@ -881,8 +881,8 @@ Rules:
 ## Modules and dependencies
 
 Split a large interface into modules under \`src/\` — \`src/board.tsx\`,
-\`src/format.ts\` — and import them from \`ui.tsx\` as \`./src/board\`, and from each
-other as \`./format\`. They compile into the one bundle, are reviewed with the
+\`src/format.ts\` — and import them as \`./board\` and \`./format\`, from \`ui.tsx\`
+and from each other (\`./src/board\` works from \`ui.tsx\` too). They compile into the one bundle, are reviewed with the
 rest, and number at most ${MAX_TOOL_MODULES}. \`data.js\` stays one plain script.
 
 Third-party code comes from one curated list, each package pinned to the one

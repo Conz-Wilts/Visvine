@@ -206,6 +206,7 @@ async function teardownTool(context: Context, name: string, folder: string): Pro
     await entityNodes.removeEntityNode(context.spaceId, 'tool', config.toolIndexPath(name, folder))
     await store.deleteFolder(context, folder)
     await installs.removeInstallForTool(context.spaceId, name)
+    await (await import('./deployKeys')).dropDeployKeys(context.spaceId, name)
   } catch (err) {
     // Rule 1: never throw into the delete path. The next teardown re-derives.
     logger.error('tools.teardown.failed', { err, spaceId: context.spaceId, name })

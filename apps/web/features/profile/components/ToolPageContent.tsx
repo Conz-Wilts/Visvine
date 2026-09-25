@@ -57,6 +57,7 @@ import ListingDialog from '@/features/tools/components/ListingDialog';
 import TransferDialog from '@/features/tools/components/TransferDialog';
 import CheckReport, { checkWord } from '@/features/tools/components/CheckReport';
 import PublishDialog from '@/features/tools/components/PublishDialog';
+import DeployKeys from '@/features/tools/components/DeployKeys';
 import type { CheckReport as CheckReportData } from '@/lib/tools/checks/findings';
 
 // ── Chrome ───────────────────────────────────────────────────────────────────
@@ -684,6 +685,9 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
           />
         </Section>
       )}
+
+      {/* ══ DEPLOY KEYS — pushing this Tool from CI or a terminal ══ */}
+      {view.canEdit && spaceId && <DeployKeys spaceId={spaceId} name={tool.name} />}
 
       {listing && spaceId && (
         <ListingDialog

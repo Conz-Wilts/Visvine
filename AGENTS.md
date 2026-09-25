@@ -1426,6 +1426,16 @@ iframe on a cookie-less origin. `docs/tools.md` is the guide. The invariants:
   `ui.*` is answered by the host page, never the server. `state` is per viewer
   (`scope: 'user'`, kit 2's default) or shared (`'install'`, what a call naming
   none gets).
+- **A Tool can be built in its author's own repo.** `packages/tool-starter`
+  (the template), `visvine-tool` (`packages/tool-cli`) and `@visvine/tool-kit`
+  are built from this repo's code (`tools:packages`) — the CLI's check is
+  `buildFromSources` + `runStaticChecks`, its `dev` is the production frame on
+  an offline runtime (`packages/tool-kit/src/mock.ts`) asking the same gates
+  from `@visvine/tool-protocol`. Its AGENTS.md, COMPONENTS.md and the kit's
+  types are generated (`lib/tools/starterDocs.ts`) and checked current. CI
+  pushes with a **deploy key** (`vvtk_…`, `lib/tools/deployKeys.ts`): the
+  minter's identity held by `runAction` to one Tool's actions in one space; its
+  publish waits for an admin.
 - **A Tool's own data is a collection, not a note.** Declared in the
   manifest with a JSON Schema subset (no `pattern`) and `read`/`write` rules
   (all · own · admin), kept per install in `app_tool_records`

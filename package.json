@@ -19,7 +19,7 @@
     "tokens:build": "pnpm --filter @visvine/tokens build",
     "tokens:check": "pnpm --filter @visvine/tokens check",
     "tokens:test": "pnpm --filter @visvine/tokens test",
-    "typecheck": "pnpm --filter @visvine/web --filter @visvine/ui typecheck",
+    "typecheck": "pnpm --filter @visvine/web --filter @visvine/ui --filter @visvine/tool-protocol --filter @visvine/tool-kit --filter @visvine/tool-cli typecheck",
     "test": "pnpm --filter @visvine/web test",
     "eval:retrieval": "pnpm --filter @visvine/web eval:retrieval",
     "eval:judge": "pnpm --filter @visvine/web eval:judge",

@@ -1,0 +1,552 @@
+<!-- Generated from the Visvine server’s own SDK docs — edits here are overwritten. -->
+
+# The kit's components
+
+What a Tool draws with: the app's own components and the kit's data-bound
+ones, on the same tokens — so a Tool looks like the rest of Visvine by
+default, and follows the viewer's theme. `npx visvine-tool dev` draws every
+one of them under **Components**. A Tool may choose its own look when the
+person it is for asks for one; these are the default, not a wall.
+
+## Design rules
+
+- The app draws the chrome. The rail row, the band (your sections as tabs, your band buttons, the ⋯ menu) and every state are the app's. Draw only content: never a page title, a top tab strip or a header that repeats what the band says.
+- Flat surfaces: sections separated by hairlines, no cards around everything, no shadows except on things that float.
+- Labels name, they do not explain: one to three words. No sentence under a field, no caption explaining a screen — if a screen needs text to explain itself, change the screen.
+- Say only the exceptional. Hide an empty section rather than captioning it; show a warning only when something is actually wrong.
+- State is data, joined by ·: `12 open · 3 overdue · updated 5m ago`, one muted line.
+- Colour comes from the theme: the kit, or `var(--vv-*)` in your own styles — never a hex, never a painted page background (the frame is transparent over the app's own).
+- No 100vh and no position: fixed — they measure the frame, not the window. The host sizes the frame to your content.
+- A Tool may choose its own look when a person asks for one. These rules are the default, not a wall.
+
+## Components
+
+### Stack
+
+Vertical or horizontal spacing between children. Every screen: the page is a column of sections; a row of buttons is a Stack in a row.
+
+Props: direction?: 'column' | 'row' · gap?: 'sm' | 'md' | 'lg' · wrap?
+
+```tsx
+<Stack gap="md">
+  <p>First</p>
+  <p>Second</p>
+</Stack>
+```
+
+### PageHeader
+
+A section's title with its actions at the trailing end. Only inside the frame for a sub-view. The band already names the Tool and its section — never repeat the page title.
+
+Props: title · description? · actions?
+
+```tsx
+<PageHeader title="This week" actions={<Button size="sm">Export</Button>} />
+```
+
+### Card
+
+A section with an optional title and actions, set off by a hairline. To group part of a page. The app is flat — a section, not a box.
+
+Props: title? · actions? · flush?
+
+```tsx
+<Card title="Totals">
+  <p>12 open</p>
+</Card>
+```
+
+### Tabs
+
+A tab strip inside the frame. For a switch INSIDE one section. A Tool's own sections belong in `surfaces.nav`, which the app draws on its band — never a tab strip at the top of the frame.
+
+Props: tabs: { id, label }[] · active · onChange(id)
+
+```tsx
+<Tabs tabs={[{ id: 'open', label: 'Open' }, { id: 'done', label: 'Done' }]} active="open" onChange={() => {}} />
+```
+
+### EmptyState
+
+What a list shows when there is nothing in it. Only where empty is exceptional. The app hides an empty section rather than captioning it.
+
+Props: title · description? · action?
+
+```tsx
+<EmptyState title="No deals" />
+```
+
+### Spinner
+
+A small loading indicator. While a query is loading and there is nothing to show yet.
+
+Props: size?: 'sm' | 'lg' · label?
+
+```tsx
+<Spinner />
+```
+
+### Banner
+
+A notice with a tone — the app's rule-and-words notice, with a title and an action. Only when something is actually wrong or needs a decision. A normal state is silent.
+
+Props: tone?: 'info' | 'success' | 'warn' | 'danger' · title? · action?
+
+```tsx
+<Banner tone="warn" title="Two deals have no owner" />
+```
+
+### Chip
+
+The app's chip: a small label for a status or a type, muted or in a tone. A row's status or type, the way the Directory labels a record.
+
+Props: tone?: 'neutral' | 'accent' | 'danger' | 'warn' | 'info'
+
+```tsx
+<Chip tone="accent">Won</Chip>
+```
+
+### Button
+
+The app's button. Labels are one to three words that name the act: Save, Run now, New deal. One primary per view.
+
+Props: variant?: 'primary' | 'secondary' | 'ghost' | 'danger' · size?: 'sm' | 'md' · loading? · loadingText? · any button attribute
+
+```tsx
+<Button variant="primary" onClick={() => {}}>Save</Button>
+```
+
+### Field
+
+A label over an input, with an error line. Every form row. The label names; it does not explain — no sentence under an input.
+
+Props: label · htmlFor? · error?
+
+```tsx
+<Field label="Owner" htmlFor="owner">
+  <Input id="owner" />
+</Field>
+```
+
+### Input
+
+A text input styled like the app’s. Any single-line value. Never a password — a Tool never asks for one, and the checks block it.
+
+Props: any input attribute
+
+```tsx
+<Input placeholder="Search" onChange={() => {}} />
+```
+
+### Textarea
+
+A multi-line input. A note or a comment.
+
+Props: any textarea attribute
+
+```tsx
+<Textarea rows={3} aria-label="Note" />
+```
+
+### Select
+
+A native select. Choosing one of a few known values.
+
+Props: options?: { value, label }[] · any select attribute
+
+```tsx
+<Select options={[{ value: 'lead', label: 'Lead' }, { value: 'won', label: 'Won' }]} onChange={() => {}} />
+```
+
+### DatePicker
+
+A date input with an ISO value. Any date field.
+
+Props: value: string | null · onChange(value) · min? · max?
+
+```tsx
+<DatePicker value={null} onChange={() => {}} />
+```
+
+### Table
+
+Rows under column headers. A short list of records with a few facts each.
+
+Props: columns: { key, header, render(row) }[] · rows · rowKey(row) · onRowClick?
+
+```tsx
+<Table
+  columns={[{ key: 'title', header: 'Title', render: (row: { title: string }) => row.title }]}
+  rows={[{ title: 'Acme' }]}
+  rowKey={(row) => row.title}
+/>
+```
+
+### DataTable
+
+A table that sorts and virtualises. The Directory's table shape: many records, sortable columns.
+
+Props: Table's props · sortable columns · defaultSort? · maxHeight? · virtualize?
+
+```tsx
+<DataTable
+  columns={[{ key: 'title', header: 'Title', render: (row: { title: string }) => row.title, sortable: true }]}
+  rows={[{ title: 'Acme' }]}
+  rowKey={(row) => row.title}
+/>
+```
+
+### KanbanBoard
+
+Columns of cards a person drags between. Records that move through stages. A move is yours to write — usually a `context.write` of the note's status.
+
+Props: onMove({ cardId, fromColumnId, toColumnId, index }) · children: KanbanColumn
+
+```tsx
+<KanbanBoard onMove={() => {}}>
+  <KanbanColumn id="lead" title="Lead">
+    <KanbanCard id="acme">Acme</KanbanCard>
+  </KanbanColumn>
+</KanbanBoard>
+```
+
+### KanbanColumn
+
+One column of a KanbanBoard. Inside a KanbanBoard.
+
+Props: id · title · count? · actions? · empty?
+
+```tsx
+<KanbanBoard onMove={() => {}}>
+  <KanbanColumn id="won" title="Won" count={0} />
+</KanbanBoard>
+```
+
+### KanbanCard
+
+One draggable card. Inside a KanbanColumn.
+
+Props: id · onClick?
+
+```tsx
+<KanbanBoard onMove={() => {}}>
+  <KanbanColumn id="lead" title="Lead">
+    <KanbanCard id="acme" onClick={() => {}}>Acme</KanbanCard>
+  </KanbanColumn>
+</KanbanBoard>
+```
+
+### Markdown
+
+A note body rendered the way the app renders notes, sanitised. Showing what a note says.
+
+Props: source · onLinkClick?
+
+```tsx
+<Markdown source="**Acme** signed." />
+```
+
+### LineChart
+
+A line chart in the app's chart palette. A value over time.
+
+Props: data · x · series: (key | { key, label?, color? })[] · height? · formatValue?
+
+```tsx
+<LineChart data={[{ week: 'W1', deals: 3 }, { week: 'W2', deals: 5 }]} x="week" series={['deals']} />
+```
+
+### BarChart
+
+A bar chart in the app's chart palette. Comparing a few counts.
+
+Props: LineChart's props · stacked?
+
+```tsx
+<BarChart data={[{ stage: 'Lead', n: 4 }, { stage: 'Won', n: 2 }]} x="stage" series={['n']} />
+```
+
+### AreaChart
+
+An area chart in the app's chart palette. A total over time made of parts.
+
+Props: LineChart's props · stacked?
+
+```tsx
+<AreaChart data={[{ m: 'Jan', a: 1, b: 2 }]} x="m" series={['a', 'b']} stacked />
+```
+
+### PieChart
+
+A pie or donut in the app's chart palette. Shares of a whole, few slices.
+
+Props: data · nameKey · valueKey · donut?
+
+```tsx
+<PieChart data={[{ name: 'Won', n: 2 }, { name: 'Lost', n: 1 }]} nameKey="name" valueKey="n" donut />
+```
+
+### Recharts
+
+The chart library itself, for a chart the four above do not draw. Rarely. Colour it with `useChartColors()` so it matches.
+
+Props: the Recharts namespace
+
+```tsx
+<Recharts.ResponsiveContainer width="100%" height={120}>
+  <Recharts.LineChart data={[{ x: 1, y: 2 }]}>
+    <Recharts.Line dataKey="y" />
+  </Recharts.LineChart>
+</Recharts.ResponsiveContainer>
+```
+
+### Alert
+
+A notice: a 2px rule in its colour down the left, then the words. Only when something is actually wrong or needs saying once — a normal state is silent. In the app: admin, agents, connectors and 8 more.
+
+Props: variant?: 'error' | 'info' | 'warning' | 'success' · onDismiss?: () => void · inline?: boolean
+
+```tsx
+<Alert variant="warning">Two deals have no owner.</Alert>
+```
+
+### Avatar
+
+A person's (or a space's) picture, falling back to a silhouette or initials. Beside a name in a list or a record — the Directory and messages draw people this way. In the app: admin, agents, connectors and 6 more.
+
+Props: name: string · imageUrl?: string | null · size?: 'xs' | 'sm' | 'md' | 'chip' | 'lg' | 'xl' · accentColor?: string · fallback?: 'silhouette' | 'initials' | 'space' · sizeClassName?: string · pixelSize?: number
+
+```tsx
+<Avatar name="Ada Lovelace" size="sm" />
+```
+
+### Checkbox
+
+The platform's own checkbox, painted in the accent (`accent-color`). A choice that joins a set. A setting that switches something on is a Toggle. In the app: events, resources, shared.
+
+Props: checked: boolean · onChange: (checked: boolean) => void · label?: ReactNode · indeterminate?: boolean · disabled?: boolean · invalid?: boolean · size?: 'sm' | 'md' · 'aria-label'?: string
+
+```tsx
+<Checkbox checked={false} onChange={() => {}} label="Include archived" />
+```
+
+### ConfirmDialog
+
+A modal that asks before a destructive or irreversible act, and can make the person type a name first. Before anything destructive or irreversible. Pass confirmText for the most dangerous. In the app: admin, connectors, directory and 9 more.
+
+Props: open: boolean · title: string · body?: React.ReactNode · confirmLabel?: string · destructive?: boolean · confirmText?: string · error?: React.ReactNode · closeOnBackdrop?: boolean · closeOnEscape?: boolean · onConfirm: () => void | Promise<void> · onClose: () => void
+
+```tsx
+<ConfirmDialog open={false} title="Delete this deal?" confirmLabel="Delete" destructive onConfirm={() => {}} onClose={() => {}} />
+```
+
+### IconButton
+
+A square, quiet button that is only an icon: the label is its name for a screen reader and its title under the pointer. A toolbar action that is only an icon; its label is its name for a screen reader. In the app: resources, tools.
+
+Props: label: string · icon: ReactNode · size?: 'sm' | 'md' · active?: boolean
+
+```tsx
+<IconButton label="More" onClick={() => {}} icon={<span aria-hidden>⋯</span>} />
+```
+
+### LoadingText
+
+A centred, muted "Loading…" line for a view that has nothing to show yet. Instead of a spinner when a whole view is waiting. In the app: admin, pages.
+
+Props: text?: string
+
+```tsx
+<LoadingText />
+```
+
+### Menu
+
+A small popover of actions under a trigger — the overflow (…) of a toolbar. The overflow (⋯) of a row or a toolbar — actions that do not earn a button of their own. In the app: messages, resources, tools.
+
+Props: trigger: (props: { open: boolean; toggle: () => void; … · items: MenuItem[] · align?: 'start' | 'end' · placement?: 'below' | 'above' · label: string
+
+```tsx
+<Menu label="Deal actions" items={[{ id: 'archive', label: 'Archive', onSelect: () => {} }]} trigger={({ toggle }) => <button type="button" onClick={toggle}>⋯</button>} />
+```
+
+### Modal
+
+Generic modal shell: fixed backdrop, centered panel, Escape + backdrop-click dismissal. A focused task over the page — an edit form, a picker. It floats, so it casts the shadow. In the app: admin, agents, discover and 8 more.
+
+Props: onClose: () => void · open?: boolean · title?: React.ReactNode · footer?: React.ReactNode · size?: 'sm' | 'md' | 'lg' · maxWidth?: string · closeOnBackdrop?: boolean · closeOnEscape?: boolean · overlayClassName?: string · overlayStyle?: React.CSSProperties · panelClassName?: string · panelStyle?: React.CSSProperties · ariaLabel?: string
+
+```tsx
+<Modal open={false} title="Edit deal" onClose={() => {}}>
+  <p>Form here</p>
+</Modal>
+```
+
+### Row
+
+Children side by side, a fixed step apart, centred on one line. A row of buttons, a label beside its control, a chip beside a name.
+
+Props: gap?: 0 | 0.5 | 1 | 1.5 | 2 | 2.5 | 3 | 4 | 5 | 6 |… · align?: 'start' | 'center' | 'end' | 'stretch' | 'bas… · justify?: 'start' | 'center' | 'end' | 'between' · wrap?: boolean · as?: ElementType
+
+```tsx
+<Row gap={2}>
+  <span>Left</span>
+  <span>Right</span>
+</Row>
+```
+
+### SearchInput
+
+A text input with a search glyph and a clear button. Above a list that filters as you type — the Directory and the pickers. In the app: admin, connectors, directory and 4 more.
+
+Props: value: string · onChange: (value: string) => void · placeholder?: string · autoFocus?: boolean · icon?: React.ReactNode · size?: 'sm' | 'md' | 'lg'
+
+```tsx
+<SearchInput value="" onChange={() => {}} placeholder="Search deals" />
+```
+
+### SettingsSection
+
+A flat settings section: a small bold heading, a muted line, and a hairline between siblings. A Tool's own settings view: small heading, one muted line, hairlines between sections, no card. In the app: admin, pages, settings.
+
+Props: title: React.ReactNode · description?: React.ReactNode · action?: React.ReactNode · flush?: boolean · large?: boolean
+
+```tsx
+<SettingsSection title="Pipeline">
+  <p>Stages</p>
+</SettingsSection>
+```
+
+### Skeleton
+
+A single shimmering placeholder block. The shape of rows while they load, so the page does not jump when they arrive. In the app: connectors, directory, discover and 5 more.
+
+Props: className — its size and shape
+
+```tsx
+<Skeleton className="h-4 w-1/3 rounded" />
+```
+
+### Toggle
+
+Standard toggle switch — one size everywhere (40×24px track, 16px thumb). A setting that switches something on — beside the title it controls, never a second row saying the same. In the app: admin, agents, connectors and 5 more.
+
+Props: checked: boolean · onChange: (checked: boolean) => void · label?: React.ReactNode · disabled?: boolean · 'aria-label'?: string
+
+```tsx
+<Toggle checked={false} onChange={() => {}} aria-label="Show closed" />
+```
+
+## Hooks
+
+### useVisvine
+
+The bridge: notes, records, files, connectors, agents, actions, the space's AI, state, the host's dialogs. Every Tool that touches the space. Everything it reaches is inside the permissions its manifest declares, bound to this space.
+
+Props: context.list/read/search/write/append/links · records.query/get/update · resources.list/get/read/blob · connectors.call · agents.run · actions.run · ai.complete/decide · collections.insert/list/get/update/delete/count (useCollection, useCollectionCount) · data.call · state.get/set (per viewer by default) · ui.toast/confirm/download/openRecord/openResource · install.settings/bindings · viewer · navigate(path)
+
+```tsx
+const visvine = useVisvine()
+```
+
+### useQuery
+
+Run a bridge read when its inputs change; hand back data, error, loading and reload. Every read that feeds the screen.
+
+Props: useQuery(fn, deps) → { data, error, loading, reload }
+
+```tsx
+const visvine = useVisvine()
+const notes = useQuery(() => visvine.context.list('deals/**'), [])
+```
+
+### useLiveQuery
+
+useQuery that reloads when a note inside the perimeter changes. A board or list others edit while it is open.
+
+Props: useLiveQuery(fn, deps, { paths?, pollMs? })
+
+```tsx
+const visvine = useVisvine()
+const notes = useLiveQuery(() => visvine.context.list('deals/**'), [], { paths: ['deals/**'] })
+```
+
+### usePagedList
+
+A list read a page at a time. A folder that may hold more than one page of notes.
+
+Props: usePagedList(glob, { pageSize? }) → { items, loading, hasMore, loadMore, reload }
+
+```tsx
+const list = usePagedList('deals/**')
+```
+
+### useCollection
+
+A collection's rows, reloaded when anyone's write to it reaches the viewer. The Tool's own data — votes, sign-ups, check-ins — declared under `collections`.
+
+Props: useCollection(name, { where?, mine?, order?, limit? }) → { data: rows, loading, error, reload }
+
+```tsx
+const { data: rows } = useCollection('votes', { mine: true })
+```
+
+### useCollectionCount
+
+How many rows a collection holds, or its tally per value of one field. A poll's results, a sign-up count.
+
+Props: useCollectionCount(name, { where?, mine?, groupBy? }) → { data: { total, groups? } }
+
+```tsx
+const { data: tally } = useCollectionCount('votes', { groupBy: 'choice' })
+```
+
+### useSubject
+
+What the Tool is being shown about, on a type page tab; null on its own page. A Tool that claims a tab on a type's page (`surfaces.types`).
+
+Props: useSubject() → { kind, path, type, title } | null
+
+```tsx
+const subject = useSubject()
+```
+
+### useSection
+
+The active one of the Tool's own sections, and a way to switch it. A Tool that declares `surfaces.nav`. The app draws the sections; the Tool draws the active one's content.
+
+Props: useSection() → [section, go(id)]
+
+```tsx
+const [section] = useSection()
+```
+
+### useBandAction
+
+Run a handler when a band button the Tool declared is pressed. A Tool that declares `surfaces.actions` — the app draws the button beside the ⋯ menu.
+
+Props: useBandAction(id, handler)
+
+```tsx
+useBandAction('new-deal', () => {})
+```
+
+### useTheme
+
+The app's theme tokens as CSS custom properties. Rarely — the kit and `var(--vv-*)` already follow the theme.
+
+Props: useTheme() → Record<string, string>
+
+```tsx
+const theme = useTheme()
+```
+
+### useChartColors
+
+The chart palette, for a chart drawn with Recharts directly. With Recharts.
+
+Props: useChartColors() → string[]
+
+```tsx
+const colors = useChartColors()
+```
