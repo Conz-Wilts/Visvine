@@ -4,13 +4,13 @@
 // never a perimeter.
 // Run: pnpm --filter @visvine/web exec node --import tsx --test tests/models.test.ts
 import test from 'node:test'
+import { modelNameOfNotePath } from '../lib/notes/shared/configKinds'
 import assert from 'node:assert/strict'
 import {
   isLegacyModelConnector,
   isModelNote,
   legacyModelNoteToModel,
   modelInfo,
-  modelNameOfPath,
   modelPath,
   newModelNote,
   parseModel,
@@ -42,10 +42,9 @@ description: our account
 
 test('the paths: models/<name>.md, and the folder index names no model', () => {
   assert.equal(modelPath('anthropic'), 'models/anthropic.md')
-  assert.equal(modelNameOfPath('models/anthropic.md'), 'anthropic')
-  assert.equal(modelNameOfPath('models/index.md'), null)
-  assert.equal(modelNameOfPath('connectors/anthropic.md'), null)
-  assert.equal(modelNameOfPath('models/a/b.md'), null)
+  assert.equal(modelNameOfNotePath('models/anthropic.md'), 'anthropic')
+  assert.equal(modelNameOfNotePath('models/index.md'), null)
+  assert.equal(modelNameOfNotePath('teams/a/b.md'), 'b')
 })
 
 test('a model refuses unknown providers and any perimeter field', () => {

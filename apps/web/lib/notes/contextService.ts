@@ -41,8 +41,9 @@ import { namespaceFeatureRefusal, reservedWriteDenial, togglableNamespaceFeature
 import { getFeatureConfig } from '@/lib/auth'
 import { federatedWriteDenial } from '@/lib/spaces/subspaces'
 import { globalSelfRecordDenial } from '@/lib/global/gate'
-import { configKindOfContent, configKindWriteDenial, connectorHomeDenial, connectorNameOfPath, type ConfigKind } from './shared/configKinds'
+import { configHomeDenial, configKindOfContent, configKindWriteDenial, configNameOfPath, type ConfigKind } from './shared/configKinds'
 import { connectorNotePathIn } from '@/lib/connectors/locate'
+import { modelNotePathIn } from '@/lib/models/locate'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { ContextPrincipal, WriteResult } from './shared/contextTypes'
 import type { NoteMeta, NoteRevisionOrigin, RawNote, References } from './shared/types'
@@ -457,8 +458,8 @@ export async function writeDenialFull(
  * what stops a member from stripping the type off a connector in a folder
  * they may otherwise edit, or from minting one there.
  *
- * For a connector two more things hold: it sits where a connector may
- * (`connectorHomeDenial` — `connectors/<name>.md` or a folder of the space's
+ * For a connector or a model two more things hold: it sits where one may
+ * (`configHomeDenial` — `<home>/<name>.md` or a folder of the space's
  * own), and its name is unique in the context, because the name is what a
  * brief's `connectors:` line, a secret suffix and the node id are cut from.
  * `movingFrom` is the note's own path during a move, so it is not its own
@@ -482,20 +483,24 @@ export async function configKindDenial(
   const kind: ConfigKind | null = nextKind ?? currentKind
   if (!kind) return null
   if (!admin) return configKindWriteDenial(kind)
-  if (kind !== 'connector' || (nextKind === null && !opts.movingFrom)) return null
-  const home = connectorHomeDenial(path)
+  if (nextKind === null && !opts.movingFrom) return null
+  // A legacy model (connectors/<name>.md, kind: model) is read where it is
+  // until db:models:migrate moves it; nothing new is shaped that way.
+  if (kind === 'model' && !opts.movingFrom && path.startsWith('connectors/')) return null
+  const home = configHomeDenial(kind, path)
   if (home) return home
-  const name = connectorNameOfPath(path)
+  const name = configNameOfPath(kind, path)
   if (!name) return null
-  // The name is the identity — a brief's `connectors:` line, the stored
-  // connections and the secrets all key on it — so a connector changes folder,
+  const noun = kind === 'connector' ? 'connector' : 'model'
+  // The name is the identity — a brief's `connectors:` / `model:` line, the
+  // stored connections and the secrets all key on it — so it changes folder,
   // never file name.
-  if (opts.movingFrom && connectorNameOfPath(opts.movingFrom) !== name) {
-    return 'A connector’s name is its file name, and everything that uses it keys on that name — move it between folders, or connect the service again under the new name.'
+  if (opts.movingFrom && configNameOfPath(kind, opts.movingFrom) !== name) {
+    return `A ${noun}’s name is its file name, and everything that uses it keys on that name — move it between folders, or write it again under the new name.`
   }
-  const held = await connectorNotePathIn(context, name)
+  const held = kind === 'connector' ? await connectorNotePathIn(context, name) : await modelNotePathIn(context, name)
   if (held && held !== path && held !== opts.movingFrom) {
-    return `A connector named "${name}" already exists at ${held} — a connector's name is its file name, and one space holds one of each.`
+    return `A ${noun} named "${name}" already exists at ${held} — a ${noun}'s name is its file name, and one space holds one of each.`
   }
   return null
 }

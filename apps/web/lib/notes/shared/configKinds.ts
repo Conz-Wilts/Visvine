@@ -19,8 +19,8 @@
 // `models/` stays as well — the folder itself is the admin's — so nothing an
 // earlier rule allowed or refused changes.
 //
-// Where a connector may sit (`connectorHomeDenial`) is the one shape rule:
-// `connectors/<name>.md`, or any folder of the space's own. Never inside
+// Where one may sit (`configHomeDenial`) is the one shape rule:
+// `connectors/<name>.md` / `models/<name>.md`, or any folder of the space's own. Never inside
 // another built-in folder, whose paths mean something else (a note under
 // `people/x/` is a sub-note about x), never a folder's index (a connector is a
 // note; its file name is its name), and never under a federated address
@@ -44,6 +44,28 @@ export const CONNECTOR_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 
 /** The built-in folder a new connector is written to. */
 export const CONNECTORS_HOME = 'connectors'
+
+/** The built-in folder a new model is written to. */
+export const MODELS_HOME = 'models'
+
+/** A model's name: its file name, which a node id and a secret suffix are cut from. */
+const MODEL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
+
+/** Where each kind lands, and the name its file may carry. */
+const HOMES: Record<ConfigKind, { dir: string; noun: string; name: RegExp; nameRule: string }> = {
+  connector: {
+    dir: CONNECTORS_HOME,
+    noun: 'connector',
+    name: CONNECTOR_NAME_RE,
+    nameRule: 'letters, digits, "-" and "_", up to 64 characters',
+  },
+  model: {
+    dir: MODELS_HOME,
+    noun: 'model',
+    name: MODEL_NAME_RE,
+    nameRule: 'lowercase letters, digits and "-", up to 64 characters',
+  },
+}
 
 /**
  * The config kind a note's frontmatter declares, or null. The pre-`models/`
@@ -74,41 +96,67 @@ export function configKindWriteDenial(kind: ConfigKind): string {
 }
 
 /**
- * The connector name a note path carries — its file name without `.md` —
+ * The name a note path carries for `kind` — its file name without `.md` —
  * or null when the path cannot name one: a folder index, a non-markdown
  * path, or a name the runtime would refuse.
  */
-export function connectorNameOfPath(path: string): string | null {
+export function configNameOfPath(kind: ConfigKind, path: string): string | null {
   const raw = path.replace(/^\/+/, '')
   if (!/\.md$/i.test(raw) || isIndexPath(raw)) return null
   const name = raw.slice(raw.lastIndexOf('/') + 1, -3)
-  return CONNECTOR_NAME_RE.test(name) ? name : null
+  return HOMES[kind].name.test(name) ? name : null
+}
+
+/** {@link configNameOfPath} for a connector. */
+export function connectorNameOfPath(path: string): string | null {
+  return configNameOfPath('connector', path)
+}
+
+/** {@link configNameOfPath} for a model. */
+export function modelNameOfNotePath(path: string): string | null {
+  return configNameOfPath('model', path)
 }
 
 /**
- * Why a note declaring `type: connector` may not sit at `path`, or null when
- * it may. Shape only — who may write it is the gate's question.
+ * Why a note declaring `kind` may not sit at `path`, or null when it may:
+ * `<home>/<name>.md` or any folder of the space's own. Shape only — who may
+ * write it is the gate's question. A model's legacy home, `connectors/`, is
+ * read by lib/agents/spaceModels.ts and never written to.
  */
-export function connectorHomeDenial(path: string): string | null {
+export function configHomeDenial(kind: ConfigKind, path: string): string | null {
+  const { dir, noun, nameRule } = HOMES[kind]
   const raw = path.replace(/^\/+/, '')
-  if (isIndexPath(raw)) return 'A connector is a note, not a folder — its file name is its name.'
-  const name = connectorNameOfPath(raw)
-  if (!name) {
-    return 'A connector’s file name is its name: letters, digits, "-" and "_", up to 64 characters.'
-  }
+  if (isIndexPath(raw)) return `A ${noun} is a note, not a folder — its file name is its name.`
+  const name = configNameOfPath(kind, raw)
+  if (!name) return `A ${noun}’s file name is its name: ${nameRule}.`
   const ns = namespaceOf(raw)
   if (!ns) return null
-  if (ns.writes === 'nobody') return 'A connector is written in the space that owns it.'
-  if (ns.dir !== CONNECTORS_HOME) {
-    return `"${ns.dir}" is one of the space's built-in folders — a connector sits in "${CONNECTORS_HOME}/" or in a folder of your own.`
+  if (ns.writes === 'nobody') return `A ${noun} is written in the space that owns it.`
+  if (ns.dir !== dir) {
+    return `"${ns.dir}" is one of the space's built-in folders — a ${noun} sits in "${dir}/" or in a folder of your own.`
   }
-  if (raw !== `${CONNECTORS_HOME}/${name}.md`) {
-    return `Inside "${CONNECTORS_HOME}/" a connector is ${CONNECTORS_HOME}/<name>.md — to group connectors, use a folder of your own.`
+  if (raw !== `${dir}/${name}.md`) {
+    return `Inside "${dir}/" a ${noun} is ${dir}/<name>.md — to group them, use a folder of your own.`
   }
   return null
+}
+
+/** {@link configHomeDenial} for a connector. */
+export function connectorHomeDenial(path: string): string | null {
+  return configHomeDenial('connector', path)
 }
 
 /** True when a note at `path` with this content IS a connector the runtime will read. */
 export function isConnectorNoteAt(path: string, content: string): boolean {
   return configKindOfContent(content) === 'connector' && connectorHomeDenial(path) === null
+}
+
+/**
+ * True when a note at `path` with this content IS a model the runtime will
+ * read: `type: model`, sitting where a model may. The legacy shape
+ * (`connectors/<name>.md`, `kind: model`) is read separately.
+ */
+export function isModelNoteAt(path: string, content: string): boolean {
+  if (!/^\s*type\s*:\s*model\s*$/im.test(content)) return false
+  return configKindOfContent(content) === 'model' && configHomeDenial('model', path) === null
 }

@@ -8,6 +8,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  configHomeDenial,
+  isModelNoteAt,
+  modelNameOfNotePath,
   configKindOfContent,
   configKindWriteDenial,
   connectorHomeDenial,
@@ -77,4 +80,18 @@ test('the house shares a connector down by what it declares, not by its folder',
   assert.equal(isSharedDown('teams/growth/plan.md', { share: 'all' }, 'design'), false)
   assert.equal(isSharedDown('people/craig/hubspot.md', fm, 'design'), false)
   assert.equal(isSharedDown('teams/growth/hubspot.md', { type: 'connector' }, 'design'), false)
+})
+
+test('a model sits in models/ or a folder of the space’s own, named by its file', () => {
+  assert.equal(configHomeDenial('model', 'models/fast.md'), null)
+  assert.equal(configHomeDenial('model', 'teams/growth/fast.md'), null)
+  assert.match(configHomeDenial('model', 'people/ana/fast.md') ?? '', /built-in folders/)
+  assert.match(configHomeDenial('model', 'models/team/fast.md') ?? '', /models\/<name>\.md/)
+  assert.match(configHomeDenial('model', 'teams/index.md') ?? '', /not a folder/)
+  assert.match(configHomeDenial('model', 'teams/Fast_One.md') ?? '', /file name is its name/)
+  assert.equal(modelNameOfNotePath('teams/growth/fast.md'), 'fast')
+  const note = '---\ntype: model\nprovider: openai\nmodel: gpt-5\n---\n'
+  assert.equal(isModelNoteAt('teams/growth/fast.md', note), true)
+  assert.equal(isModelNoteAt('subspaces/x/fast.md', note), false)
+  assert.equal(isModelNoteAt('teams/growth/fast.md', '---\ntype: note\n---\nabout a model'), false)
 })

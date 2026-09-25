@@ -22,7 +22,8 @@ import type { Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled } from '@/lib/connectors/config'
-import { isLegacyModelConnector, isModelNote, modelInfo, modelPath, parseModel, type ModelInfo } from './config'
+import { isLegacyModelConnector, isModelNote, modelInfo, parseModel, type ModelInfo } from './config'
+import { modelHomePath, modelNotePathIn } from './locate'
 
 const HISTORY_LIMIT = 60
 
@@ -45,12 +46,12 @@ export interface ModelDetail {
 }
 
 /**
- * One model, by name, through the caller's visibility lens: `models/<name>.md`
- * first, then the legacy connectors path. Null when neither exists (or
+ * One model, by name, through the caller's visibility lens: wherever the
+ * space filed it (lib/models/locate.ts), then the legacy connectors path. Null when neither exists (or
  * neither is visible — indistinguishable, as readVisible has it).
  */
 export async function describeModel(p: ContextPrincipal, context: Context, name: string): Promise<ModelDetail | null> {
-  let path = modelPath(name)
+  let path = (await modelNotePathIn(context, name)) ?? modelHomePath(name)
   let content = await readVisible(p, context, path)
   let legacy = false
   if (content === null) {

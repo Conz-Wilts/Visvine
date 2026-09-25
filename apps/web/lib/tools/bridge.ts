@@ -61,6 +61,7 @@ import { acquireDataCall } from './limits'
 import { targetKey, type ResolvedTarget } from './target'
 import { logger } from '@/lib/logger'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
+import { configKindOfContent } from '@/lib/notes/shared/configKinds'
 
 /**
  * Everything the handlers touch that isn't pure. Injectable as one object so a
@@ -473,6 +474,19 @@ async function checkWrite(
           `${path} already exists — a tool may create an agent brief but never change one. ` +
             'Editing the instructions an admin approved is a person’s act.',
         ),
+      }
+    }
+  } else {
+    // A connector or a model is what a note DECLARES, wherever it is filed
+    // (lib/notes/shared/configKinds.ts), so the seal follows the declaration
+    // too: a Tool neither mints one in a folder of the space's own nor edits
+    // one already there.
+    const current = await deps.readVisible(t.principal, t.context, path)
+    const kind = configKindOfContent(body) ?? configKindOfContent(current)
+    if (kind) {
+      return {
+        ok: false,
+        response: err('forbidden', `a ${kind} is configuration that runs — no tool may write one, whatever its perimeter declares.`),
       }
     }
   }

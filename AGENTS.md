@@ -358,9 +358,9 @@ has.
 - **A kind's namespace is named after the kind, and one table says so** —
   `lib/notes/shared/namespaces.ts` (pure, leaf): `people/`, `spaces/`,
   `events/`, `resources/`, `sections/`, `channels/`, `connectors/`, `agents/`,
-  `tools/`, `models/`, plus `settings/` and `subspaces/`, which belong to no
-  kind and which NOTHING may write — a space's configuration is the `spaces`
-  row alone (`db:settings:drop` removed the notes an earlier mirror left). Each row carries the folder, its kind, the feature that owns it, how it
+  `tools/`, `models/`, plus `subspaces/` and `parent/`, which belong to no
+  kind and which NOTHING may write. A space's configuration is the `spaces`
+  row alone. Each row carries the folder, its kind, the feature that owns it, how it
   appears, who writes it and the line its index says it holds — so `ENTITY_DIRS`,
   the tree's graft, the reserved descriptions and the tool gate are four reads
   of one row. A space RECORD lives in `spaces/`; the sub-space graft is
@@ -437,8 +437,8 @@ has.
   through it, and `connectors/<name>.md` wins its name over a copy elsewhere.
   The path gate on `connectors/` and `models/` stays as well. The tree stamps
   `declares` on such a note so the sidebar offers the moves the server would
-  allow. Models keep their home for now: the gate follows their declaration,
-  the readers do not yet.
+  allow. A model is the same: `type: model` in `models/<name>.md` or a folder
+  of the space's own, found by `lib/models/locate.ts`.
 - **Links are derived, not authored.** A markdown link to an entity's note,
   inside another shared-context note, creates the `mentioned` edge. There is no
   create-link operation anywhere.

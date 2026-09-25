@@ -56,7 +56,7 @@
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { PROVIDERS, type ModelPricing, type ProviderEntry } from '@/lib/agents/registry'
 
-export const MODELS_DIR = 'models/'
+const MODELS_DIR = 'models/'
 
 /** A model's name: the note's basename, which is also what a node id and a secret suffix are cut from. */
 export const MODEL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -64,12 +64,6 @@ export const MODEL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 /** `models/<name>.md` */
 export function modelPath(name: string): string {
   return `${MODELS_DIR}${name}.md`
-}
-
-/** `models/<name>.md` → `<name>`, or null for any other path. */
-export function modelNameOfPath(path: string): string | null {
-  const m = /^models\/([^/]+)\.md$/.exec(path)
-  return m && m[1] !== 'index' ? m[1] : null
 }
 
 /** Does this frontmatter declare a model note (`type: model`)? */

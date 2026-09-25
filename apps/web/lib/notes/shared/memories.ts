@@ -10,6 +10,7 @@
 
 import type { NoteMeta } from './types'
 import { isIndexPath } from './indexNote'
+import { declaredConfigKind } from './configKinds'
 
 /** The most claims one note keeps — past this the note is the better unit. */
 export const MAX_CLAIMS_PER_NOTE = 12
@@ -23,13 +24,15 @@ const CONFIG_FOLDERS = ['connectors', 'models', 'agents', 'tools', 'actions', 'r
 /**
  * Whether a note is worth extracting from. Index notes are folder listings; the
  * configuration folders hold machine-read notes (a connector's perimeter, a
- * Tool's code); a note may also opt out with `memories: false`.
+ * Tool's code), as is a connector or model filed anywhere else; a note may
+ * also opt out with `memories: false`.
  */
 export function yieldsMemories(meta: Pick<NoteMeta, 'path' | 'frontmatter'>, body: string): boolean {
   if (isIndexPath(meta.path)) return false
   if (meta.frontmatter.memories === false) return false
   const top = meta.path.split('/')[0]
   if (meta.path.includes('/') && CONFIG_FOLDERS.includes(top)) return false
+  if (declaredConfigKind(meta.frontmatter)) return false
   return body.trim().length >= MIN_BODY_CHARS
 }
 

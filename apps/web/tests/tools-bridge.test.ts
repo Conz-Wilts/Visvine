@@ -441,7 +441,7 @@ test("a write the viewer's grants refuse is forbidden, and says so in the gate's
       target({ perimeter: perimeter({ write: ['deals/**'] }) }),
       'context.write',
       { path: 'deals/acme.md', content: '# Acme' },
-      deps({ writeGated: async () => ({ status: 'denied', reason: 'You have view access in "deals".' }) }),
+      deps({ readVisible: async () => null, writeGated: async () => ({ status: 'denied', reason: 'You have view access in "deals".' }) }),
     ),
   )
   assert.equal(error.code, 'forbidden')
@@ -455,6 +455,7 @@ test('a write that lands returns its stored path and is audited as the tool', as
     'context.write',
     { path: 'deals/acme.md', content: '# Acme' },
     deps({
+      readVisible: async () => null,
       writeGated: async (_p, _c, path) => ({ status: 'applied', path }),
       logAudit: async (_spaceId, entry) => {
         audits.push(entry)
@@ -473,6 +474,7 @@ test('append goes through the log gate, not a whole-note write', async () => {
     'context.append',
     { path: 'deals/acme.md', text: 'Called them back' },
     deps({
+      readVisible: async () => null,
       appendLogGated: async (_p, _c, path) => {
         calls++
         return { status: 'applied', path }
@@ -481,6 +483,27 @@ test('append goes through the log gate, not a whole-note write', async () => {
   )
   assert.deepEqual(valueOf(response), { path: 'deals/acme.md' })
   assert.equal(calls, 1)
+})
+
+test('a connector or model filed in a folder of the space’s own is sealed like its built-in folder', async () => {
+  const mint = errorOf(
+    await handleBridgeCall(
+      target({ perimeter: perimeter({ write: ['teams/**'] }) }),
+      'context.write',
+      { path: 'teams/growth/hubspot.md', content: '---\ntype: connector\nhosts: [api.hubapi.com]\n---\n' },
+      deps({ readVisible: async () => null, writeGated: async () => assert.fail('the store must not be reached') }),
+    ),
+  )
+  assert.equal(mint.code, 'forbidden')
+  const edit = errorOf(
+    await handleBridgeCall(
+      target({ perimeter: perimeter({ write: ['teams/**'] }) }),
+      'context.write',
+      { path: 'teams/growth/fast.md', content: 'plain now' },
+      deps({ readVisible: async () => '---\ntype: model\nprovider: openai\n---\n', writeGated: async () => assert.fail('the store must not be reached') }),
+    ),
+  )
+  assert.equal(edit.code, 'forbidden')
 })
 
 // ── degraded installs ─────────────────────────────────────────────────────────

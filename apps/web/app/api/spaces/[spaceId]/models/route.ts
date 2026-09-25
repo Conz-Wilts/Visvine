@@ -37,7 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
       keyFrom: m.keyFrom ?? null,
       sharedFrom: m.sharedFrom ?? null,
       problem: m.problem,
-      legacy: !m.path.startsWith('models/'),
+      legacy: m.path.startsWith('connectors/'),
     })),
   })
 }

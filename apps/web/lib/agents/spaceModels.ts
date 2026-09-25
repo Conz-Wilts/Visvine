@@ -26,7 +26,8 @@
 import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled } from '@/lib/connectors/config'
-import { isLegacyModelConnector, isModelNote, MODELS_DIR, modelNameOfPath, parseModel } from '@/lib/models/config'
+import { isLegacyModelConnector, parseModel } from '@/lib/models/config'
+import { modelNoteRows } from '@/lib/models/locate'
 import { reachesRoom, subspaceConfigOf } from '@/lib/spaces/subspaces'
 import type { ModelPricing, ProviderEntry } from './registry'
 
@@ -35,9 +36,9 @@ const LEGACY_DIR = 'connectors/'
 
 /** One model note, parsed, with whether its key is actually stored. */
 export interface SpaceModel {
-  /** The note name — `models/<name>.md`. */
+  /** The note's file name — `models/<name>.md` unless the space filed it elsewhere. */
   name: string
-  /** Where the note is: `models/<name>.md`, or the legacy `connectors/<name>.md`. */
+  /** Where the note is: `models/<name>.md`, a folder of the space's own, or the legacy `connectors/<name>.md`. */
   path: string
   /** The catalogue row it came from (`recipe:`) — display only. */
   recipe: string | null
@@ -142,17 +143,10 @@ export function modelKeyOwner(input: {
 /** One space's own model notes, with whether each key is in ITS store. */
 async function modelsOf(spaceId: string, houseName: string | null): Promise<SpaceModel[]> {
   void houseName
-  const [rows, secrets] = await Promise.all([
+  const [own, legacyRows, secrets] = await Promise.all([
+    modelNoteRows({ spaceId, ownerKey: SHARED_OWNER_KEY }),
     prisma.contextNote.findMany({
-      where: {
-        spaceId,
-        ownerKey: SHARED_OWNER_KEY,
-        deletedAt: null,
-        OR: [
-          { path: { startsWith: MODELS_DIR, endsWith: '.md' } },
-          { path: { startsWith: LEGACY_DIR, endsWith: '.md' } },
-        ],
-      },
+      where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: LEGACY_DIR, endsWith: '.md' } },
       select: { path: true, content: true },
       orderBy: { path: 'asc' },
     }),
@@ -162,18 +156,15 @@ async function modelsOf(spaceId: string, houseName: string | null): Promise<Spac
 
   const out: SpaceModel[] = []
   const seen = new Set<string>()
-  // models/ sorts after connectors/, so the legacy shape is met first; a
-  // models/ note of the same name replaces it rather than sitting beside it.
-  const parsedRows = rows.map((row) => ({ row, fm: parseFrontmatter(row.content) }))
+  // A model note — in models/ or a folder of the space's own — is met first;
+  // the legacy connectors/ shape only fills a name no model note holds.
   const ordered = [
-    ...parsedRows.filter(({ row }) => row.path.startsWith(MODELS_DIR)),
-    ...parsedRows.filter(({ row }) => row.path.startsWith(LEGACY_DIR)),
+    ...own.map((row) => ({ row, name: row.name, fm: parseFrontmatter(row.content), legacy: false })),
+    ...legacyRows.map((row) => ({ row, name: row.path.slice(LEGACY_DIR.length, -'.md'.length), fm: parseFrontmatter(row.content), legacy: true })),
   ]
-  for (const { row, fm } of ordered) {
-    const legacy = row.path.startsWith(LEGACY_DIR)
-    if (legacy ? !isLegacyModelConnector(fm) : !isModelNote(fm)) continue
-    const name = legacy ? row.path.slice(LEGACY_DIR.length, -'.md'.length) : modelNameOfPath(row.path)
-    if (!name || seen.has(name)) continue
+  for (const { row, name, fm, legacy } of ordered) {
+    if (legacy && !isLegacyModelConnector(fm)) continue
+    if (!name || name.includes('/') || seen.has(name)) continue
     const parsed = parseModel(fm)
     // An unparseable model is a broken note, not a model. It shows up as
     // invalid on its own page, which is where it is fixed.
