@@ -424,6 +424,8 @@ test('the published shapes are what the routes and the space DTO carry', () => {
     releaseNotes: 'Adds the archive column',
     tags: ['crm', 'kanban'],
     previewUrl: null,
+    revokedAt: null,
+    revokeReason: null,
   }
   const detail: ToolVersionDetail = { ...summary, config: decodeToolConfig({}, 'deal-pipeline'), indexSource: '', uiSource: '', dataSource: '' }
   const entry: BrowseEntry = { ...summary, installs: 2 }

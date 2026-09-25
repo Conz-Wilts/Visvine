@@ -105,6 +105,11 @@ test('the audit trail is redacted on account deletion, never deleted', () => {
   assert.doesNotMatch(service, /\.contextAuditEntry\.delete/)
 })
 
+test('a Tool incident keeps its record and drops the viewer', () => {
+  // `viewerId`, not `userId`, so the schema guard above cannot see it.
+  assert.match(service, /\.appToolIncident\.updateMany\(\{ where: \{ viewerId: userId \}, data: \{ viewerId: null \} \}\)/)
+})
+
 test('queued move proposals are deleted with the account', () => {
   // The coverage guard above structurally cannot see this one: the column is
   // `proposedBy`, not `userId`. The row holds a full snapshot of a note from

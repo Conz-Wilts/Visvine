@@ -130,6 +130,11 @@ export interface HostBridgeOptions {
   /** The Tool asked the app to move. Already checked to be an in-app path. */
   navigate: (path: string) => void
   /**
+   * The bridge answered `revoked`: the version was withdrawn or its listing
+   * held. The host removes the frame; the Tool is never told.
+   */
+  onRevoked?: (message: string) => void
+  /**
    * Injected by tests; defaults to the real POST. Whatever it resolves is run
    * through `readResponse` — there is exactly one place a bridge answer is
    * believed, and this is not it.
@@ -220,6 +225,7 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
     onResize,
     onError,
     navigate,
+    onRevoked,
     send = postBridge,
   } = options
 
@@ -254,6 +260,10 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
       response = { ok: false, error: relayError(cause) }
     }
     if (disposed) return
+    if (!response.ok && response.error.code === 'revoked') {
+      onRevoked?.(response.error.message)
+      return
+    }
     post(
       response.ok
         ? { type: 'visvine:result', id, ok: true, value: response.value }

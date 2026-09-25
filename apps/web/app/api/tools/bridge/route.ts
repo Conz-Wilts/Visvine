@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/session'
 import { handleBridgeCall } from '@/lib/tools/bridge'
-import { bridgeRateKey, takeBridgeCall } from '@/lib/tools/limits'
+import { bridgeRateKey, takeBridgeCallShared } from '@/lib/tools/limits'
 import { resolveBridgeTarget, targetKey } from '@/lib/tools/target'
 import { appOrigin } from '@/lib/tools/origin'
 import { BRIDGE_LIMITS, isBridgeMethod, type BridgeResponse } from '@/lib/tools/protocol'
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
   // Rate limited AFTER resolution, so the budget is per resolved TARGET rather
   // than per unauthenticated guess, and a viewer's two Tools — two installs, or
   // two drafts being previewed — cannot starve each other.
-  const decision = takeBridgeCall(bridgeRateKey(session.userId, targetKey(resolved)))
+  const decision = await takeBridgeCallShared(bridgeRateKey(session.userId, targetKey(resolved)))
   if (!decision.ok) {
     return json({
       ok: false,

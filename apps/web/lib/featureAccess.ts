@@ -58,10 +58,9 @@ export function defaultFeatureConfig(): SpaceFeatureConfig {
 /**
  * The prefix of an INSTALLED Tool's dynamic rail key: `tool:<slug>`.
  *
- * The `tools` key above is the tool-vocabulary switch (it gates the Tool node
- * type and the /tools marketplace). A rail row, by contrast, belongs to one
- * installed Tool, and a space can install any number of them — so those keys
- * can't be enumerated in a registry. They are persisted in
+ * There is no key for Tools as a whole — they are nodes of the Directory. A
+ * rail row belongs to one installed Tool, and a space can install any number
+ * of them — so those keys can't be enumerated in a registry. They are persisted in
  * `featureConfig.order` / `more` / `adminOnly` exactly like the registry keys,
  * which is why every validator below accepts them alongside ALL_FEATURE_KEYS.
  */
@@ -115,10 +114,8 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
  * - `connectors` is a section of the Space Console (`/admin?section=connectors`),
  *   admins only by nature, so it has neither a rail row nor a toggle.
  *
- * The marketplace is not here because it is not a key at all: it is reached
- * from the navbar icon, and each INSTALLED Tool gets its own rail row keyed
- * `tool:<slug>`. Those per-install keys are not nav-hidden — they ARE the rail
- * rows.
+ * Each INSTALLED Tool gets its own rail row keyed `tool:<slug>`. Those
+ * per-install keys are not nav-hidden — they ARE the rail rows.
  */
 export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['connectors'];
 
@@ -142,8 +139,8 @@ export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, 
  * Person, Space (the org type), Resource, Event, Agent and Connector all belong
  * to the always-on directory — Resources is one of its tabs, an event is a
  * record with its own page, an agent is watched on its node page, and a
- * connector is a record whose note the console edits — and Tool to the
- * always-on marketplace, so none of them appears here and they're never hidden.
+ * connector is a record whose note the console edits, and a Tool is a node
+ * there too — so none of them appears here and they're never hidden.
  * In particular 'space' must NOT be added: it would hide every org record
  * whenever the Channels tool is off.
  */
@@ -329,7 +326,7 @@ export function moreFeatureKeys(config: SpaceFeatureConfig | null | undefined): 
  * locked whether a Tool or a built-in is behind it.
  *
  * `toolKeys` are dropped wholesale when the DIRECTORY is off for this viewer —
- * a Tool is one of its nodes, and the marketplace has no key of its own — the
+ * a Tool is one of its nodes, and Tools have no key of their own — the
  * same rule the bridge enforces for a running Tool
  * (lib/tools/target.ts#forbiddenForTools): a space never shows the shape of a
  * Tool it may not run, install-scoped `enabled` included. Without this, an

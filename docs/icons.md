@@ -127,8 +127,8 @@ surfaces:
   rail: { label: Deals, icon: custom }
 ```
 
-plus a `tools/<name>/icon.svg`, uploaded from the marketplace's **Mine** tab or
-written over MCP like any other Tool file.
+plus a `tools/<name>/icon.svg`, written over MCP (`write_tool { file: 'icon.svg' }`)
+like any other Tool file.
 
 This is the one place markup an outside author wrote renders inside the app's
 own document, outside the Tool's sandboxed iframe. `apps/web/lib/tools/iconSvg.ts`

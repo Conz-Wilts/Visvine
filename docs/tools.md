@@ -113,24 +113,33 @@ are the five gates every surface (bridge, isolate, review UI, install checklist)
 calls — never a second copy of the rule, so a denial always quotes the same
 declaration a reviewer read.
 
-Three namespaces are **sealed against Tool writes**, whatever a perimeter
-declares: `tools/`, `agents/`, `connectors/` hold configuration that *runs*, and
-a Tool that could write them could grant itself unreviewed reach — see
-`lib/tools/bridge.ts#SEALED_WRITE_DIRS`. This binds admins too; it is not merely
+Four namespaces are **sealed against Tool writes**, whatever a perimeter
+declares: `tools/`, `agents/`, `connectors/`, `models/` hold configuration that
+*runs*, and a Tool that could write them could grant itself unreviewed reach —
+see `lib/tools/bridge.ts#SEALED_WRITE_DIRS`. The seal follows the declaration
+too: a connector, model, agent or Tool filed in a folder of the space's own is
+configuration wherever it sits. This binds admins too; it is not merely
 `writeDenial`'s member gate.
 
-**The one exception: creating an agent brief the Tool named.** A Tool may
-`context.write` a note at `agents/<name>.md` when its own `perimeter.agents`
-names that agent — a bare `*` does not count, a prefix like `digest-*` does.
-Everything else in the three namespaces stays sealed, including `agents/live/**`
-(the activation), `context.append` anywhere under `agents/`, and any path a Tool
-did not declare an agent for.
+**Reads of configuration need a glob that names it.** `**` never reaches those
+namespaces, nor configuration filed elsewhere: a Tool reading `connectors/`
+must say `connectors/*` (or name the note), and one reading a connector filed
+in `teams/growth/` must name `teams/growth/` — a reviewer then sees the name
+(`perimeter.ts#refuseRead`, `configReach.ts`). A bare `*` already names no
+agent; this is the same rule for notes.
 
-The brief is not the thing that runs. `contextService#writeDenial` guards
-`agents/live/` and nothing else, precisely because ACTIVATION is what puts an
-agent on the space's model key and that stays a space admin's decision; a
-Tool-written brief is something an admin can read and approve, and `claimManualRun`
-refuses an inactive agent, so `agents.run` on it does nothing until they do.
+**The one exception: creating an agent brief the Tool named.** A Tool may
+`context.write` a new brief at `agents/<name>/index.md` when its own
+`perimeter.agents` names that agent — a bare `*` does not count, a prefix like
+`digest-*` does. Everything else stays sealed: `context.append` anywhere under
+`agents/`, the rest of an agent's folder (written by the agent itself), and any
+path a Tool did not declare an agent for.
+
+The brief is not the thing that runs. Whether an agent runs is its RECORD
+(`agent_state`, switched on by a person), and a brief arriving with `active: true`
+is refused, so a Tool-written brief is something a person reads and switches on;
+`claimManualRun` refuses an inactive agent, so `agents.run` on it does nothing
+until they do.
 
 **Create, never change.** An existing brief is refused: the admin who activated an
 agent approved a specific brief, and `lib/agents/hooks.ts` (rule 2) deliberately
@@ -286,7 +295,7 @@ act with a second reviewer. That split is carried by two independent columns on
 
 | column | whose verdict | what `approved` grants |
 | --- | --- | --- |
-| `status` | the **source space**'s admin | installable in that space and everything nested under it |
+| `status` | the **source space**'s admin | installable in that space (its rooms get it through `share:`) |
 | `marketplaceStatus` | **Visvine**'s super-admin, and **NULL until someone asks** | installable by any space (over `install_tool`) |
 
 1. **Publish** (`publish_tool` / `lib/tools/registry.ts#publishTool`) snapshots
@@ -309,12 +318,12 @@ act with a second reviewer. That split is carried by two independent columns on
    working copy that doesn't compile. Version numbers count from 1 and never
    repeat, even across a rejection.
 2. **Approve** (`reviewSpaceVersion`, `POST …/tools/versions/<id>` with
-   `action: 'review'`) is the space admin's verdict, on the **Approvals** tab of
-   `/tools` (admins only, badged with the count). They read the declared
+   `action: 'review'`) is the space admin's verdict, in Console → **Approvals**
+   (`/admin?section=approvals`, admins only, badged with the count). They read the declared
    perimeter diffed against the last version *this space* approved, then approve
    or reject with a note the author reads. Approving flags every install **in
-   this space's subtree** pinned to an older version with an offered upgrade; it
-   never changes what is running anywhere.
+   this space** pinned to an older version with an offered upgrade; it never
+   changes what is running anywhere. Rooms follow the house through `share:`.
 3. **List** (`submitToMarketplace`, `action: 'list'`; no console button since
    the Build section was removed — API only) is the only thing that offers a Tool to other spaces, and it
    is a space admin acting on a version their space has **already approved**.
@@ -344,8 +353,11 @@ act with a second reviewer. That split is carried by two independent columns on
    clash), and resolves the declared type surfaces against the space (see
    [Type pages](#type-pages)). The gate is the pure
    `registry.ts#installability`: the source space's verdict must be `approved`,
-   and then either the installing space's **lineage includes the source space**
-   or the version is **listed**. `install_tool { key }` resolves to the newest
+   the version not withdrawn, and then either the installing space **is** the
+   source space or the version is **listed** (and its listing not held). A room
+   gets its house's Tool only through `share:` on the Tool's index note
+   (`lib/tools/share.ts`) — that flag is the whole grant, and a room admin
+   cannot install what the house chose not to share. `install_tool { key }` resolves to the newest
    **listed** version only — a key is a marketplace identity. **Unmet
    requirements never block an install** — the Tool installs degraded behind a
    checklist; see [Degraded mode](#degraded-mode).
@@ -354,6 +366,39 @@ act with a second reviewer. That split is carried by two independent columns on
    `installability`** rather than trusting the offer — a listing can be rejected
    between the flag and the click. This is the *only* way a space's Tool code
    ever changes — publishing a new version never touches an install by itself.
+
+### Pulling a Tool back
+
+Approval is not forever (`lib/tools/verdicts.ts`, migration
+`20260928000001_tools_revocation`). Two holds, each in its own columns so
+`status` / `marketplaceStatus` keep meaning only what the review decided:
+
+| Hold | Who | Stops |
+|---|---|---|
+| version **withdrawn** (`revokedAt`) | the source space's admins (Withdraw on the Tool tab's version trail, `POST …/tools/versions/<id> { action: 'revoke' }`), or a Visvine reviewer | that version everywhere it runs — the source space, its rooms, every space that installed it |
+| listing **suspended** / **revoked** (`app_tool_listings.state`) | a Visvine reviewer (`POST /api/tools/review/<id> { hold }`) | every install outside the publisher's family, whatever version it pins; suspended is reversible, revoked is not |
+
+Both are read wherever a version is chosen or run: `resolveBridgeTarget` (every
+bridge call, frame mint, status check and changes stream), `installability`,
+`applyUpgrade`, and share-down's version pick, which falls back to the newest
+version still standing. A running frame stops because its **host** is told,
+never because a token expired (a frame token is checked once, on load): the
+bridge answers the one code a Tool never sees, `revoked`, and the host removes
+the frame and draws the reason in its place; the changes stream pushes a
+`verdict` event where it can (per-process); and the host re-checks
+`GET /api/tools/status` once a minute. Bridge calls stop at once, open frames
+within a minute.
+
+### A draft runs with its authors' reach
+
+A preview runs code no admin approved, so it never runs with more reach than
+its authors have (`lib/tools/draftAuthors.ts`). Its target carries everyone who
+wrote the draft's notes since its last approved version (from the notes'
+revisions); the bridge allows a read or write only when the viewer **and** each
+of them could make it, so a member cannot send an admin the preview link and
+borrow the admin's reach. An author who left the space reaches nothing, and so
+does the draft. For anyone who is not one of its authors, the preview does not
+start by itself: it says who wrote it and what it reaches, and runs on **Run**.
 
 ## Runtime architecture
 
@@ -396,6 +441,24 @@ sends:
   never a CDN, never `eval`.
 - `frame-ancestors <app origin>` — only the Visvine app may embed the frame, so
   a leaked frame URL is useless on its own.
+- `img-src 'self' data: blob: <app>/api/media/` (and the media CDN when
+  `GCS_CDN_BASE_URL` is set) — path-scoped, never a whole storage host, where
+  anyone's bucket would take an image request carrying data in its URL.
+- `report-uri` naming `/api/tools/runtime/report?token=…` on the frame's own
+  origin: the browser reports every blocked load, attributed to the install by
+  the frame token, and `app_tool_incidents` keeps the directive and the blocked
+  URL's **origin** — never the URL, where a leak would be. Not `report-to`:
+  Chrome does not deliver Reporting API batches from an opaque-origin frame,
+  and a policy naming both makes it ignore `report-uri`.
+
+The document also carries `Permissions-Policy` denying every powerful feature
+and `X-DNS-Prefetch-Control: off`. Two channels CSP cannot close: a frame
+navigating itself (`navigate-to` never shipped) — the host counts the iframe's
+`load` events, and a second one it did not cause takes the frame down with
+"This tool tried to leave its frame and was stopped" and records a severe
+incident (`POST /api/tools/incidents`); the desktop shell refuses the
+navigation outright — and WebRTC, which is a static review finding rather than
+a control this page claims.
 
 ### Frame token
 
@@ -437,7 +500,7 @@ Methods (`lib/tools/protocol.ts#BridgeMethods`):
 | `context.list` | List note metadata under an optional glob, perimeter- and grant-filtered, path order. With `cursor` or `page: true`, answers `{ items, nextCursor }` instead of a plain array (see [Paging](#paging)). |
 | `context.read` | One note's body + parsed frontmatter. |
 | `context.search` | Ranked search over what the viewer can read, perimeter-filtered after ranking. Pages the same way (`k` is the page size, the cursor is a rank offset, 1,000 hits deep at most). |
-| `context.write` / `context.append` | Write/append a `.md` note — refused for `tools/`, `agents/`, `connectors/`, except that `write` may CREATE the brief of an agent the perimeter names (see [Frontmatter reference](#frontmatter-reference)). |
+| `context.write` / `context.append` | Write/append a `.md` note — refused for `tools/`, `agents/`, `connectors/`, `models/` and configuration filed elsewhere, except that `write` may CREATE the brief of an agent the perimeter names (see [Frontmatter reference](#frontmatter-reference)). |
 | `connectors.call` | Run a declared connector, exactly the path `run_connector` uses. |
 | `agents.run` | Trigger a declared, active agent (author-or-admin, dispatched not awaited). |
 | `data.call` | Call a `data.js` handler in the isolate. |
@@ -510,10 +573,14 @@ numbers the server enforces:
 | Calls per minute, per viewer per install | 120 |
 | `data.call` wall clock | 20s |
 
-Plus two in-process throttles (`lib/tools/limits.ts`) on top of the isolate's own
-caps: a sliding-window rate limit per `(viewer, install)`, and a `data.call`
-concurrency cap of **2 per install** against the isolate's `MAX_CONCURRENT_RUNS`
-of 4 — a chatty Tool can't starve connectors and agents of isolate slots. And
+Plus two throttles (`lib/tools/limits.ts`) on top of the isolate's own caps,
+both ROWS so they hold across instances: the call budget is a token bucket per
+`(viewer, target)` in `rate_limit_buckets`, and the `data.call` cap of **2 per
+target** is a lease in `rate_limit_leases` (`lib/rateLimit/leases.ts`) — slots
+expire by themselves, so a crashed holder never strands one — against the
+isolate's `MAX_CONCURRENT_RUNS` of 4, so a chatty Tool can't starve connectors
+and agents of isolate slots. With the store unreachable, the in-process versions
+decide: a weaker limit, never none. And
 `TOOL_BUNDLE_LIMITS` (`lib/tools/compile.ts`), the compile-time ceiling:
 512,000 bytes of source, 1,000,000 bytes of compiled bundle (JSX expands 2-5×),
 10s compile timeout.
@@ -586,14 +653,19 @@ machinery (`order`/`more`/`adminOnly`) through `mergeFeatureConfig`, so admins
 reorder or hide an installed Tool exactly like a built-in feature — installing
 never silently reorders the front door: an empty `order` is materialised as the
 registry order *first*, with the new Tool appended after it. `tools` itself is
-**core and nav-hidden** (`lib/featureAccess.ts#CORE_FEATURE_KEYS`): it has no
-rail row of its own and no on/off switch. What a space runs is decided by the
-pipeline itself — a version is approved, then installed. There is no `/tools`
-destination: the Space Console owns every one of those decisions (Tools =
-placement + the installed versions + the super-admin marketplace review queue
-at the bottom, Approvals = what a member published; a working copy is published
-from its own tool page), and cross-space install is the
-`install_tool` action rather than a browsable catalogue.
+**no key at all**: a Tool is a node of the Directory, gated on `directory`, and
+each installed Tool has its own `tool:<slug>` rail key. What a space runs is
+decided by the pipeline itself — a version is approved, then installed. There is
+no `/tools` destination: the Space Console owns those decisions (Tools =
+placement + the installed versions + the super-admin review queue at the
+bottom, Approvals = what a member published; a working copy is published from
+its own tool page), and cross-space install is the `install_tool` action.
+
+**An admin's lock is the Tool's lock.** A row an admin locks
+(`featureConfig.adminOnly['tool:<slug>']`) takes the rail row, the page and the
+Tool's tabs on type pages away from members (`typePages.ts#runnableInstalls`),
+and the bridge refuses them (`target.ts#resolveInstall`) — the browser hiding it
+is the courtesy, the server refusing it is the gate.
 
 ### Type pages
 
@@ -619,10 +691,13 @@ resolved against the installing space by `lib/tools/installs.ts#resolveTypeClaim
 |---|---|
 | Author (`create_tool`, `write_tool`, edit any of the three notes) | Any member with normal grants — no admin gate on `tools/` |
 | Publish into the space (`publish_tool`) | Any member who can write the Tool's note. An admin's publish is approved as it lands; a member's queues for one |
-| Approve a member's version (Approvals tab) | Space admins (`isAdmin`) of the space that wrote it |
+| Approve a member's version (Console → Approvals) | Space admins (`isAdmin`) of the space that wrote it |
+| Withdraw an approved version | Space admins of the space that wrote it, or a Visvine reviewer |
+| Suspend / reinstate / remove a listing | Visvine **super-admins** |
 | Submit to / withdraw from the marketplace | Space admins (`isAdmin`) of the space that wrote it, on a version that space already approved |
 | Install / upgrade / enable / uninstall / type claims | Space admins (`isAdmin`) |
 | Review a marketplace listing | Visvine **super-admins** only (`isSuperAdmin`, env-driven `SUPER_ADMIN_EMAILS`) — the one queue in the app that is not space-scoped. Exception: an unchanged-perimeter re-listing from a `TOOLS_TRUSTED_PUBLISHERS` space is auto-approved (`shouldAutoApprove`) |
+| Run a draft (preview) | Anyone who can read its index note, with the reach they and its authors share; non-authors press Run |
 
 This mirrors agents: member-writable brief, admin-gated activation.
 
@@ -770,7 +845,9 @@ Playwright. Each is a `pnpm --filter @visvine/web` script:
 
 ```sh
 pnpm --filter @visvine/web verify:tools           # author over MCP → publish → review → install → frame + bridge write
-pnpm --filter @visvine/web verify:tools:escape    # adversarial: undeclared reads, cookie theft, content-area escape, cross-space
+pnpm --filter @visvine/web verify:tools:escape    # adversarial: undeclared reads, cookie theft, content-area escape, cross-space,
+                                                  # a foreign-bucket image, a self-navigating frame, CSP reports, a `**` read of
+                                                  # configuration, an admin-only Tool, a non-author's preview, a withdrawn version
 ```
 
 `verify:tools:escape`'s first step asks the running app for its
@@ -804,9 +881,10 @@ leaving the shared dev DB as they found it. The demo seed ships no Tools.
 
 `lib/tools/{config,perimeter,protocol,compile,builds,hooks,service,target,bridge,
 dataRun,limits,state,requirements,registry,installs,origin,csp,frameToken,
-frameDocument,vendorBundle,sdkDocs,screenshot,changes}.ts`, the change bus
-`lib/notes/changes.ts`, runtime routes under `app/api/tools/runtime/*` and
-`app/api/tools/{bridge,frame-token,changes}/route.ts`, REST
+frameDocument,vendorBundle,sdkDocs,screenshot,changes,verdicts,draftAuthors,
+configReach,incidents}.ts`, the change bus `lib/notes/changes.ts`, runtime
+routes under `app/api/tools/runtime/*` (the report sink included) and
+`app/api/tools/{bridge,frame-token,changes,status,incidents}/route.ts`, REST
 routes under `app/api/tools/{registry,review}/*` and
 `app/api/spaces/[spaceId]/tools/*`, actions in `lib/actions/defs/apps.ts`
 (their scopes declared there and read through `scopeForAction`), entity sync (`lib/notes/entities.ts`,

@@ -64,6 +64,7 @@ import {
   wrapSource,
   type ToolConfig,
 } from './config'
+import { draftAuthorship, type DraftAuthorship } from './draftAuthors'
 
 /** The files an author addresses, whatever the notes behind them are called. */
 export type ToolFileName = 'index.md' | 'ui.tsx' | 'data.js' | 'icon.svg'
@@ -111,6 +112,12 @@ export interface AuthoredToolDetail extends AuthoredToolSummary {
    * (sanitized by lib/tools/iconSvg.ts), the way features/tools/components/toolIcons.tsx does.
    */
   sources: Record<ToolFileName, string | null>
+  /**
+   * Who wrote this working copy since it was last approved (lib/tools/draftAuthors.ts).
+   * A preview runs with the reach they all share, and starts by itself only for
+   * one of them; anyone else presses Run.
+   */
+  draft: DraftAuthorship
 }
 
 type ToolServiceError = { ok: false; status: number; error: string }
@@ -258,13 +265,14 @@ export async function describeAuthoredTool(
   if (indexContent === null) return null
 
   const key = toolKey(context.spaceId, name)
-  const [uiNote, dataNote, iconNote, authors, build, publications] = await Promise.all([
+  const [uiNote, dataNote, iconNote, authors, build, publications, draft] = await Promise.all([
     readVisible(p, context, toolUiPath(name, folder)),
     readVisible(p, context, toolDataPath(name, folder)),
     readVisible(p, context, toolIconPath(name, folder)),
     authorsOf(context.spaceId, [toolIndexPath(name, folder)]),
     getBuild(context.spaceId, name),
     latestPublications([key]),
+    draftAuthorship(context.spaceId, name, folder),
   ])
   const summary = summarise(
     name,
@@ -284,6 +292,7 @@ export async function describeAuthoredTool(
       'data.js': dataNote === null ? null : (unwrapSource(dataNote)?.code ?? dataNote),
       'icon.svg': iconNote === null ? null : (unwrapSource(iconNote)?.code ?? iconNote),
     },
+    draft,
   }
 }
 

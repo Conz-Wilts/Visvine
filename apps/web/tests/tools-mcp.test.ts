@@ -115,6 +115,7 @@ function detail(over: Partial<AuthoredToolDetail> = {}): AuthoredToolDetail {
       'data.js': 'handlers.hello = async () => ({ ok: true })',
       'icon.svg': null,
     },
+    draft: { authors: [{ userId: 'user_1', name: 'Ada' }], lastEdit: null },
     ...over,
   }
 }
@@ -163,6 +164,8 @@ function version(over: Partial<ToolVersionSummary> = {}): ToolVersionSummary {
     releaseNotes: null,
     tags: [],
     previewUrl: null,
+    revokedAt: null,
+    revokeReason: null,
     ...over,
   }
 }
@@ -579,7 +582,7 @@ test('publish_tool explains the review gate and passes the note through', async 
   // — an author told only "published" assumes it is live.
   assert.equal(result.scope, 'space')
   assert.match(result.published, /waiting on an admin of this space/)
-  assert.match(result.published, /NOT on the marketplace/)
+  assert.match(result.published, /NOT listed/)
   // …and that publishing never lists anything is the sentence this whole
   // surface exists to make unmissable.
   assert.match(result.marketplace, /separate act/)
@@ -861,5 +864,5 @@ test("publish_tool says an admin's publish is live here — and still not public
   assert.equal(result.status, 'approved')
   assert.match(result.published, /APPROVED in this space/)
   // Approved in a space is still not public, and the wording may never blur it.
-  assert.match(result.published, /NOT on the marketplace/)
+  assert.match(result.published, /NOT listed/)
 })

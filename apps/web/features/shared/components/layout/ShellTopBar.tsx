@@ -46,6 +46,7 @@ export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
     // In the desktop shell the band IS the title bar it replaced, so the bare
     // parts of it drag the window; everything on it opts back out.
     <div
+      data-shell-band
       className="flex shrink-0 items-center gap-4 pr-1"
       style={{
         height: bandH,

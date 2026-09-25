@@ -36,17 +36,29 @@ import { z } from 'zod'
 import { logAudit } from '@/lib/notes/audit'
 import {
   appendLogGated,
+  canReadPath,
   readVisible,
   searchContext,
   visibleVault,
+  writeDenial,
   writeGated,
 } from '@/lib/notes/contextService'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { executeConnectorScript, loadConnector } from '@/lib/connectors/service'
 import { ConnectorError, type ConnectorErrorCode } from '@/lib/connectors/config'
 import { canTriggerRun } from '@/lib/agents/service'
 import { claimManualRun } from '@/lib/agents/schedule'
-import { globMatch, isValidGlobEntry, refuseAgent, refuseConnector, refuseRead, refuseWrite } from './perimeter'
+import {
+  configNamespaceOf,
+  globMatch,
+  isValidGlobEntry,
+  refuseAgent,
+  refuseConnector,
+  refuseRead,
+  refuseWrite,
+} from './perimeter'
+import { configFolderOf, configFoldersOf, type ConfigFolders } from './configReach'
 import {
   BRIDGE_LIMITS,
   type BridgeErrorCode,
@@ -57,7 +69,7 @@ import {
 } from './protocol'
 import { runDataHandler, type IsolateCapabilities } from './dataRun'
 import { getToolState, setToolState, STATE_MAX_BYTES, STATE_MAX_KEYS } from './state'
-import { acquireDataCall } from './limits'
+import { acquireDataCall, acquireDataCallShared } from './limits'
 import { targetKey, type ResolvedTarget } from './target'
 import { logger } from '@/lib/logger'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
@@ -84,6 +96,8 @@ export interface BridgeDeps {
   setToolState: typeof setToolState
   runDataHandler: typeof runDataHandler
   logAudit: typeof logAudit
+  /** A `data.call` slot for a target; absent, the in-process gate (tests). */
+  acquireDataSlot?: (key: string) => Promise<(() => void) | null>
 }
 
 /** The real ones, named in exactly one place. Not exported: a caller wanting
@@ -102,6 +116,7 @@ const REAL_DEPS: BridgeDeps = {
   setToolState,
   runDataHandler,
   logAudit,
+  acquireDataSlot: acquireDataCallShared,
 }
 
 // ── shapes ────────────────────────────────────────────────────────────────────
@@ -307,6 +322,40 @@ function agentBriefExemption(
   return null
 }
 
+// ── a draft's authors ─────────────────────────────────────────────────────────
+
+/**
+ * A preview runs unreviewed code, so it runs with the INTERSECTION of the
+ * viewer and everyone else who wrote the draft since its last approval
+ * (lib/tools/draftAuthors.ts): each of these asks "could all of them?".
+ */
+function coAuthors(t: ResolvedTarget): ContextPrincipal[] {
+  return t.coPrincipals ?? []
+}
+
+function coAuthorsCanRead(t: ResolvedTarget, path: string): boolean {
+  return coAuthors(t).every((p) => canReadPath(p, t.context, path))
+}
+
+const DRAFT_REACH =
+  'This draft runs with the reach of the people who wrote it since it was last approved'
+
+// ── configuration that runs ───────────────────────────────────────────────────
+
+/**
+ * Configuration filed outside the namespaces, by declaration. The namespaces
+ * themselves are refuseRead's own rule; this finds the rest from the vault the
+ * viewer can see.
+ */
+async function declaredConfig(t: ResolvedTarget, deps: BridgeDeps): Promise<ConfigFolders> {
+  const { metas } = await deps.visibleVault(t.principal, t.context)
+  return configFoldersOf(metas)
+}
+
+function readRefusal(t: ResolvedTarget, path: string, config: ConfigFolders | null): string | null {
+  return refuseRead(t.perimeter, path, config ? { configFolder: configFolderOf(path, config) } : {})
+}
+
 /** How a Tool is named in an audit line — the store has no `tool` origin to carry it. */
 function toolLabel(t: ResolvedTarget): string {
   return t.installId === null ? `tool:${t.config.name} (preview)` : `tool:${t.config.name}`
@@ -335,6 +384,7 @@ async function contextList(t: ResolvedTarget, params: unknown, deps: BridgeDeps)
   if (t.perimeter.read.length === 0) return err('perimeter', refuseRead(t.perimeter, glob ?? '**')!)
 
   const { metas } = await deps.visibleVault(t.principal, t.context)
+  const config = configFoldersOf(metas)
   const rows: ContextEntry[] = []
   let more = false
   // Path order (not localeCompare) so the cursor's "after this path" test and
@@ -342,7 +392,8 @@ async function contextList(t: ResolvedTarget, params: unknown, deps: BridgeDeps)
   for (const meta of [...metas].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))) {
     if (after !== null && meta.path <= after) continue
     if (glob && !globMatch(glob, meta.path)) continue
-    if (refuseRead(t.perimeter, meta.path)) continue
+    if (readRefusal(t, meta.path, config)) continue
+    if (!coAuthorsCanRead(t, meta.path)) continue
     // Truncate rather than refuse — the SDK documents a capped list, so a Tool
     // over a big folder degrades to a page instead of failing outright. A paged
     // caller learns there is more; an unpaged one gets the first page as before.
@@ -371,6 +422,8 @@ async function contextRead(t: ResolvedTarget, params: unknown, deps: BridgeDeps)
 
   const refusal = refuseRead(t.perimeter, path)
   if (refusal) return err('perimeter', refusal)
+  // A draft's author who could not read it makes it absent, like the viewer.
+  if (!coAuthorsCanRead(t, path)) return err('not_found', `No note at ${path}.`)
 
   const content = await deps.readVisible(t.principal, t.context, path)
   // readVisible answers null for absent AND for invisible, on purpose: a Tool
@@ -384,6 +437,10 @@ async function contextRead(t: ResolvedTarget, params: unknown, deps: BridgeDeps)
       'too_large',
       `${path} is ${bytes} bytes, over the ${BRIDGE_LIMITS.maxReadBytes} byte read limit.`,
     )
+  }
+  if (!configNamespaceOf(path)) {
+    const declared = readRefusal(t, path, await declaredConfig(t, deps))
+    if (declared) return err('perimeter', declared)
   }
   return ok({ path, content, frontmatter: parseFrontmatter(content) })
 }
@@ -411,7 +468,9 @@ async function contextSearch(t: ResolvedTarget, params: unknown, deps: BridgeDep
   // one extra hit past the page is how the caller learns there is a next one.
   const want = Math.min(Math.max(BRIDGE_LIMITS.maxRows, offset + pageSize + 1), SEARCH_PAGE_MAX_TOTAL + 1)
   const { hits } = await deps.searchContext(t.principal, t.context, query, {}, want)
-  const inPerimeter = hits.filter((hit) => refuseRead(t.perimeter, hit.path) === null)
+  const reachable = hits.filter((hit) => refuseRead(t.perimeter, hit.path) === null && coAuthorsCanRead(t, hit.path))
+  const config = reachable.some((hit) => !configNamespaceOf(hit.path)) ? await declaredConfig(t, deps) : null
+  const inPerimeter = config ? reachable.filter((hit) => readRefusal(t, hit.path, config) === null) : reachable
   const slice = inPerimeter.slice(offset, offset + pageSize)
   const rows: ContextHit[] = slice.map((hit) => ({
     path: hit.path,
@@ -443,6 +502,9 @@ async function checkWrite(
   }
   const refusal = refuseWrite(t.perimeter, path)
   if (refusal) return { ok: false, response: err('perimeter', refusal) }
+  if (coAuthors(t).some((p) => writeDenial(p, t.context, path) !== null)) {
+    return { ok: false, response: err('forbidden', `${DRAFT_REACH}, and one of them may not write ${path}.`) }
+  }
 
   const bytes = Buffer.byteLength(body, 'utf8')
   if (bytes > BRIDGE_LIMITS.maxWriteBytes) {
@@ -603,6 +665,11 @@ async function connectorsCall(t: ResolvedTarget, params: unknown, deps: BridgeDe
     // to lend it — so that lookup stays on (`shared` defaults true).
     const loaded = await deps.loadConnector(t.principal, t.context, name, { personal: false })
     if (!loaded) return err('not_found', `No connector named "${name}" here.`)
+    for (const author of coAuthors(t)) {
+      if (!(await deps.loadConnector(author, t.context, name, { personal: false }))) {
+        return err('forbidden', `${DRAFT_REACH}, and one of them may not use "${name}".`)
+      }
+    }
     const result = await deps.executeConnectorScript(
       loaded,
       action !== undefined ? { action, args: args ?? {} } : { code: code! },
@@ -640,6 +707,11 @@ async function agentsRun(t: ResolvedTarget, params: unknown, deps: BridgeDeps): 
   if (!(await deps.canTriggerRun(t.principal, t.spaceId, name))) {
     return err('forbidden', 'Only someone who can edit this agent can run it.')
   }
+  for (const author of coAuthors(t)) {
+    if (!(await deps.canTriggerRun(author, t.spaceId, name))) {
+      return err('forbidden', `${DRAFT_REACH}, and one of them may not run "${name}".`)
+    }
+  }
 
   const claimed = await deps.claimManualRun(t.spaceId, name, t.principal.userId)
   if (!claimed.ok) {
@@ -661,7 +733,8 @@ async function dataCall(t: ResolvedTarget, params: unknown, deps: BridgeDeps): P
   const parsed = parseParams(P.data, params)
   if (!parsed.ok) return parsed.response
 
-  const release = acquireDataCall(targetKey(t))
+  const key = targetKey(t)
+  const release = deps.acquireDataSlot ? await deps.acquireDataSlot(key) : acquireDataCall(key)
   if (!release) {
     return err('rate_limited', 'This tool already has two data handlers running — try again in a moment.')
   }

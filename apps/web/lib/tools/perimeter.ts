@@ -374,10 +374,58 @@ function refuse(
   return `tool perimeter denied: ${subject} is not in this tool's ${label} (${entries.join(', ')})`
 }
 
-/** May the Tool read this note path? Null when it may. */
-export function refuseRead(perimeter: ToolPerimeter, notePath: string): string | null {
+/**
+ * The namespaces whose notes configure what RUNS: connectors (hosts, secret
+ * names), models, agent briefs and a Tool's own sources. Reading them is not
+ * writing them — the bridge seals writes outright — but a Tool that reads
+ * `**` as an admin must not come away with every brief and connector in the
+ * space, so a read there needs a glob that NAMES the folder.
+ */
+const CONFIG_NAMESPACES = ['tools', 'agents', 'connectors', 'models'] as const
+
+/** The namespace `path` sits in when it is one of {@link CONFIG_NAMESPACES}. */
+export function configNamespaceOf(path: string): string | null {
+  const top = normalizePath(path.trim()).split('/')[0]
+  return (CONFIG_NAMESPACES as readonly string[]).includes(top) ? top : null
+}
+
+/**
+ * Does `glob` spell `folder` out — every one of its segments written literally
+ * before any wildcard? `connectors/*` names `connectors`; `**`, `*` and
+ * `teams/**` do not name `teams/growth`.
+ */
+function globNamesFolder(glob: string, folder: string): boolean {
+  const normalized = normalizePath(glob.trim())
+  const segments = (normalized.endsWith('/') ? `${normalized}**` : normalized).split('/')
+  const wanted = normalizePath(folder).split('/').filter(Boolean)
+  if (wanted.length === 0) return true
+  for (let i = 0; i < wanted.length; i++) {
+    const segment = segments[i]
+    if (segment === undefined || segment.includes('*') || segment !== wanted[i]) return false
+  }
+  return true
+}
+
+/**
+ * May the Tool read this note path? Null when it may.
+ *
+ * `configFolder` names the folder of configuration the note belongs to when it
+ * DECLARES one outside the namespaces — a connector filed in `teams/growth/`,
+ * an agent's folder there. A note in a config namespace needs no telling.
+ * Either way only a glob that names that folder reaches it.
+ */
+export function refuseRead(
+  perimeter: ToolPerimeter,
+  notePath: string,
+  opts: { configFolder?: string | null } = {},
+): string | null {
   if (!isValidSubjectPath(notePath)) return `tool perimeter denied: ${notePath} is not a valid context path`
-  return refuse(perimeter.read, 'read', notePath, (glob) => globMatch(glob, notePath))
+  const refused = refuse(perimeter.read, 'read', notePath, (glob) => globMatch(glob, notePath))
+  if (refused) return refused
+  const folder = opts.configFolder ?? configNamespaceOf(notePath)
+  if (!folder) return null
+  if (perimeter.read.some((glob) => globMatch(glob, notePath) && globNamesFolder(glob, folder))) return null
+  return `tool perimeter denied: ${notePath} is configuration that runs — only a read glob that names ${folder}/ reaches it`
 }
 
 /**

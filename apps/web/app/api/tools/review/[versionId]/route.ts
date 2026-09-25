@@ -11,6 +11,7 @@ import {
   versionHistory,
 } from '@/lib/tools/registry'
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
+import { revokeVersion, setListingState } from '@/lib/tools/verdicts'
 import type {
   ReviewDecisionResponse,
   ReviewDetailResponse,
@@ -82,10 +83,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
   return NextResponse.json(body)
 }
 
-const decisionSchema = z.object({
-  decision: z.enum(['approved', 'rejected']),
-  note: z.string().max(4000).optional(),
-})
+const decisionSchema = z.union([
+  z.object({
+    decision: z.enum(['approved', 'rejected']),
+    note: z.string().max(4000).optional(),
+  }),
+  // Visvine's holds after the fact (lib/tools/verdicts.ts): a listing
+  // suspended, reinstated or removed for good, or one version withdrawn.
+  z.object({ hold: z.enum(['suspended', 'active', 'revoked']), reason: z.string().max(500).optional() }),
+  z.object({ revoke: z.literal(true), reason: z.string().max(500).optional() }),
+])
 
 /**
  * The verdict. Approving does one thing beyond flipping the status: every
@@ -101,6 +108,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ver
 
   const body = await parseBody(req, decisionSchema)
   if (body instanceof NextResponse) return body
+
+  const reviewer = { userId: session.userId, email: session.email }
+  if ('revoke' in body) {
+    const pulled = await revokeVersion(versionId, reviewer, body.reason ?? null)
+    if (!pulled.ok) return NextResponse.json({ error: pulled.error }, { status: pulled.status })
+    return NextResponse.json({ ok: true })
+  }
+  if ('hold' in body) {
+    const version = await getVersion(versionId)
+    if (!version) return NextResponse.json({ error: 'No such tool version.' }, { status: 404 })
+    const held = await setListingState(version.key, body.hold, reviewer, body.reason ?? null)
+    if (!held.ok) return NextResponse.json({ error: held.error }, { status: held.status })
+    return NextResponse.json({ ok: true })
+  }
 
   const result = await reviewVersion(
     versionId,

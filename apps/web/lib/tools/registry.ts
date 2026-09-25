@@ -73,6 +73,7 @@ import {
   type PerimeterDiff,
   type ToolPerimeter,
 } from './perimeter'
+import { decodeListingState, ensureListing, type ListingState } from './verdicts'
 
 /**
  * Where a verdict stands. `pending` is in a queue, `approved` is the yes,
@@ -136,6 +137,9 @@ export interface ToolVersionSummary {
   tags: string[]
   /** `preview:` from index.md at publish time — a card image, or null. */
   previewUrl: string | null
+  /** Set when the version was withdrawn after approval (lib/tools/verdicts.ts). */
+  revokedAt: string | null
+  revokeReason: string | null
 }
 
 /** A version opened: the summary plus everything a reviewer or a diff reads. */
@@ -284,6 +288,8 @@ const SUMMARY_SELECT = {
   releaseNotes: true,
   tags: true,
   previewUrl: true,
+  revokedAt: true,
+  revokeReason: true,
   author: { select: { id: true, name: true } },
 } as const
 
@@ -318,6 +324,8 @@ type SummaryRow = {
   releaseNotes: string | null
   tags: string[]
   previewUrl: string | null
+  revokedAt: Date | null
+  revokeReason: string | null
   author: { id: string; name: string } | null
 }
 
@@ -351,6 +359,8 @@ function toSummary(row: SummaryRow): ToolVersionSummary {
     releaseNotes: row.releaseNotes,
     tags: row.tags,
     previewUrl: row.previewUrl,
+    revokedAt: row.revokedAt ? row.revokedAt.toISOString() : null,
+    revokeReason: row.revokeReason,
   }
 }
 
@@ -396,6 +406,10 @@ export function installability(input: {
   sourceSpaceId: string
   /** The space doing the installing. */
   spaceId: string
+  /** Withdrawn after approval (lib/tools/verdicts.ts). */
+  revoked?: boolean
+  /** Visvine's hold over the Tool's listing, when it has one. */
+  listingState?: ListingState | null
 }): { ok: true } | { ok: false; error: string } {
   if (input.status !== 'approved') {
     return {
@@ -406,7 +420,14 @@ export function installability(input: {
           : `This version was ${input.status} by the space that wrote it.`,
     }
   }
+  if (input.revoked) return { ok: false, error: 'This version was withdrawn by the space that made it.' }
   if (input.spaceId === input.sourceSpaceId) return { ok: true }
+  if (input.listingState && input.listingState !== 'active') {
+    return {
+      ok: false,
+      error: input.listingState === 'suspended' ? 'This tool is suspended by Visvine.' : 'This tool was removed by Visvine.',
+    }
+  }
   if (input.marketplaceStatus === 'approved') return { ok: true }
   return {
     ok: false,
@@ -799,11 +820,17 @@ export async function submitToMarketplace(
       config: true,
       sourceSpaceId: true,
       marketplaceStatus: true,
+      revokedAt: true,
     },
   })
   if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
   if (row.sourceSpaceId !== actor.spaceId) {
     return { ok: false, status: 403, error: 'Only the space that wrote a tool can list it.' }
+  }
+  if (row.revokedAt) return { ok: false, status: 409, error: 'This version was withdrawn — it cannot be listed.' }
+  const listing = await prisma.appToolListing.findUnique({ where: { key: row.key }, select: { state: true } })
+  if (listing && decodeListingState(listing.state) === 'revoked') {
+    return { ok: false, status: 409, error: 'Visvine removed this tool’s listing for good.' }
   }
   if (!actor.isAdmin) {
     return { ok: false, status: 403, error: 'Only space admins can submit a tool to the marketplace.' }
@@ -832,6 +859,7 @@ export async function submitToMarketplace(
     }
   }
 
+  await ensureListing(row.key, row.sourceSpaceId)
   const submitted = await prisma.appToolVersion.update({
     where: { id: versionId },
     data: {
@@ -1165,10 +1193,16 @@ export async function browseVersions(
   opts: { q?: string; cursor?: string; limit?: number } = {},
 ): Promise<BrowsePage> {
   const q = opts.q?.trim() ?? ''
+  const held = await prisma.appToolListing.findMany({
+    where: { state: { not: 'active' } },
+    select: { key: true },
+  })
   const rows = await prisma.appToolVersion.findMany({
     where: {
       status: 'approved',
       marketplaceStatus: 'approved',
+      revokedAt: null,
+      ...(held.length ? { key: { notIn: held.map((h) => h.key) } } : {}),
       ...(q
         ? {
             OR: [

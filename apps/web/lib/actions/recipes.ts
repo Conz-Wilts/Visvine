@@ -454,7 +454,7 @@ const RECIPES: Recipe[] = [
       { n: 3, tool: 'create_tool', why: 'Scaffolds the entity, the config note and two source files that already compile and render.', args: { space_id: spaceId(ctx), name: '<name>', title: '<Display name>', description: '<one sentence>' } },
       { n: 4, tool: 'write_tool', why: 'Write one file and get the fresh build back in the same answer — that is the loop: write, read diagnostics, write again.', args: { space_id: spaceId(ctx), name: '<name>', file: 'ui.tsx', content: '<source>' } },
       { n: 5, tool: 'preview_tool', why: 'A link to see it running before anyone else does.', args: { space_id: spaceId(ctx), name: '<name>' }, optional: true },
-      { n: 6, tool: 'publish_tool', why: 'Submits it to the marketplace for review. Admin-gated underneath.', args: { space_id: spaceId(ctx), name: '<name>' }, optional: true },
+      { n: 6, tool: 'publish_tool', why: 'Publishes it into this space: an admin\'s publish is approved as it lands, a member\'s waits for an admin. It goes no further than this space.', args: { space_id: spaceId(ctx), name: '<name>' }, optional: true },
     ],
     mustKnow: () => [
       "Authoring needs the 'tools:author' scope. If create_tool refuses you, the connection was never granted it — reconnect asking for it rather than looking for another door; there is one server and every action is on it.",

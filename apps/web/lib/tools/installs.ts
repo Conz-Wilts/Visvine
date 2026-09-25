@@ -53,6 +53,7 @@ import {
   toolKey,
   type RegistryError,
 } from './registry'
+import { decodeListingState, listingHoldFor, runDenial, type ListingHold } from './verdicts'
 import {
   computeRequirements,
   isDegraded,
@@ -88,6 +89,8 @@ export interface InstallSummary {
   pendingVersion: { id: string; version: number; perimeterDiff: PerimeterDiff } | null
   /** The house this install came down from, when it is a shared Tool (lib/tools/share.ts). */
   sharedFrom?: { id: string; name: string } | null
+  /** Why it no longer runs — withdrawn, or its listing held (lib/tools/verdicts.ts). */
+  stopped?: string | null
 }
 
 /**
@@ -116,6 +119,8 @@ export interface InstalledToolDto {
   types: TypeClaims
   /** The house this install came down from, when it is a shared Tool (lib/tools/share.ts). */
   sharedFrom?: { id: string; name: string } | null
+  /** Why it no longer runs, drawn on its page instead of the frame. */
+  stopped?: string | null
 }
 
 export type InstallResult =
@@ -337,6 +342,7 @@ export function featureConfigWithoutRail(config: SpaceFeatureConfig, key: string
 
 const INSTALL_SELECT = {
   id: true,
+  spaceId: true,
   key: true,
   slug: true,
   enabled: true,
@@ -355,12 +361,16 @@ const INSTALL_SELECT = {
       config: true,
       perimeter: true,
       iconSvg: true,
+      sourceSpaceId: true,
+      revokedAt: true,
+      revokeReason: true,
     },
   },
 } as const
 
 interface InstallRow {
   id: string
+  spaceId: string
   key: string
   slug: string
   enabled: boolean
@@ -378,13 +388,41 @@ interface InstallRow {
     config: unknown
     perimeter: unknown
     iconSvg: string | null
+    sourceSpaceId: string
+    revokedAt: Date | null
+    revokeReason: string | null
   }
+}
+
+/** Visvine's holds over the listings a batch of installs runs, keyed by Tool key. */
+type HoldLookup = ReadonlyMap<string, ListingHold>
+
+async function holdsFor(rows: readonly InstallRow[]): Promise<HoldLookup> {
+  const keys = [...new Set(rows.filter((row) => row.spaceId !== row.version.sourceSpaceId).map((row) => row.key))]
+  if (keys.length === 0) return new Map()
+  const held = await prisma.appToolListing.findMany({
+    where: { key: { in: keys }, state: { not: 'active' } },
+    select: { key: true, state: true, stateReason: true },
+  })
+  return new Map(held.map((row) => [row.key, { state: decodeListingState(row.state), stateReason: row.stateReason }]))
+}
+
+/** Why this install is not running, when it was pulled back; null when it runs. */
+function stoppedOf(row: InstallRow, holds: HoldLookup): string | null {
+  const denial = runDenial({
+    version: row.version,
+    listing: holds.get(row.key) ?? null,
+    sourceSpaceId: row.version.sourceSpaceId,
+    installSpaceId: row.spaceId,
+    sharedFromSpaceId: row.sharedFromSpaceId,
+  })
+  return denial?.message ?? null
 }
 
 /** A pending upgrade, resolved to the diff an admin is being asked to approve. */
 type PendingLookup = ReadonlyMap<string, { id: string; version: number; perimeter: unknown }>
 
-function toSummary(row: InstallRow, pending: PendingLookup): InstallSummary {
+function toSummary(row: InstallRow, pending: PendingLookup, holds: HoldLookup): InstallSummary {
   const config = decodeToolConfig(row.version.config, row.version.name)
   const requirements = parseRequirements(row.requirements)
   const upgrade = row.pendingVersionId ? pending.get(row.pendingVersionId) : undefined
@@ -402,6 +440,7 @@ function toSummary(row: InstallRow, pending: PendingLookup): InstallSummary {
     rail: config.surfaces.rail,
     types: config.surfaces.types,
     sharedFrom: row.sharedFromSpace,
+    stopped: stoppedOf(row, holds),
     pendingVersion: upgrade
       ? {
           id: upgrade.id,
@@ -424,15 +463,15 @@ async function pendingFor(rows: readonly InstallRow[]): Promise<PendingLookup> {
   const versions = await prisma.appToolVersion.findMany({
     // `pendingVersionId` is deliberately not a foreign key, and a withdrawn
     // version is no longer an offer, so both cases resolve to "no upgrade".
-    where: { id: { in: ids }, status: 'approved' },
+    where: { id: { in: ids }, status: 'approved', revokedAt: null },
     select: { id: true, version: true, perimeter: true },
   })
   return new Map(versions.map((version) => [version.id, version]))
 }
 
 async function summarise(rows: readonly InstallRow[]): Promise<InstallSummary[]> {
-  const pending = await pendingFor(rows)
-  return rows.map((row) => toSummary(row, pending))
+  const [pending, holds] = await Promise.all([pendingFor(rows), holdsFor(rows)])
+  return rows.map((row) => toSummary(row, pending, holds))
 }
 
 async function loadInstall(spaceId: string, installId: string): Promise<InstallRow | null> {
@@ -457,7 +496,7 @@ export async function listInstalls(spaceId: string): Promise<InstallSummary[]> {
 /** One install row → the space-DTO slice: enough to draw the rail row, route
  *  `/t/<slug>` and dispatch a type page, with no perimeter, requirements detail
  *  or version history. */
-function toClientDto(row: InstallRow): InstalledToolDto {
+function toClientDto(row: InstallRow, holds: HoldLookup): InstalledToolDto {
   const config = decodeToolConfig(row.version.config, row.version.name)
   const requirements = parseRequirements(row.requirements)
   return {
@@ -473,6 +512,7 @@ function toClientDto(row: InstallRow): InstalledToolDto {
     degraded: isDegraded(requirements),
     types: parseTypeClaims(row.typeClaims),
     sharedFrom: row.sharedFromSpace,
+    stopped: stoppedOf(row, holds),
   }
 }
 
@@ -494,12 +534,13 @@ export async function installedToolsForSpaces(
     // Stable and space-independent: the rail's own order comes from
     // `featureConfig.order`, so this only has to be the same every time.
     orderBy: [{ spaceId: 'asc' }, { slug: 'asc' }],
-    select: { ...INSTALL_SELECT, spaceId: true },
+    select: INSTALL_SELECT,
   })
+  const holds = await holdsFor(rows)
   for (const row of rows) {
     const list = out.get(row.spaceId)
-    if (list) list.push(toClientDto(row))
-    else out.set(row.spaceId, [toClientDto(row)])
+    if (list) list.push(toClientDto(row, holds))
+    else out.set(row.spaceId, [toClientDto(row, holds)])
   }
   return out
 }
@@ -561,9 +602,11 @@ export async function installVersion(
       sourceSpaceId: true,
       config: true,
       perimeter: true,
+      revokedAt: true,
     },
   })
   if (!version) return { ok: false, status: 404, error: 'No such tool version.' }
+  const listing = version.sourceSpaceId === spaceId ? null : await listingHoldFor(version.key)
   // The two verdicts, applied. A space's own approval reaches that space;
   // outside it, only a marketplace listing will do — which is what keeps a Tool
   // written in a private space out of everyone else's reach.
@@ -572,6 +615,8 @@ export async function installVersion(
     marketplaceStatus: version.marketplaceStatus ? decodeVersionStatus(version.marketplaceStatus) : null,
     sourceSpaceId: version.sourceSpaceId,
     spaceId,
+    revoked: version.revokedAt !== null,
+    listingState: listing?.state ?? null,
   })
   if (!allowed.ok) return { ok: false, status: 403, error: allowed.error }
 
@@ -915,8 +960,10 @@ export async function applyUpgrade(
       sourceSpaceId: true,
       config: true,
       perimeter: true,
+      revokedAt: true,
     },
   })
+  const nextListing = next && next.sourceSpaceId !== spaceId ? await listingHoldFor(next.key) : null
   // Re-asked rather than trusted: the offer was written when the version was
   // approved, and a listing can be rejected or a space verdict reversed in
   // between. The same rule as a fresh install, because that is what this is.
@@ -927,6 +974,8 @@ export async function applyUpgrade(
           marketplaceStatus: next.marketplaceStatus ? decodeVersionStatus(next.marketplaceStatus) : null,
           sourceSpaceId: next.sourceSpaceId,
           spaceId,
+          revoked: next.revokedAt !== null,
+          listingState: nextListing?.state ?? null,
         })
       : { ok: false as const }
   if (!next || !offered.ok) {

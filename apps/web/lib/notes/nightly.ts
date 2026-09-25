@@ -25,6 +25,7 @@ import { memorySweep } from '@/lib/notes/memorySweep'
 import { generateLinkReasons } from '@/lib/notes/linkReasons'
 import { drainProjections, projectionBacklog } from '@/lib/notes/projections'
 import { pruneRateLimits } from '@/lib/rateLimit'
+import { pruneLeases } from '@/lib/rateLimit/leases'
 import { msUntilNextRun, nightlyDriver, nightlyRunHour } from './shared/nightly'
 
 let sweeping = false
@@ -148,6 +149,11 @@ export async function runNightlyMaintenance(): Promise<{ ran: boolean; ms: numbe
       return 0
     })
     if (prunedBuckets) logger.info('notes.nightly.rate_limits', { pruned: prunedBuckets })
+    const prunedLeases = await pruneLeases().catch((err) => {
+      logger.error('notes.nightly.lease_prune_failed', { err })
+      return 0
+    })
+    if (prunedLeases) logger.info('notes.nightly.leases', { pruned: prunedLeases })
 
     // An authorization code lives five minutes and is single-use; a row past
     // that is a record of nothing. Swept an hour late so a code still being

@@ -191,6 +191,9 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     // Who used a space's resources is the space's record too: the use stays,
     // unattributed (its foreign key would null it anyway — this says so).
     await tx.resourceAccess.updateMany({ where: { userId }, data: { userId: null } })
+    // A Tool incident is a record of what the Tool did; the viewer it happened
+    // to is theirs to take with them.
+    await tx.appToolIncident.updateMany({ where: { viewerId: userId }, data: { viewerId: null } })
 
     // MCP/OAuth credentials issued to them. Nothing cascades these, and an
     // unconsumed authorization code would otherwise still be exchangeable.

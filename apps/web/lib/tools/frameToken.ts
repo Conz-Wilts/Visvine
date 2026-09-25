@@ -74,11 +74,15 @@ function isNonEmptyString(value: unknown): value is string {
  * than a half-filled object handed to a route. Returns null on any failure; the
  * caller answers 403 without leaking which check failed.
  */
-export async function verifyFrameToken(token: string): Promise<FrameTokenPayload | null> {
+export async function verifyFrameToken(
+  token: string,
+  opts: { toleranceSec?: number } = {},
+): Promise<FrameTokenPayload | null> {
   try {
     const { payload } = await jwtVerify(token, getSecret(), {
       algorithms: ['HS256'],
       audience: FRAME_TOKEN_AUDIENCE,
+      ...(opts.toleranceSec ? { clockTolerance: opts.toleranceSec } : {}),
     })
     const { kind, viewerId, spaceId, installId, name } = payload as Record<string, unknown>
     if (!isNonEmptyString(viewerId) || !isNonEmptyString(spaceId)) return null

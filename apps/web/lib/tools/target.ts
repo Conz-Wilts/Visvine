@@ -37,21 +37,30 @@ import { EMPTY_PERIMETER, parseToolPerimeter, type ToolPerimeter } from './perim
 import { parseToolConfig, parseToolPreviewUrl, parseToolTags, toolIndexPath, TOOL_NAME_RE, type ToolConfig } from './config'
 import { toolFolderIn } from './location'
 import type { BridgeError, BridgeTarget, ToolDegraded, ToolInstallInfo, ToolSubject } from './protocol'
+import { toolRailKey } from '@/lib/featureAccess'
+import { principalForUser } from '@/lib/agents/principal'
+import { listingHoldFor, runDenial, type ListingHold } from './verdicts'
+import { draftAuthorship, nobodyPrincipal, type DraftAuthorship } from './draftAuthors'
 
 /** The stored shape `resolveBridgeTarget` needs off an install row. */
 interface InstallRow {
   id: string
+  versionId?: string
   spaceId: string
   slug: string
   key: string
   enabled: boolean
   requirements: unknown
+  sharedFromSpaceId?: string | null
   version: {
     name: string
     title: string
     config: unknown
     perimeter: unknown
     dataBundle: string
+    sourceSpaceId?: string
+    revokedAt?: Date | null
+    revokeReason?: string | null
   }
 }
 
@@ -76,6 +85,12 @@ export interface TargetDeps {
   featureAccessForbidden: typeof featureAccessForbidden
   /** Where the Tool's folder is — `tools/<name>` unless filed elsewhere. Absent: `tools/<name>`. */
   toolFolder?: (spaceId: string, name: string) => Promise<string>
+  /** Visvine's hold over a listing. Absent: never held. */
+  listingHold?: (key: string) => Promise<ListingHold | null>
+  /** Who wrote a draft since its last approval. Absent: nobody but the viewer. */
+  draftAuthorship?: (spaceId: string, name: string, folder: string) => Promise<DraftAuthorship>
+  /** An author's principal in the space, or null when they are gone. */
+  principalForUser?: (spaceId: string, userId: string) => Promise<ContextPrincipal | null>
 }
 
 const REAL_DEPS: TargetDeps = {
@@ -91,6 +106,9 @@ const REAL_DEPS: TargetDeps = {
   readVisible,
   featureAccessForbidden,
   toolFolder: toolFolderIn,
+  listingHold: listingHoldFor,
+  draftAuthorship,
+  principalForUser,
 }
 
 /**
@@ -102,6 +120,13 @@ export interface ResolvedTarget {
   spaceId: string
   /** The VIEWER's principal. Never the Tool's, never the author's. */
   principal: ContextPrincipal
+  /**
+   * For a preview: everyone else who wrote the draft since its last approved
+   * version. The bridge allows a read or write only if the viewer AND each of
+   * them could make it — an unreviewed draft never runs with more reach than
+   * its authors have. Empty (or absent) for an install, whose code was reviewed.
+   */
+  coPrincipals?: ContextPrincipal[]
   /** The space's shared context — Tools never see anyone's personal context. */
   context: Context
   /** The declared reach: the version's for an install, the note's for a preview. */
@@ -111,6 +136,8 @@ export interface ResolvedTarget {
   dataBundle: string
   /** Null for a preview — a working copy has no install to key state against. */
   installId: string | null
+  /** The version an install runs; null for a preview. */
+  versionId?: string | null
   /** What the space is missing for this Tool to run whole; null when nothing. */
   degraded: ToolDegraded | null
   /** What the Tool is told it is (the `install` global in `data.js`). */
@@ -262,6 +289,24 @@ async function resolveInstall(
   if (!install.enabled) {
     return fail('forbidden', 'This tool is turned off in this space — an admin can switch it back on.')
   }
+  // An admin who locked this Tool's rail row locked the Tool: its page, its
+  // tabs on type pages, and every call its frame makes.
+  if (await deps.featureAccessForbidden(resolved.actor.id, resolved.spaceId, toolRailKey(install.slug), resolved.actor.email)) {
+    return fail('forbidden', 'This tool is for admins in this space.')
+  }
+  // Pulled back after approval: withdrawn by its space, or its listing held by
+  // Visvine. Read on every call, so a pulled version stops at its next one.
+  const sourceSpaceId = install.version.sourceSpaceId ?? install.spaceId
+  const listing =
+    sourceSpaceId !== install.spaceId && deps.listingHold ? await deps.listingHold(install.key) : null
+  const denial = runDenial({
+    version: { revokedAt: install.version.revokedAt ?? null, revokeReason: install.version.revokeReason ?? null },
+    listing,
+    sourceSpaceId,
+    installSpaceId: install.spaceId,
+    sharedFromSpaceId: install.sharedFromSpaceId ?? null,
+  })
+  if (denial) return denial
 
   // The VERSION, not the working copy: an install runs the code and the reach a
   // reviewer approved, whatever the source space's notes say today.
@@ -277,6 +322,7 @@ async function resolveInstall(
     config,
     dataBundle: install.version.dataBundle,
     installId: install.id,
+    versionId: install.versionId ?? null,
     degraded: degradedOfRequirements(install.requirements),
     install: { slug: install.slug, title: config.title, key: install.key },
     isAdmin: resolved.isAdmin,
@@ -320,9 +366,22 @@ async function resolvePreview(
   // renders instead of 404ing.
   const build = await deps.findBuild(target.spaceId, name)
 
+  // Everyone else who wrote this draft since its last approval: their reach
+  // bounds it, whoever opens it (lib/tools/draftAuthors.ts).
+  const coPrincipals: ContextPrincipal[] = []
+  if (deps.draftAuthorship) {
+    const draft = await deps.draftAuthorship(target.spaceId, name, folder ?? `tools/${name}`)
+    for (const author of draft.authors) {
+      if (author.userId === session.userId) continue
+      const theirs = deps.principalForUser ? await deps.principalForUser(target.spaceId, author.userId) : null
+      coPrincipals.push(theirs ?? nobodyPrincipal(target.spaceId, author))
+    }
+  }
+
   return {
     spaceId: target.spaceId,
     principal,
+    coPrincipals,
     context,
     perimeter: parsedConfig.config.perimeter,
     config: parsedConfig.config,

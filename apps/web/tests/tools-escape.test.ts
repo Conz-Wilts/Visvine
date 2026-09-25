@@ -296,6 +296,7 @@ test('a spaceId smuggled into params changes nothing — the target decides the 
         sawContext = context
         return '# Acme'
       },
+      visibleVault: async () => ({ raws: [], metas: [] }),
     }),
   )
   assert.equal(response.ok, true)
@@ -527,4 +528,56 @@ test('compileToolUi refuses the ways a specifier can hide from the resolver', as
     const result = await compileToolUi(source)
     assert.equal(result.ok, false, `should not compile: ${source.split('\n')[0]}`)
   }
+})
+
+// ── configuration that runs ──────────────────────────────────────────────────
+
+test('`**` never reads configuration: connector notes, briefs, models and Tool sources', async () => {
+  const everything = target({ perimeter: perimeter({ read: ['**'] }) })
+  for (const path of ['connectors/hubspot.md', 'agents/digest/index.md', 'models/claude.md', 'tools/deals/ui.md']) {
+    const error = errorOf(await handleBridgeCall(everything, 'context.read', { path }, deps()))
+    assert.equal(error.code, 'perimeter', path)
+    assert.match(error.message, /configuration that runs/)
+  }
+})
+
+test('a glob that names a config folder reads it — a reviewer saw the name', async () => {
+  const named = target({ perimeter: perimeter({ read: ['connectors/*'] }) })
+  const response = await handleBridgeCall(
+    named,
+    'context.read',
+    { path: 'connectors/hubspot.md' },
+    deps({ readVisible: async () => '---\ntype: connector\n---\n' }),
+  )
+  assert.equal(response.ok, true)
+})
+
+test('configuration filed outside the namespaces is sealed by what it declares', async () => {
+  const vault = async () => ({
+    raws: [],
+    metas: [
+      { ...note('teams/growth/hubspot.md'), frontmatter: { type: 'connector' } },
+      { ...note('teams/growth/digest/index.md'), frontmatter: { type: 'agent' } },
+      note('teams/growth/digest/memory.md'),
+      note('teams/growth/plan.md'),
+    ],
+  })
+  const broad = target({ perimeter: perimeter({ read: ['teams/**'] }) })
+  for (const path of ['teams/growth/hubspot.md', 'teams/growth/digest/index.md', 'teams/growth/digest/memory.md']) {
+    const error = errorOf(
+      await handleBridgeCall(broad, 'context.read', { path }, deps({ readVisible: async () => '# note', visibleVault: vault })),
+    )
+    assert.equal(error.code, 'perimeter', path)
+  }
+  const listed = valueOf(await handleBridgeCall(broad, 'context.list', {}, deps({ visibleVault: vault }))) as Array<{ path: string }>
+  assert.deepEqual(listed.map((r) => r.path), ['teams/growth/plan.md'], 'list shows the plan and no configuration')
+
+  const narrow = target({ perimeter: perimeter({ read: ['teams/growth/*'] }) })
+  const response = await handleBridgeCall(
+    narrow,
+    'context.read',
+    { path: 'teams/growth/hubspot.md' },
+    deps({ readVisible: async () => '---\ntype: connector\n---\n', visibleVault: vault }),
+  )
+  assert.equal(response.ok, true, 'naming the folder the connector sits in reaches it')
 })

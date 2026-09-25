@@ -44,14 +44,14 @@ function parseTarget(value: unknown): BridgeTarget | null {
   return null
 }
 
-function fail(status: number, error: string): NextResponse {
-  return NextResponse.json({ error }, { status })
+function fail(status: number, error: string, code?: string): NextResponse {
+  return NextResponse.json(code ? { error, code } : { error }, { status })
 }
 
 /** A bridge refusal → this route's status code. */
 function statusOf(error: BridgeError): number {
   if (error.code === 'not_found') return 404
-  if (error.code === 'forbidden') return 403
+  if (error.code === 'forbidden' || error.code === 'revoked') return 403
   return 400
 }
 
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
   // flag and (for a preview) read access to the working copy are all decided
   // here, not re-asked in this route — see lib/tools/target.ts.
   const resolved = await resolveBridgeTarget(session, target)
-  if ('code' in resolved) return fail(statusOf(resolved), resolved.message)
+  if ('code' in resolved) return fail(statusOf(resolved), resolved.message, resolved.code)
 
   const token = await mintFrameToken(
     resolved.installId !== null

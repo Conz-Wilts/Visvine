@@ -910,6 +910,13 @@ model AppToolVersion {
   releaseNotes           String?          @map("release_notes")
   tags                   String[]         @default([])
   previewUrl             String?          @map("preview_url")
+  /// Pulled after approval — by the source space's admins, or by a Visvine
+  /// reviewer. Separate from `status` (the review's outcome): a revoked version
+  /// was approved, and stops everywhere it runs, rooms included, at its next
+  /// bridge call (lib/tools/verdicts.ts).
+  revokedAt              DateTime?        @map("revoked_at")
+  revokedBy              String?          @map("revoked_by")
+  revokeReason           String?          @map("revoke_reason")
   createdAt              DateTime         @default(now()) @map("created_at")
   author                 User?            @relation("AppToolVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
   installs               AppToolInstall[]
@@ -968,6 +975,46 @@ model AppToolState {
 
   @@unique([installId, key], name: "app_tool_state_identity")
   @@map("app_tool_state")
+}
+
+/// A Tool's global listing: one row per Tool Visvine has listed or been asked
+/// to. Its `state` is Visvine's hold over the listing as a whole — `suspended`
+/// (reversible) or `revoked` (permanent) stops every install OUTSIDE the
+/// publisher's own space at its next bridge call, whatever version it pins.
+model AppToolListing {
+  id               String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  key              String    @unique // the Tool key the listing currently names
+  publisherSpaceId String    @map("publisher_space_id") // no FK — a listing outlives its space's rows
+  state            String    @default("active") // active | suspended | revoked
+  stateReason      String?   @map("state_reason")
+  stateBy          String?   @map("state_by")
+  stateAt          DateTime? @map("state_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@map("app_tool_listings")
+}
+
+/// Something a running Tool did that a person should look at: a frame that
+/// navigated itself, a CSP violation, a report. Counts and facts only, never
+/// the viewer's content. `viewerId` is redacted when that person deletes their
+/// account; the incident stays.
+model AppToolIncident {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  kind      String // navigation | csp | report | canary | anomaly
+  severity  String // severe | flag | quality | report
+  status    String   @default("open") // open | cleared | confirmed
+  key       String?
+  versionId String?  @map("version_id")
+  installId String?  @map("install_id")
+  spaceId   String?  @map("space_id")
+  viewerId  String?  @map("viewer_id")
+  detail    Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([key, createdAt])
+  @@index([status, createdAt])
+  @@map("app_tool_incidents")
 }
 
 /// Which of its space's PERSON ALIASES a member holds. The aliases themselves
@@ -2109,6 +2156,20 @@ model RateLimitBucket {
 
   @@index([updatedAt])
   @@map("rate_limit_buckets")
+}
+
+/// A concurrency cap shared by every instance: `slot` 0..cap-1 of a key is
+/// held until `expiresAt`, so a crashed holder frees its slot by itself
+/// (lib/rateLimit/leases.ts).
+model RateLimitLease {
+  key       String
+  slot      Int
+  holder    String
+  expiresAt DateTime @map("expires_at")
+
+  @@id([key, slot])
+  @@index([expiresAt])
+  @@map("rate_limit_leases")
 }
 
 /// The space's nightly pass (lib/notes/cleanSchedule.ts): one row per space,

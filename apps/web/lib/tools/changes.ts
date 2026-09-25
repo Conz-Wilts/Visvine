@@ -32,6 +32,7 @@ export function changedPathsFor(t: ResolvedTarget, change: NoteChange): string[]
   const consider = (path: string) => {
     if (refuseRead(t.perimeter, path) !== null) return
     if (!canReadPath(t.principal, t.context, path)) return
+    if ((t.coPrincipals ?? []).some((p) => !canReadPath(p, t.context, path))) return
     out.push(path)
   }
   consider(change.path)

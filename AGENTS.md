@@ -1290,17 +1290,24 @@ guide. The invariants:
 - **A Tool belongs to the space that wrote it.** Publishing ships it there and
   NOWHERE else. `AppToolVersion` carries two independent verdicts, both asked in
   order (`registry.ts#installability`, pure): `status` is the source space's
-  admin (`approved` = installable there and in its descendants), and
-  `marketplaceStatus` is Visvine's — **null until an admin explicitly submits
-  it**, and only `approved` lists it or lets an unrelated space install it.
-  Never widen a query over versions without deciding which verdict it asks about.
+  admin (`approved` = installable there; its rooms get it only through `share:`),
+  and `marketplaceStatus` is Visvine's — **null until an admin explicitly
+  submits it**, and only `approved` lists it or lets an unrelated space install
+  it. Never widen a query over versions without deciding which verdict it asks
+  about. **Approval is not forever**: a version withdrawn by its space
+  (`revokedAt`) or a listing Visvine suspends (`app_tool_listings.state`) stops
+  at its next bridge call, and the host removes the frame
+  (`lib/tools/verdicts.ts`) — read wherever a version is chosen or run.
 - **Publishing is a member act; approving is the admin's.** An admin's publish
   lands approved; a member's lands pending and notifies the space's admins —
-  that queue is `/admin?section=approvals`. There is no `/tools` destination and
-  no rail row: the console owns tools (Tools = rail placement + installed
-  versions, Build = working copies, Approvals = the queue), and cross-space
-  install is the `install_tool` action. A re-publish supersedes the author's
-  earlier pending submission rather than being refused.
+  that queue is `/admin?section=approvals`. There is no `/tools` destination:
+  the console owns tools (Tools = rail placement + installed versions,
+  Approvals = the queue; a working copy is published from its own Tool tab),
+  and cross-space install is the `install_tool` action. A re-publish
+  supersedes the author's earlier pending submission rather than being
+  refused. **A draft runs with its authors' reach**: a preview's principal is
+  the viewer intersected with everyone who wrote it since its last approval
+  (`lib/tools/draftAuthors.ts`), and it starts by itself only for them.
 - **A Tool is its folder, filed anywhere.** `tools/<name>/` is where one
   lands; a folder of the space's own whose index declares `type: tool` is the
   same Tool. The folder name is its name (build, installs, versions and node

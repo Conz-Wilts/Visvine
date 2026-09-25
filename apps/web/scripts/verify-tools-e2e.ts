@@ -58,7 +58,7 @@ import { toolFolderPath, toolIndexPath } from '../lib/tools/config';
 import { mintFrameToken } from '../lib/tools/frameToken';
 import { applyUpgrade, installedToolsForSpaces, listInstalls, uninstall } from '../lib/tools/installs';
 import type { BridgeMethod, BridgeResponse } from '../lib/tools/protocol';
-import { reviewVersion, toolKey } from '../lib/tools/registry';
+import { toolKey } from '../lib/tools/registry';
 import { resolveBridgeTarget, type ResolvedTarget } from '../lib/tools/target';
 import { SPACE_ID } from './seed/space'
 
@@ -355,8 +355,8 @@ async function main(): Promise<void> {
       note: 'verify-tools-e2e first submission',
     });
     check(
-      'publish_tool queues version 1 for review',
-      v1.status === 'pending' && v1.version === 1 && v1.key === toolKey(SPACE, TOOL),
+      "an admin's publish is version 1, approved in its own space as it lands",
+      v1.status === 'approved' && v1.version === 1 && v1.key === toolKey(SPACE, TOOL),
       `${v1.key} v${v1.version} ${v1.status} (${v1.version_id})`,
     );
 
@@ -375,29 +375,26 @@ async function main(): Promise<void> {
       appToolHandlers.publishTool(memberCtx, { space_id: SPACE, name: TOOL }),
     );
     check(
-      'a member of the space cannot publish',
+      'a member who cannot edit the Tool cannot publish it',
       typeof refused !== 'string' && refused.status === 403 && /admin/i.test(refused.message),
       typeof refused === 'string' ? refused : `${refused.status} ${refused.message}`,
     );
 
-    // ── 6. review ────────────────────────────────────────────────────────────
-    step('6. reviewVersion as a Visvine super admin');
-    const reviewed = await reviewVersion(v1.version_id, 'approved', actor, 'verify-tools-e2e');
+    // ── 6. not listed ────────────────────────────────────────────────────────
+    step('6. approved here, listed nowhere');
+    const unlisted = await refusal(() => appToolHandlers.installTool(ctx, { space_id: SPACE, key: toolKey(SPACE, TOOL) }));
     check(
-      'the super admin approves version 1',
-      reviewed.ok && reviewed.version.status === 'approved',
-      reviewed.ok
-        ? `v${reviewed.version.version} approved, ${reviewed.upgraded} install(s) offered it`
-        : reviewed.error,
+      'a key names a LISTED version, so an unlisted Tool is installed by its version id',
+      typeof unlisted !== 'string' && unlisted.status === 404,
+      typeof unlisted === 'string' ? unlisted : `${unlisted.status} ${unlisted.message}`,
     );
 
     // ── 7. install ───────────────────────────────────────────────────────────
     step('7. install_tool');
-    // The MCP door; `installVersion` is what runs underneath it, once the key
-    // has been resolved to its newest approved version.
+    // The MCP door; `installVersion` is what runs underneath it.
     const installed = await appToolHandlers.installTool(ctx, {
       space_id: SPACE,
-      key: toolKey(SPACE, TOOL),
+      version_id: v1.version_id,
     });
     const install = (await listInstalls(SPACE)).find((row) => row.key === toolKey(SPACE, TOOL));
     const order = (await readSpaceConfig(SPACE))?.featureConfig.order ?? [];
@@ -557,17 +554,13 @@ async function main(): Promise<void> {
       name: TOOL,
       note: 'wider read reach',
     });
-    const approved = await reviewVersion(v2.version_id, 'approved', actor);
     const offered = (await listInstalls(SPACE)).find((row) => row.id === install.id);
     check(
-      'approving v2 offers it to the install, with the perimeter diff attached',
-      approved.ok &&
-        approved.upgraded === 1 &&
+      "an admin's v2 is approved as it lands and offered to the install, with the perimeter diff attached",
+      v2.status === 'approved' &&
         offered?.pendingVersion?.id === v2.version_id &&
         (offered?.pendingVersion?.perimeterDiff.read.added.length ?? 0) > 0,
-      `v${v2.version} ${approved.ok ? approved.version.status : 'FAILED'} · read += ${JSON.stringify(
-        offered?.pendingVersion?.perimeterDiff.read.added ?? [],
-      )}`,
+      `v${v2.version} ${v2.status} · read += ${JSON.stringify(offered?.pendingVersion?.perimeterDiff.read.added ?? [])}`,
     );
 
     const upgraded = await applyUpgrade(SPACE, install.id, actor);

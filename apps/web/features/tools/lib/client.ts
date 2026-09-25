@@ -113,6 +113,15 @@ export function deleteAuthoredTool(spaceId: string, name: string): Promise<{ ok:
  * `listOnMarketplace`. A working copy that does not compile comes back 409 with
  * its diagnostics.
  */
+/** Pull an approved version back — it stops wherever it runs (admins of the space that made it). */
+export function revokeToolVersion(spaceId: string, versionId: string, reason?: string): Promise<{ ok: true }> {
+  return fetchJsonBody<{ ok: true }>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/versions/${encodeURIComponent(versionId)}`,
+    'POST',
+    { action: 'revoke', ...(reason ? { reason } : {}) },
+  )
+}
+
 export function publishTool(
   spaceId: string,
   name: string,

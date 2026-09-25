@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { NextRequest } from 'next/server'
-import { frameCsp, frameHeaders } from '@/lib/tools/csp'
+import { frameCsp, frameHeaders, toolMediaSources } from '@/lib/tools/csp'
 import { renderFrameDocument, renderFrameErrorDocument } from '@/lib/tools/frameDocument'
 import { verifyFrameToken } from '@/lib/tools/frameToken'
 import { appOrigin } from '@/lib/tools/origin'
@@ -89,5 +89,15 @@ export async function GET(req: NextRequest): Promise<Response> {
     vendorVersions: versions,
     nonce,
   })
-  return htmlResponse(html, 200, frameCsp({ appOrigin: app, selfOrigin, nonce }))
+  // Violations go to the sink on this same origin, carrying the token that
+  // says which install they came from (app/api/tools/runtime/report).
+  const reportUrl = `${selfOrigin}/api/tools/runtime/report?token=${encodeURIComponent(token)}`
+  const csp = frameCsp({
+    appOrigin: app,
+    selfOrigin,
+    nonce,
+    mediaSources: toolMediaSources(app, process.env.GCS_CDN_BASE_URL),
+    reportUrl,
+  })
+  return htmlResponse(html, 200, csp)
 }

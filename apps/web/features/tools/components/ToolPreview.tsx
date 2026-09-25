@@ -13,8 +13,10 @@
  *
  * It renders the WORKING COPY, not a published version: the frame target is
  * `{ kind: 'preview' }`, which the frame-token route gates on the viewer's own
- * ability to read `tools/<name>/index.md` rather than on an install. So a
- * preview is exactly as private as the notes behind it.
+ * ability to read the Tool's index note rather than on an install. So a
+ * preview is exactly as private as the notes behind it — and, being code no
+ * admin has approved, it runs with only the reach its authors and the viewer
+ * share, starting by itself only for one of its authors.
  *
  * The chrome is deliberately a strip and not a page: the name, whether it
  * builds, and the two things you do while iterating — reload it, and go read
@@ -32,6 +34,10 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
+import { Button } from '@visvine/ui';
+import { timeAgo } from '@/lib/date';
+import PerimeterSummary from './PerimeterSummary';
 import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, CopyIcon, FileCode2Icon, RotateCwIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import { useCopied } from '@/features/shared/hooks/useCopied';
@@ -76,7 +82,12 @@ function buildStatus(tool: AuthoredToolDetail): { label: string; tone: keyof typ
 
 export default function ToolPreview({ name }: { name: string }) {
   const { currentSpace, loading: spaceLoading } = useSpace();
+  const { user } = useAuth();
   const spaceId = currentSpace?.id;
+  // A draft starts by itself only for someone who wrote it. Anyone else is
+  // shown who did and what it reaches, and presses Run — it then runs with the
+  // reach the viewer and its authors share (lib/tools/draftAuthors.ts).
+  const [runRequested, setRunRequested] = useState(false);
 
   const [tool, setTool] = useState<AuthoredToolDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,6 +159,8 @@ export default function ToolPreview({ name }: { name: string }) {
   // A failed build stores no bundle (lib/tools/builds.ts), so there is nothing
   // for a frame to mount even if one were opened.
   const runnable = !tool.invalid && !!tool.build?.ok;
+  const isAuthor = !!user && tool.draft.authors.some((author) => author.userId === user.id);
+  const started = isAuthor || runRequested;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-6 pt-4 pb-6">
@@ -183,7 +196,9 @@ export default function ToolPreview({ name }: { name: string }) {
         </div>
       </div>
 
-      {runnable ? (
+      {!runnable ? (
+        <NotBuilding tool={tool} />
+      ) : started ? (
         <ToolFrame
           key={attempt}
           target={{ kind: 'preview', spaceId, name: tool.name }}
@@ -191,8 +206,36 @@ export default function ToolPreview({ name }: { name: string }) {
           mode="preview"
         />
       ) : (
-        <NotBuilding tool={tool} />
+        <RunGate tool={tool} onRun={() => setRunRequested(true)} />
       )}
+    </div>
+  );
+}
+
+/**
+ * An unreviewed draft someone else wrote: who, when, and what it reaches, then
+ * Run. What it can do once running is the reach its authors and the viewer
+ * share, so this is not a warning about the viewer's data — it is the moment
+ * to decide whether to run code nobody has approved.
+ */
+function RunGate({ tool, onRun }: { tool: AuthoredToolDetail; onRun: () => void }) {
+  const names = tool.draft.authors.map((author) => author.name);
+  const edited = tool.draft.lastEdit;
+  return (
+    <div className="flex flex-col gap-4 border-t border-line-subtle pt-5">
+      <p className="text-sm text-fg-muted">
+        {[
+          names.length ? `Written by ${names.join(', ')}` : null,
+          edited ? `edited ${timeAgo(new Date(edited.at).getTime())}` : null,
+          'not approved',
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </p>
+      {tool.config && <PerimeterSummary perimeter={tool.config.perimeter} />}
+      <div>
+        <Button onClick={onRun}>Run</Button>
+      </div>
     </div>
   );
 }

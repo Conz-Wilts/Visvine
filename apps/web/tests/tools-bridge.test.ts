@@ -86,6 +86,9 @@ function target(over: Partial<ResolvedTarget> = {}): ResolvedTarget {
   }
 }
 
+/** A vault with nothing declared in it — for the reads that consult declarations. */
+const NO_VAULT: BridgeDeps['visibleVault'] = async () => ({ raws: [], metas: [] })
+
 /** Every dependency, wired to fail the test if the gate lets a call through. */
 function deps(over: Partial<BridgeDeps> = {}): BridgeDeps {
   const forbidden = (name: string) => () => {
@@ -211,7 +214,7 @@ test('a leading slash is normalised rather than refused', async () => {
     t,
     'context.read',
     { path: '/deals/acme.md' },
-    deps({ readVisible: async (_p, _c, path) => (path === 'deals/acme.md' ? '# Acme' : null) }),
+    deps({ readVisible: async (_p, _c, path) => (path === 'deals/acme.md' ? '# Acme' : null), visibleVault: NO_VAULT }),
   )
   assert.deepEqual(valueOf(response), { path: 'deals/acme.md', content: '# Acme', frontmatter: {} })
 })
@@ -415,6 +418,7 @@ test('search asks for the full cap, filters to the perimeter, then honours k', a
         askedFor = k
         return { hits, semantic: 'no-key', plan: PLAN }
       },
+      visibleVault: NO_VAULT,
     }),
   )
   assert.equal(askedFor, BRIDGE_LIMITS.maxRows)
@@ -951,7 +955,7 @@ test('context.search pages by rank: k is the page size and the cursor is the off
     snippet: '',
   }))
   const t = target({ perimeter: perimeter({ read: ['deals/**'] }) })
-  const d = deps({ searchContext: async () => ({ hits, semantic: 'no-key', plan: PLAN }) })
+  const d = deps({ searchContext: async () => ({ hits, semantic: 'no-key', plan: PLAN }), visibleVault: NO_VAULT })
 
   const first = valueOf(await handleBridgeCall(t, 'context.search', { query: 'd', k: 3, page: true }, d)) as {
     items: Array<{ path: string }>

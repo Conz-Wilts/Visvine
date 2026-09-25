@@ -168,7 +168,37 @@ test('pruneRateLimits reclaims idle buckets and leaves fresh ones', async (t) =>
   assert.ok(survivor[0].n >= 1, 'a bucket touched just now must survive the prune')
 })
 
+test('a lease cap holds across callers, and a released or expired slot is free again', async (t) => {
+  const skip = await probe()
+  if (skip) return t.skip(skip)
+  const { acquireLease } = await import('@/lib/rateLimit/leases')
+
+  const key = keyFor('lease')
+  const held = await Promise.all([acquireLease(key, 2, 30_000), acquireLease(key, 2, 30_000), acquireLease(key, 2, 30_000)])
+  const got = held.filter((l) => l !== null)
+  assert.ok(got.length <= 2, 'never more than the cap at once')
+  assert.ok(got.length >= 1, 'at least one caller holds a slot')
+
+  // With both slots held, a fourth caller is refused.
+  const extra = got.length === 2 ? await acquireLease(key, 2, 30_000) : null
+  assert.equal(extra, null)
+
+  await got[0]!.release()
+  await got[0]!.release() // idempotent
+  const again = await acquireLease(key, 2, 30_000)
+  assert.ok(again, 'a released slot is taken again')
+
+  // An expired lease is reclaimed without anyone releasing it.
+  const shortKey = keyFor('lease-short')
+  assert.ok(await acquireLease(shortKey, 1, 1))
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.ok(await acquireLease(shortKey, 1, 30_000), 'an expired slot is free')
+
+  for (const l of [...got.slice(1), again]) await l?.release()
+})
+
 test.after(async () => {
   // Only the rows this file made; the table is shared with the running dev app.
   if (prisma) await prisma.$executeRaw`DELETE FROM rate_limit_buckets WHERE updated_at < now() - interval '1 day'`
+  if (prisma) await prisma.$executeRaw`DELETE FROM rate_limit_leases WHERE expires_at <= now() + interval '1 minute'`
 })

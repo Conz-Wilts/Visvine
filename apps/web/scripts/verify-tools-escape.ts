@@ -55,6 +55,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext, type Frame, type Page } from 'playwright';
 import prisma from '../lib/prisma';
 import { ADMIN_ALIAS_ID } from '../lib/types/context';
+import { isAdmin } from '../lib/auth';
 import type { SpaceFeatureConfig } from '../lib/types/space';
 import { toolRailKey } from '../lib/featureAccess';
 import { resolveContext } from '../lib/notes/resolve';
@@ -65,7 +66,7 @@ import { appToolHandlers } from '../lib/actions/defs/apps';
 import { handleBridgeCall } from '../lib/tools/bridge';
 import { toolFolderPath, toolIndexPath } from '../lib/tools/config';
 import { listInstalls, uninstall } from '../lib/tools/installs';
-import { reviewVersion, toolKey } from '../lib/tools/registry';
+import { toolKey } from '../lib/tools/registry';
 import { resolveBridgeTarget, type ResolvedTarget } from '../lib/tools/target';
 import { SPACE_ID } from './seed/space'
 
@@ -102,6 +103,8 @@ const MARKER = 'verify-tools-escape:hostile';
  */
 const OWN_NOTES = [
   'hostile/owned.md',
+  'hostile/leave.md',
+  'hostile/index.md',
   'agents/hostile-escalation.md',
   `${toolFolderPath(TOOL)}/ui.md`,
   `${toolFolderPath(TOOL)}/data.md`,
@@ -155,6 +158,7 @@ interface Probe {
   sessionFetch?: { blocked: boolean; status?: number; body?: string; error?: string };
   crossOriginFetch?: { blocked: boolean; type?: string; status?: number; error?: string };
   image?: { outcome: string; error?: string };
+  bucketImage?: { outcome: string; error?: string };
   forgedCall?: { answered: boolean; ok: boolean; code: string | null; message: string | null };
   declaredRead?: { refused: boolean; error?: string };
   dataCall?: { ok: boolean; value?: unknown; error?: string };
@@ -240,6 +244,8 @@ async function cleanup(spaceId: string, dropOrder: boolean): Promise<void> {
 
   await prisma.appToolInstall.deleteMany({ where: { key } });
   await prisma.appToolVersion.deleteMany({ where: { key } });
+  await prisma.appToolIncident.deleteMany({ where: { key } });
+  await prisma.contextGrant.deleteMany({ where: { spaceId, resourcePath: { startsWith: toolFolderPath(TOOL) } } });
 
   for (const path of OWN_NOTES) await store.deleteNote(context, path);
   // After the notes, never before: every one of those deletions runs the compile
@@ -415,12 +421,13 @@ async function main(): Promise<void> {
       name: TOOL,
       note: 'verify-tools-escape',
     });
-    const reviewed = await reviewVersion(version.version_id, 'approved', actor, 'verify-tools-escape');
-    await appToolHandlers.installTool(ctx, { space_id: SPACE, key: toolKey(SPACE, TOOL) });
+    // An admin's publish is the space's approval; the Tool is installed here by
+    // its version id, being listed nowhere else.
+    await appToolHandlers.installTool(ctx, { space_id: SPACE, version_id: version.version_id });
     const install = (await listInstalls(SPACE)).find((row) => row.key === toolKey(SPACE, TOOL));
     check(
       'the hostile Tool is approved and installed',
-      reviewed.ok && install !== undefined && install.version === version.version,
+      version.status === 'approved' && install !== undefined && install.version === version.version,
       install ? `v${install.version} · rail ${JSON.stringify(install.rail)}` : 'no install row',
     );
     if (!install) throw new Error('no install to open');
@@ -585,6 +592,12 @@ async function main(): Promise<void> {
       `outcome ${found.image?.outcome}${found.image?.error ? ` — ${found.image.error}` : ''}`,
     );
 
+    check(
+      'an image from a foreign bucket on the media host never loads (img-src is path-pinned)',
+      found.bucketImage?.outcome === 'error' || found.bucketImage?.outcome === 'never-loaded',
+      `outcome ${found.bucketImage?.outcome}${found.bucketImage?.error ? ` — ${found.bucketImage.error}` : ''}`,
+    );
+
     check('localStorage is unavailable', found.localStorage?.threw === true, detailOf(found.localStorage));
 
     // Chrome hands `sendBeacon` a `true` for a beacon it merely QUEUED and
@@ -676,7 +689,7 @@ async function main(): Promise<void> {
     // ── 7. the frame stays in the content area ───────────────────────────────
     step('7. the frame renders in the main content area and nowhere else');
     const mainRect = await rectOf(page, 'main');
-    const navRect = await rectOf(page, 'header');
+    const navRect = await rectOf(page, '[data-shell-band]');
     const railRect = await rectOf(page, 'aside');
     const iframeRect = await frameElement.boundingBox();
     check(
@@ -748,6 +761,182 @@ async function main(): Promise<void> {
       console.log(`\n        the browser's own account of it (${blocked.length} line(s)):`);
       for (const line of blocked.slice(0, 12)) console.log(`          ${line.slice(0, 200)}`);
     }
+
+
+    // ── 8b. the frame navigating itself ─────────────────────────────────────
+    step('8b. a frame that navigates itself is taken down and recorded');
+    const since = new Date();
+    await store.writeNote(sharedContext(SPACE), 'hostile/leave.md', '# leave\n', {
+      id: owner.id,
+      name: owner.name ?? '',
+      email: owner.email,
+    });
+    const stoppedText = page.getByText('This tool tried to leave its frame and was stopped.');
+    const stoppedShown = await stoppedText
+      .waitFor({ state: 'visible', timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false);
+    const framesLeft = await page.locator('iframe[title="Hostile"]').count();
+    check(
+      'the host removes the frame and says why',
+      stoppedShown && framesLeft === 0,
+      `${stoppedShown ? 'stopped state drawn' : 'NO stopped state'} · ${framesLeft} frame(s) left`,
+    );
+    let incident = null as null | { kind: string; severity: string };
+    for (let i = 0; i < 20 && !incident; i++) {
+      incident = await prisma.appToolIncident.findFirst({
+        where: { kind: 'navigation', installId: install.id, createdAt: { gte: since } },
+        select: { kind: true, severity: true },
+      });
+      if (!incident) await sleep(250);
+    }
+    check(
+      'a severe navigation incident is recorded against the install',
+      incident?.severity === 'severe',
+      incident ? `${incident.kind} · ${incident.severity}` : 'no incident row',
+    );
+    await store.deleteNote(sharedContext(SPACE), 'hostile/leave.md');
+
+    // The browser sends what the sandbox blocked to the frame's report sink,
+    // attributed by the frame token (app/api/tools/runtime/report).
+    let cspIncidents = 0;
+    for (let i = 0; i < 20 && cspIncidents === 0; i++) {
+      cspIncidents = await prisma.appToolIncident.count({ where: { kind: 'csp', installId: install.id } });
+      if (cspIncidents === 0) await sleep(500);
+    }
+    const leaked = await prisma.appToolIncident.findMany({
+      where: { kind: 'csp', installId: install.id },
+      select: { detail: true },
+    });
+    check(
+      "the frame's CSP violations reach the report sink, as origins only",
+      cspIncidents > 0 && !JSON.stringify(leaked).includes('stolen'),
+      `${cspIncidents} csp incident(s) · ${JSON.stringify(leaked[0]?.detail ?? {}).slice(0, 200)}`,
+    );
+
+    // ── 8c. configuration stays out of reach ─────────────────────────────────
+    step('8c. `**` never reads configuration');
+    const everything: ResolvedTarget = { ...target, perimeter: { ...target.perimeter, read: ['**'] } };
+    const configRead = await handleBridgeCall(everything, 'context.read', { path: 'connectors/hubspot.md' });
+    check(
+      'a `**` read of connectors/ is refused by the perimeter',
+      !configRead.ok && configRead.error.code === 'perimeter' && /configuration that runs/.test(configRead.error.message),
+      configRead.ok ? 'THE READ WENT THROUGH' : `${configRead.error.code}: ${configRead.error.message}`,
+    );
+
+    // ── 8d. the admin lock holds on the server ───────────────────────────────
+    step('8d. a member cannot run an admin-only Tool through the bridge');
+    const memberRow = await prisma.spaceMember.findFirst({
+      where: { spaceId: SPACE, status: 'active', userId: { not: owner.id } },
+      select: { user: { select: { id: true, name: true, email: true } } },
+    });
+    const member = memberRow?.user ?? null;
+    if (member && !(await isAdmin(member.id, SPACE, member.email))) {
+      const memberSession = { userId: member.id, name: member.name ?? '', email: member.email ?? '' };
+      await updateSpaceConfig(SPACE, (stored) => ({
+        featureConfig: { ...stored.featureConfig, adminOnly: [...(stored.featureConfig.adminOnly ?? []), RAIL_KEY] },
+      }));
+      const locked = await resolveBridgeTarget(memberSession, { kind: 'install', installId: install.id });
+      await updateSpaceConfig(SPACE, (stored) => ({
+        featureConfig: {
+          ...stored.featureConfig,
+          adminOnly: (stored.featureConfig.adminOnly ?? []).filter((key) => key !== RAIL_KEY),
+        },
+      }));
+      check(
+        'the bridge refuses a member once an admin locks the row',
+        'code' in locked && locked.code === 'forbidden',
+        'code' in locked ? `${locked.code}: ${locked.message}` : 'THE MEMBER RESOLVED THE TARGET',
+      );
+
+      // ── 8e. a draft runs with its authors' reach ─────────────────────────
+      step("8e. a draft someone else wrote waits for Run, with its authors' reach");
+      // The member must be able to open the draft at all: view on its folder.
+      await prisma.contextGrant.create({
+        data: {
+          spaceId: SPACE,
+          subjectType: 'user',
+          subjectId: member.id,
+          resourcePath: toolFolderPath(TOOL),
+          level: 10,
+          grantedBy: owner.id,
+        },
+      });
+      const preview = await resolveBridgeTarget(memberSession, { kind: 'preview', spaceId: SPACE, name: TOOL });
+      check(
+        "the member's preview carries the author as a co-principal",
+        !('code' in preview) && (preview.coPrincipals ?? []).some((p) => p.userId === owner.id),
+        'code' in preview ? `${preview.code}: ${preview.message}` : `co-principals [${(preview.coPrincipals ?? []).map((p) => p.userId).join(', ')}]`,
+      );
+      const memberContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      try {
+        const memberPage = await memberContext.newPage();
+        await memberPage.goto(`${APP}/dev/login`, { waitUntil: 'domcontentloaded' });
+        const memberLogin = memberPage.locator(`form[action^="/api/dev/login-as/${member.id}"] button`);
+        if ((await memberLogin.count()) > 0) {
+          await memberLogin.first().click();
+          await memberPage.waitForURL((url) => !url.pathname.startsWith('/dev/login'), { timeout: 30_000 });
+          await memberPage.goto(`${APP}/s/${encodeURIComponent(SPACE)}/tools/preview/${TOOL}`, { waitUntil: 'domcontentloaded' });
+          const run = memberPage.getByRole('button', { name: 'Run' });
+          const gated = await run.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true).catch(() => false);
+          const early = await memberPage.locator('iframe[title="Hostile"]').count();
+          check(
+            'the preview does not start by itself for someone who did not write it',
+            gated && early === 0,
+            `${gated ? 'Run offered' : 'NO Run button'} · ${early} frame(s) before Run`,
+          );
+          if (gated) {
+            await run.click();
+            const started = await memberPage
+              .locator('iframe[title="Hostile"]')
+              .waitFor({ state: 'attached', timeout: 30_000 })
+              .then(() => true)
+              .catch(() => false);
+            check('Run starts it', started, started ? 'frame mounted' : 'no frame after Run');
+          }
+        } else {
+          console.log(`SKIP  preview gate in the browser\n        ${member.email} is not on /dev/login`);
+        }
+      } finally {
+        await memberContext.close().catch(() => {});
+      }
+    } else {
+      console.log('SKIP  admin lock and preview gate\n        no non-admin member in this space');
+    }
+
+    // ── 8f. withdrawing stops the open frame ─────────────────────────────────
+    step('8f. a withdrawn version stops its open frame');
+    await page.goto(`${APP}/t/${TOOL}`, { waitUntil: 'domcontentloaded' });
+    await page.locator('iframe[title="Hostile"]').waitFor({ state: 'attached', timeout: 30_000 });
+    // Let the handshake land, so the host is watching (status polls, the stream).
+    await sleep(3_000);
+    const revoked = await page.evaluate(
+      async ({ space, versionId }) => {
+        const res = await fetch(`/api/spaces/${encodeURIComponent(space)}/tools/versions/${encodeURIComponent(versionId)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'revoke', reason: 'verify-tools-escape' }),
+        });
+        return res.status;
+      },
+      { space: SPACE, versionId: version.version_id },
+    );
+    const withdrawnShown = await page
+      .getByText(/Withdrawn by the space that made it/)
+      .waitFor({ state: 'visible', timeout: 75_000 })
+      .then(() => true)
+      .catch(() => false);
+    check(
+      'the open frame is replaced by the withdrawal within a minute',
+      revoked === 200 && withdrawnShown && (await page.locator('iframe[title="Hostile"]').count()) === 0,
+      `revoke answered ${revoked} · ${withdrawnShown ? 'withdrawal drawn' : 'frame still up'}`,
+    );
+    const afterRevoke = await resolveBridgeTarget(session, { kind: 'install', installId: install.id });
+    check(
+      'and the next bridge call is refused `revoked`',
+      'code' in afterRevoke && afterRevoke.code === 'revoked',
+      'code' in afterRevoke ? `${afterRevoke.code}: ${afterRevoke.message}` : 'STILL RESOLVES',
+    );
 
     // ── 9. uninstall ─────────────────────────────────────────────────────────
     step('9. uninstall');

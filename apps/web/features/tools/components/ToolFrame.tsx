@@ -6,7 +6,8 @@ import Link from '@/features/shared/components/SpaceLink';
 import { clsx } from 'clsx';
 import { RefreshCwIcon } from '@/features/shared/icons';
 import { Button, Skeleton } from '@visvine/ui';
-import { fetchJsonBody } from '@/lib/fetchJson';
+import { FetchJsonError, fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
 import type { BridgeTarget, ToolSubject } from '@/lib/tools/protocol';
 import { useTheme } from '@/features/shared/contexts/ThemeContext';
 import {
@@ -33,6 +34,15 @@ const READY_TIMEOUT_MS = 15_000;
 
 /** Breathing room under the frame so it never sits flush on the viewport edge. */
 const PANE_BOTTOM_GUTTER = 16;
+
+/**
+ * How often an open frame asks whether it may keep running. A withdrawn
+ * version stops at its next bridge call; this bounds a Tool that makes none.
+ */
+const STATUS_CHECK_MS = 60_000;
+
+/** What the frame said when it left its sandbox, drawn in its place. */
+const NAVIGATED = 'This tool tried to leave its frame and was stopped.';
 
 type Status = 'minting' | 'loading' | 'ready';
 
@@ -93,6 +103,12 @@ export default function ToolFrame({
   // never unmounts the frame, only adds a note next to it.
   const [timedOut, setTimedOut] = useState(false);
   const [iframeEl, setIframeEl] = useState<HTMLIFrameElement | null>(null);
+  // Why the frame was taken down: withdrawn or suspended (the server said
+  // `revoked`), or the frame navigated itself. Set, the frame is gone for good
+  // until Reload.
+  const [stopped, setStopped] = useState<string | null>(null);
+  const loadsRef = useRef(0);
+  const visible = usePageVisible();
   const [paneHeight, setPaneHeight] = useState(MIN_FRAME_HEIGHT);
   const [contentHeight, setContentHeight] = useState<number | null>(null);
 
@@ -117,6 +133,8 @@ export default function ToolFrame({
     setMint(null);
     setStatus('minting');
     setError(null);
+    setStopped(null);
+    loadsRef.current = 0;
     setFrameLoaded(false);
     setTimedOut(false);
     setContentHeight(null);
@@ -128,6 +146,10 @@ export default function ToolFrame({
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
+        if (cause instanceof FetchJsonError && cause.code === 'revoked') {
+          setStopped(cause.message);
+          return;
+        }
         setError(cause instanceof Error ? cause.message : 'Visvine could not open this Tool.');
       });
     return () => {
@@ -188,6 +210,7 @@ export default function ToolFrame({
       onResize: setContentHeight,
       onError: (frameError) => setError(frameError.message),
       navigate: (path) => router.push(path),
+      onRevoked: setStopped,
     });
     bridgeRef.current = bridge;
     return () => {
@@ -205,7 +228,40 @@ export default function ToolFrame({
     return () => clearTimeout(timer);
   }, [status, attempt]);
 
-  const handleFrameLoad = useCallback(() => setFrameLoaded(true), []);
+  // The first `load` is the document the host asked for. Any later one is the
+  // frame navigating itself — the one way out CSP cannot close — so the host
+  // takes the frame down and records it. The request has already left; this is
+  // detection, and the incident is what a reviewer acts on.
+  const handleFrameLoad = useCallback(() => {
+    loadsRef.current += 1;
+    if (loadsRef.current === 1) {
+      setFrameLoaded(true);
+      return;
+    }
+    setStopped(NAVIGATED);
+    void fetchJsonBody('/api/tools/incidents', 'POST', { target, kind: 'navigation' }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetKey]);
+
+  // ── may it keep running ──
+
+  const checkStatus = useCallback(() => {
+    void fetchJson<{ ok: boolean; error?: { code: string; message: string } }>(
+      `/api/tools/status?target=${encodeURIComponent(targetKey)}`,
+    )
+      .then((answer) => {
+        if (answer.ok || !answer.error) return;
+        if (answer.error.code === 'revoked') setStopped(answer.error.message);
+        else setError(answer.error.message);
+      })
+      .catch(() => {});
+  }, [targetKey]);
+
+  useEffect(() => {
+    if (status !== 'ready' || stopped || !visible) return;
+    const timer = setInterval(checkStatus, STATUS_CHECK_MS);
+    return () => clearInterval(timer);
+  }, [status, stopped, visible, checkStatus]);
 
   // ── live updates ──
 
@@ -239,11 +295,15 @@ export default function ToolFrame({
       }
     };
     source.addEventListener('changed', onChanged);
+    // A verdict moved on this Tool somewhere on this server: ask at once
+    // rather than at the next minute.
+    source.addEventListener('verdict', checkStatus);
     return () => {
       source.removeEventListener('changed', onChanged);
+      source.removeEventListener('verdict', checkStatus);
       source.close();
     };
-  }, [status, targetKey, attempt]);
+  }, [status, targetKey, attempt, checkStatus]);
 
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
@@ -272,8 +332,10 @@ export default function ToolFrame({
                         className={mode === 'page' ? 'mx-6 my-3' : undefined} />
       )}
 
-      <div ref={slotRef} className="relative w-full" style={{ height: error ? undefined : frameHeight }}>
-        {error ? (
+      <div ref={slotRef} className="relative w-full" style={{ height: error || stopped ? undefined : frameHeight }}>
+        {stopped ? (
+          <ToolStopped title={title} reason={stopped} />
+        ) : error ? (
           <ToolErrorCard title={title} message={error} reportHref={reportHref} onReload={reload} />
         ) : (
           <>
@@ -302,6 +364,22 @@ export default function ToolFrame({
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A Tool that was taken down — withdrawn by its space, held by Visvine, or
+ * stopped for leaving its frame. The host's own state, the same for every
+ * Tool; the frame is gone and nothing of the Tool's is drawn.
+ */
+export function ToolStopped({ title, reason }: { title: string; reason: string }) {
+  return (
+    <div className="flex h-full min-h-[240px] items-center justify-center p-6">
+      <div className="max-w-md text-center">
+        <h2 className="text-base font-semibold text-fg">{title}</h2>
+        <p className="mt-2 text-sm text-fg-secondary">{reason}</p>
       </div>
     </div>
   );

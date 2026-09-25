@@ -13,22 +13,30 @@
 import { useMemo } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import {
+  runnableInstalls,
   typePagesFor,
   typeTabsFor,
   type TypePageClaim,
   type TypePageOwner,
 } from '@/lib/tools/typePages';
+import type { SpaceFeatureConfig } from '@/lib/types';
+
+/** The installs this viewer may run — locked and pulled-back Tools draw nothing. */
+function useRunnable() {
+  const { currentSpace, isAdmin } = useSpace();
+  const installs = currentSpace?.installedTools;
+  const config = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null;
+  return useMemo(() => runnableInstalls(installs, config, isAdmin), [installs, config, isAdmin]);
+}
 
 /** Every context type an installed Tool claims, resolved: type → who draws it. */
 export function useTypePages(): Record<string, TypePageClaim> {
-  const { currentSpace } = useSpace();
-  const installs = currentSpace?.installedTools;
+  const installs = useRunnable();
   return useMemo(() => typePagesFor(installs), [installs]);
 }
 
 /** The Tools adding a tab to this type's built-in page — usually none. */
 export function useTypeTabs(typeName: string | null | undefined): TypePageOwner[] {
-  const { currentSpace } = useSpace();
-  const installs = currentSpace?.installedTools;
+  const installs = useRunnable();
   return useMemo(() => typeTabsFor(installs, typeName), [installs, typeName]);
 }

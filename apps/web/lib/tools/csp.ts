@@ -16,13 +16,15 @@
  *   `frame-ancestors`     only the Visvine app may embed the frame, so the URL
  *                         is useless if it leaks.
  *
+ *   `img-src`             this origin, inline data, and the app's own media
+ *                         path — never a whole storage host, where anyone's
+ *                         bucket would take an image request carrying data in
+ *                         its URL.
+ *
  * `X-Frame-Options` is intentionally absent: it has no origin-list form, so
  * `frame-ancestors` is the only directive that can express "the app, and nothing
  * else". Everything is pure string building — no env, no I/O.
  */
-
-/** Where uploaded media lives (lib/gcs.ts serves it public, so images just load). */
-const MEDIA_ORIGIN = 'https://storage.googleapis.com'
 
 /** Immutable-cache lifetime for content-addressed bundle URLs (one year). */
 const BUNDLE_MAX_AGE = 31536000
@@ -38,6 +40,25 @@ function safeSources(values: readonly string[]): string[] {
   return values.filter((v) => SAFE_SOURCE_RE.test(v))
 }
 
+/** A source scoped to a path (`https://app.example/api/media/`): an origin and a plain path. */
+const SAFE_PATH_SOURCE_RE = /^[a-z][a-z0-9+.-]*:\/\/[a-z0-9.-]+(?::\d+)?\/[A-Za-z0-9._~/-]*$/i
+
+function safePathSources(values: readonly string[]): string[] {
+  return values.filter((v) => SAFE_PATH_SOURCE_RE.test(v))
+}
+
+/**
+ * Where a Tool may load images from besides itself: the app's media route
+ * (`/api/media/…`, which streams the private bucket), and the media CDN when
+ * one fronts it. Path-scoped, so nothing else on either host is reachable.
+ */
+export function toolMediaSources(appOrigin: string, cdnBase: string | null | undefined): string[] {
+  const out = [`${appOrigin.replace(/\/+$/, '')}/api/media/`]
+  if (cdnBase) out.push(`${cdnBase.replace(/\/+$/, '')}/`)
+  return out
+}
+
+
 /** A nonce is base64/base64url text; anything else would be writing policy. */
 const SAFE_NONCE_RE = /^[A-Za-z0-9+/_=-]{16,128}$/
 
@@ -46,8 +67,15 @@ export function frameCsp(opts: {
   appOrigin: string
   /** The origin the frame document itself is served from (the tools origin). */
   selfOrigin: string
-  /** Extra image hosts, e.g. a CDN in front of the media bucket. */
-  mediaHosts?: string[]
+  /** Path-scoped image sources — {@link toolMediaSources}. */
+  mediaSources?: string[]
+  /**
+   * Where the browser sends a violation of this policy — `report-uri` alone:
+   * the Reporting API's `report-to` batches are not delivered from an
+   * opaque-origin (sandboxed) document, and a browser that knows `report-to`
+   * ignores `report-uri` when both are present.
+   */
+  reportUrl?: string
   /**
    * Per-response nonce for the frame document's two inline scripts — the
    * import map (which has no reliable external form) and the boot module.
@@ -56,7 +84,7 @@ export function frameCsp(opts: {
    */
   nonce?: string
 }): string {
-  const imgSources = ["'self'", 'data:', 'blob:', MEDIA_ORIGIN, ...safeSources(opts.mediaHosts ?? [])]
+  const imgSources = ["'self'", 'data:', 'blob:', ...safePathSources(opts.mediaSources ?? [])]
   // When the tools origin is unconfigured the frame is same-origin with the app
   // (the documented dev/pre-DNS fallback), and `'self'` is then both correct and
   // narrower than naming the origin.
@@ -64,6 +92,7 @@ export function frameCsp(opts: {
     opts.appOrigin === opts.selfOrigin ? ["'self'"] : safeSources([opts.appOrigin])
   const scriptSources = ["'self'"]
   if (opts.nonce && SAFE_NONCE_RE.test(opts.nonce)) scriptSources.push(`'nonce-${opts.nonce}'`)
+  const report = opts.reportUrl && SAFE_REPORT_URL_RE.test(opts.reportUrl) ? opts.reportUrl : null
   return [
     "default-src 'none'",
     `script-src ${scriptSources.join(' ')}`,
@@ -74,8 +103,28 @@ export function frameCsp(opts: {
     `frame-ancestors ${ancestors.length ? ancestors.join(' ') : "'none'"}`,
     "base-uri 'none'",
     "form-action 'none'",
+    ...(report ? [`report-uri ${report}`] : []),
   ].join('; ')
 }
+
+/** A report URL is one of ours with a token query: no quotes, spaces or `;` that would write policy. */
+const SAFE_REPORT_URL_RE = /^https?:\/\/[a-z0-9.-]+(?::\d+)?\/[A-Za-z0-9._~/-]*(?:\?[A-Za-z0-9._~=&%-]*)?$/i
+
+/**
+ * Every powerful feature, denied to the frame document itself — the iframe's
+ * empty `allow` says the same from the outside, and this holds even if the
+ * frame were ever opened on its own.
+ */
+const PERMISSIONS_POLICY = [
+  'accelerometer', 'ambient-light-sensor', 'autoplay', 'battery', 'bluetooth', 'camera',
+  'clipboard-read', 'clipboard-write', 'display-capture', 'encrypted-media', 'fullscreen',
+  'gamepad', 'geolocation', 'gyroscope', 'hid', 'idle-detection', 'local-fonts',
+  'magnetometer', 'microphone', 'midi', 'payment', 'picture-in-picture',
+  'publickey-credentials-create', 'publickey-credentials-get', 'screen-wake-lock', 'serial',
+  'storage-access', 'usb', 'web-share', 'window-management', 'xr-spatial-tracking',
+]
+  .map((feature) => `${feature}=()`)
+  .join(', ')
 
 /**
  * Headers for the frame DOCUMENT. Never cached: the document embeds a
@@ -90,6 +139,10 @@ export function frameHeaders(csp: string): Record<string, string> {
     'Cross-Origin-Resource-Policy': 'cross-origin',
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': 'no-store',
+    'Permissions-Policy': PERMISSIONS_POLICY,
+    // A frame cannot fetch, but a `<link rel=dns-prefetch>` would still put a
+    // lookup — and whatever it carries in the name — on the wire.
+    'X-DNS-Prefetch-Control': 'off',
   }
 }
 

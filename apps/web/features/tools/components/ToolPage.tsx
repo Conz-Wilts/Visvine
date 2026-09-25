@@ -23,7 +23,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { canAccessFeature, toolRailKey } from '@/features/shared/lib/features';
 import { Skeleton } from '@visvine/ui';
 import type { SpaceFeatureConfig } from '@/lib/types';
-import ToolFrame from './ToolFrame';
+import ToolFrame, { ToolStopped } from './ToolFrame';
 
 export default function ToolPage({ slug }: { slug: string }) {
   const { currentSpace, loading, isAdmin } = useSpace();
@@ -58,6 +58,7 @@ export default function ToolPage({ slug }: { slug: string }) {
 
   if (loading) return <ToolPageSkeleton />;
   if (!allowed || !install) return <ToolNotFound slug={slug} />;
+  if (install.stopped) return <ToolStopped title={install.title} reason={install.stopped} />;
 
   return (
     <ToolFrame

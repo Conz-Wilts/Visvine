@@ -53,9 +53,9 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
   'agents:admin':
     'Turn agents you can edit on and off — an agent you turn on runs unattended on the space\'s model key, on the schedule you set',
   'tools:author':
-    'Build tools in your spaces — write their code, compile it, and submit one for review to the tool marketplace',
+    'Build tools in your spaces — write their code, compile it, and publish it into the space for its admins to approve',
   'tools:install':
-    'Install a reviewed tool from the marketplace into a space you administer',
+    'Install an approved tool into a space you administer, and manage the tools it runs',
   'secrets:write':
     'Store and rotate connector credentials in spaces you administer — values are write-only and can never be read back, by this client or any other',
   'vm:run':

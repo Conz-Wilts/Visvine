@@ -1,21 +1,26 @@
 /**
- * The bridge's two throttles, kept pure and in one file so both are testable
- * without a database, a session or a clock.
+ * The bridge's two throttles:
  *
- *   • a sliding-window rate limit on every bridge call, per viewer per install;
- *   • a concurrency cap on `data.call`, per install.
+ *   • a rate limit on every bridge call, per viewer per target;
+ *   • a concurrency cap on `data.call`, per target.
  *
- * Both are IN-PROCESS. That is a deliberate limit, not an oversight: the same
- * caveat already applies to lib/messages/realtime.ts, and a Tool that is merely
- * chatty is a nuisance rather than a threat — the hard guarantees (perimeter,
- * viewer grants, byte caps, isolate timeouts) are all per-call and hold on every
- * worker. What these two buy is that one Tool in a loop cannot make the app
- * unusable for the person running it, and that `data.call` cannot take all four
- * isolate slots (lib/connectors/isolate.ts) away from connectors and agents.
+ * Both are ROWS (`takeBridgeCallShared`, `acquireDataCallShared`): the runtime
+ * is N instances, and a per-process limiter there is N limits, each reset by a
+ * cold start. The rate is a token bucket in `rate_limit_buckets`
+ * (lib/rateLimit), the cap a lease in `rate_limit_leases`
+ * (lib/rateLimit/leases.ts). What they buy is that one Tool in a loop cannot
+ * make the app unusable for the person running it, and that `data.call` cannot
+ * take all four isolate slots (lib/connectors/isolate.ts) away from connectors
+ * and agents. The hard guarantees (perimeter, viewer grants, byte caps, isolate
+ * timeouts) are per call and hold on every instance regardless.
  *
- * `now` is a parameter everywhere rather than a read of the clock, so the tests
- * can walk a window forward without sleeping.
+ * The in-process versions below are the fallback when the store is
+ * unreachable — a weaker limit, never none — and are pure enough to test
+ * exactly: `now` is a parameter rather than a read of the clock.
  */
+import { takeToken } from '@/lib/rateLimit'
+import { acquireLease } from '@/lib/rateLimit/leases'
+import { logger } from '@/lib/logger'
 import { BRIDGE_LIMITS } from './protocol'
 
 /** The sliding window the call budget is measured over. */
@@ -128,6 +133,46 @@ export function acquireDataCall(
 /** Live `data.call` count for a key — for tests and for a future health surface. */
 export function dataCallsInFlight(key: string): number {
   return running.get(key) ?? 0
+}
+
+/**
+ * How long a `data.call` slot is held at most: the isolate's own timeout plus
+ * room for the round trip, so a holder that died mid-call frees its slot.
+ */
+const DATA_CALL_LEASE_MS = 30_000
+
+/**
+ * Spend one call from a viewer's budget for one target, shared by every
+ * instance. `limit` calls a minute, refilled continuously; a halved limit is
+ * how a new listing's reach is staged.
+ */
+export async function takeBridgeCallShared(
+  key: string,
+  limit: number = BRIDGE_LIMITS.callsPerMinute,
+): Promise<{ ok: true } | { ok: false; retryAfterMs: number }> {
+  const result = await takeToken(`tools:bridge:${key}`, {
+    capacity: limit,
+    refillPerSec: limit / (RATE_WINDOW_MS / 1000),
+  })
+  return result.ok ? { ok: true } : { ok: false, retryAfterMs: Math.max(1, result.retryAfterMs) }
+}
+
+/**
+ * Take a `data.call` slot for a target, shared by every instance, or null
+ * when it is at the cap. Refuses rather than queues, like the in-process
+ * gate. With the store unreachable, the in-process gate decides.
+ */
+export async function acquireDataCallShared(
+  key: string,
+  cap: number = DATA_CALL_CONCURRENCY,
+): Promise<(() => void) | null> {
+  try {
+    const lease = await acquireLease(`tools:data:${key}`, cap, DATA_CALL_LEASE_MS)
+    return lease ? () => void lease.release() : null
+  } catch (err) {
+    logger.error('tools.limits.lease_unavailable', { err })
+    return acquireDataCall(key, cap)
+  }
 }
 
 /** Drop all state. Tests only: a shared process must not leak counts between them. */

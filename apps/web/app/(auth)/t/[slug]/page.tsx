@@ -4,8 +4,8 @@
 // logic (resolving the install, the 404 state, the header) is in
 // features/tools/components/ToolPage.tsx, like every other surface here.
 //
-// `/t/` rather than `/tools/<slug>`: /tools is the marketplace, and a Tool's own
-// page must not be able to shadow one of its tabs.
+// `/t/` rather than `/tools/<slug>`: `/tools/preview/<name>` is a working
+// copy's page, and an installed Tool's slug must never be able to shadow it.
 
 import { useParams } from 'next/navigation';
 import ToolPage from '@/features/tools/components/ToolPage';

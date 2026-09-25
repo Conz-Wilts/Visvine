@@ -12,7 +12,7 @@ import { isWellFormedChallenge } from './handoff';
 
 /** The one address a phone sign-in ever returns to. */
 export const MOBILE_CALLBACK = 'visvine://auth/callback';
-export const MOBILE_ERROR = 'visvine://auth/error';
+const MOBILE_ERROR = 'visvine://auth/error';
 
 const DEFAULT_PATH = '/home';
 

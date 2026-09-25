@@ -30,7 +30,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, CopyIcon, ExternalLinkIcon, TriangleAlertIcon, UploadIcon } from '@/features/shared/icons';
-import { Button, Modal, Skeleton, Textarea } from '@visvine/ui';
+import { Button, ConfirmDialog, Modal, Skeleton, Textarea } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import ShareWithRooms, { type ShareValue } from '@/features/shared/components/ShareWithRooms';
 import { setAuthoredToolShare } from '@/features/tools/lib/client';
@@ -48,7 +48,7 @@ import { describeRequirements } from '@/lib/tools/requirements';
 import BuildDiagnostics from '@/features/tools/components/BuildDiagnostics';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import { TONE_CHIP, TONE_CLASSES, type Tone } from '@/features/shared/lib/statusTone';
-import { fetchAuthoredTool, publishTool } from '@/features/tools/lib/client';
+import { fetchAuthoredTool, publishTool, revokeToolVersion } from '@/features/tools/lib/client';
 
 // ── Chrome ───────────────────────────────────────────────────────────────────
 
@@ -137,7 +137,14 @@ const VERSION_TONES: Record<ToolVersionSummary['status'], Tone> = {
  * newest first. A rejection keeps its reviewer note — that note is the whole
  * value of the review gate to the author.
  */
-function VersionTrail({ versions }: { versions: ToolVersionSummary[] }) {
+function VersionTrail({
+  versions,
+  onWithdraw,
+}: {
+  versions: ToolVersionSummary[];
+  /** An admin of this space may pull an approved version back. */
+  onWithdraw?: (version: ToolVersionSummary) => void;
+}) {
   if (versions.length === 0) {
     return (
       <p className="text-sm text-fg-muted">
@@ -152,18 +159,30 @@ function VersionTrail({ versions }: { versions: ToolVersionSummary[] }) {
         <li key={version.id} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
             <span className="font-mono font-semibold text-fg">v{version.version}</span>
-            <span className={`${TONE_CHIP} ${TONE_CLASSES[VERSION_TONES[version.status]]}`}>
-              {version.status}
+            <span className={`${TONE_CHIP} ${TONE_CLASSES[version.revokedAt ? 'bad' : VERSION_TONES[version.status]]}`}>
+              {version.revokedAt ? 'withdrawn' : version.status}
             </span>
             <span className="text-fg-muted">
               {version.author.name ?? 'someone'} · {timeAgo(new Date(version.submittedAt).getTime(), { style: 'short' })}
             </span>
             <span className="ml-auto shrink-0 font-mono text-fg-muted">{fmtBytes(version.sizeBytes)}</span>
+            {onWithdraw && version.status === 'approved' && !version.revokedAt && (
+              <button
+                type="button"
+                onClick={() => onWithdraw(version)}
+                className="shrink-0 text-fg-muted transition-colors hover:text-danger"
+              >
+                Withdraw
+              </button>
+            )}
           </div>
           {version.reviewNote && (
             <p className="min-w-0 break-words text-[12px] text-fg-secondary">
               Reviewer: {version.reviewNote}
             </p>
+          )}
+          {version.revokeReason && (
+            <p className="min-w-0 break-words text-[12px] text-fg-secondary">{version.revokeReason}</p>
           )}
         </li>
       ))}
@@ -319,6 +338,8 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [withdrawing, setWithdrawing] = useState<ToolVersionSummary | null>(null);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [copied, copy] = useCopied(2000);
   const spaceHref = useSpaceHref();
 
@@ -611,13 +632,37 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
         title="Publishing"
         meta={pending ? `v${pending.version} in review` : versions.length > 0 ? `${versions.length} version${versions.length === 1 ? '' : 's'}` : undefined}
       >
-        <VersionTrail versions={versions} />
+        <VersionTrail versions={versions} onWithdraw={isAdmin ? setWithdrawing : undefined} />
         {!isAdmin && versions.length === 0 && (
           <p className="mt-3 text-[12px] text-fg-muted">
             Members author tools; publishing one is a space admin&apos;s call.
           </p>
         )}
       </Section>
+
+      <ConfirmDialog
+        open={!!withdrawing}
+        title={withdrawing ? `Withdraw v${withdrawing.version}?` : ''}
+        body="It stops wherever it runs — this space, its rooms, and any space that installed it."
+        confirmLabel="Withdraw"
+        destructive
+        error={withdrawError}
+        onConfirm={async () => {
+          if (!withdrawing || !spaceId) return;
+          setWithdrawError(null);
+          try {
+            await revokeToolVersion(spaceId, withdrawing.id);
+            setWithdrawing(null);
+            void reload();
+          } catch (e) {
+            setWithdrawError(e instanceof Error ? e.message : 'Could not withdraw');
+          }
+        }}
+        onClose={() => {
+          setWithdrawing(null);
+          setWithdrawError(null);
+        }}
+      />
 
       {publishing && spaceId && (
         <PublishDialog

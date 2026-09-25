@@ -4,6 +4,7 @@ import { subscribeChanges } from '@/lib/notes/changes'
 import { changedPathsFor } from '@/lib/tools/changes'
 import { resolveBridgeTarget } from '@/lib/tools/target'
 import { MAX_STREAMS_PER_USER, streamCounter } from '@/lib/tools/streamLimit'
+import { subscribeVerdicts } from '@/lib/tools/verdicts'
 
 /**
  * `GET /api/tools/changes?target=<BridgeTarget JSON>` — an SSE stream of
@@ -87,6 +88,17 @@ export async function GET(req: NextRequest) {
         for (const path of changedPathsFor(resolved, change)) pending.add(path)
         if (pending.size > 0 && flushTimer === null) flushTimer = setTimeout(flush, COALESCE_MS)
       })
+      // A verdict moved on this Tool (lib/tools/verdicts.ts): say so and end the
+      // stream. The host re-checks the target, which is what decides.
+      const key = 'key' in resolved.install ? resolved.install.key : null
+      const unsubscribeVerdicts = subscribeVerdicts((event) => {
+        const mine =
+          (event.versionId !== undefined && event.versionId === resolved.versionId) ||
+          (event.key !== undefined && event.key === key)
+        if (!mine) return
+        write('event: verdict\ndata: {}\n\n')
+        cleanup()
+      })
       const heartbeat = setInterval(() => write(': keepalive\n\n'), HEARTBEAT_MS)
       const lifetime = setTimeout(() => cleanup(), MAX_STREAM_MS)
 
@@ -98,6 +110,7 @@ export async function GET(req: NextRequest) {
         clearTimeout(lifetime)
         if (flushTimer !== null) clearTimeout(flushTimer)
         unsubscribe()
+        unsubscribeVerdicts()
         try {
           controller.close()
         } catch {

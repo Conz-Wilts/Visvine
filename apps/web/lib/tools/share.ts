@@ -113,11 +113,15 @@ async function houseVersion(houseId: string, name: string): Promise<{
   const key = toolKey(houseId, name)
   const own = await prisma.appToolInstall.findUnique({
     where: { app_tool_install_identity: { spaceId: houseId, key } },
-    select: { versionId: true, installedBy: true, version: { select: { config: true, perimeter: true } } },
+    select: { versionId: true, installedBy: true, version: { select: { config: true, perimeter: true, revokedAt: true } } },
   })
-  if (own) return { versionId: own.versionId, config: own.version.config, perimeter: own.version.perimeter, installedBy: own.installedBy }
+  // A withdrawn version is never handed down: the rooms fall back to the
+  // newest one still standing, exactly as if the house had never pinned it.
+  if (own && !own.version.revokedAt) {
+    return { versionId: own.versionId, config: own.version.config, perimeter: own.version.perimeter, installedBy: own.installedBy }
+  }
   const approved = await prisma.appToolVersion.findFirst({
-    where: { key, status: 'approved' },
+    where: { key, status: 'approved', revokedAt: null },
     orderBy: { version: 'desc' },
     select: { id: true, config: true, perimeter: true },
   })

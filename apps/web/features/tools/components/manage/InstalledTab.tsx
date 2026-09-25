@@ -157,6 +157,7 @@ function InstallRow({
           <p className="truncate font-mono text-[11px] text-fg-muted">
             {install.slug} · v{install.version}
           </p>
+          {install.stopped && <p className="mt-1 text-sm text-danger">{install.stopped}</p>}
           {install.description && (
             <p className="mt-1 line-clamp-2 text-sm text-fg-secondary">{install.description}</p>
           )}

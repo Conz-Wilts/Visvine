@@ -20,7 +20,7 @@ import {
   toolsOriginConfigured,
   TOOL_RUNTIME_PATH_PREFIX,
 } from '@/lib/tools/origin'
-import { bundleHeaders, frameCsp, frameHeaders } from '@/lib/tools/csp'
+import { bundleHeaders, frameCsp, frameHeaders, toolMediaSources } from '@/lib/tools/csp'
 import nextConfig from '../next.config'
 
 /** Runs `fn` with TOOLS_ORIGIN / NEXT_PUBLIC_APP_URL set, then restores both. */
@@ -186,24 +186,46 @@ test('frameCsp denies everything the bridge replaces', () => {
     "base-uri 'none'",
     "form-action 'none'",
     'frame-ancestors https://visvine.com',
-    "img-src 'self' data: blob: https://storage.googleapis.com",
+    "img-src 'self' data: blob:",
   ]) {
     assert.ok(csp.includes(directive), directive)
   }
+  // Never a whole storage host: anyone's bucket there would take an image
+  // request carrying data in its URL.
+  assert.ok(!csp.includes('storage.googleapis.com'))
   assert.ok(!csp.includes("script-src 'self' 'unsafe-inline'"), 'no inline script')
   assert.ok(!csp.includes('unsafe-eval'))
   assert.ok(!/frame-src|child-src/.test(csp), 'a Tool cannot nest another frame (default-src none)')
 })
 
-test('frameCsp appends media hosts and refuses sources that would write policy', () => {
+test('frameCsp pins images to the media paths and refuses sources that would write policy', () => {
   const csp = frameCsp({
     appOrigin: 'https://visvine.com',
     selfOrigin: 'https://tools.visvine.com',
-    mediaHosts: ['https://cdn.visvine.com', "evil'; script-src *", 'https://x.example:8443'],
+    mediaSources: [...toolMediaSources('https://visvine.com', 'https://cdn.visvine.com'), "https://evil.example/'; script-src *"],
   })
-  assert.ok(csp.includes("img-src 'self' data: blob: https://storage.googleapis.com https://cdn.visvine.com https://x.example:8443"))
+  assert.ok(csp.includes("img-src 'self' data: blob: https://visvine.com/api/media/ https://cdn.visvine.com/"))
   assert.ok(!csp.includes('evil'), 'a source that closes the directive is dropped, not escaped')
   assert.equal(csp.match(/script-src/g)?.length, 1)
+})
+
+test('frameCsp reports violations to the sink it is given, and nothing that writes policy', () => {
+  const url = 'https://tools.visvine.com/api/tools/runtime/report?token=abc.def-ghi'
+  const csp = frameCsp({ appOrigin: 'https://visvine.com', selfOrigin: 'https://tools.visvine.com', reportUrl: url })
+  assert.ok(csp.includes(`report-uri ${url}`))
+  // `report-to` would silence `report-uri`, and its batches never leave an
+  // opaque-origin document.
+  assert.ok(!csp.includes('report-to'))
+  const hostile = frameCsp({ appOrigin: 'https://visvine.com', selfOrigin: 'https://tools.visvine.com', reportUrl: "https://x.example/r; script-src *" })
+  assert.ok(!hostile.includes('report-uri'))
+})
+
+test('the frame document denies every powerful feature and DNS prefetch', () => {
+  const headers = frameHeaders("default-src 'none'")
+  for (const feature of ['camera=()', 'microphone=()', 'geolocation=()', 'payment=()', 'usb=()', 'clipboard-read=()']) {
+    assert.ok(headers['Permissions-Policy'].includes(feature), feature)
+  }
+  assert.equal(headers['X-DNS-Prefetch-Control'], 'off')
 })
 
 test('frameCsp uses \'self\' for the same-origin fallback', () => {

@@ -535,3 +535,31 @@ test('collectThemeTokens on a detached document falls back rather than throwing'
   const tokens = collectThemeTokens({ defaultView: null } as unknown as Document)
   assert.equal(tokens['--vv-accent'], '#78d870')
 })
+
+// ── pulled back ──
+
+test('a `revoked` answer goes to the host, never to the Tool', async () => {
+  const revoked: string[] = []
+  const h = harness({
+    send: async () => ({ ok: false, error: { code: 'revoked', message: 'Suspended by Visvine' } }),
+    onRevoked: (message) => revoked.push(message),
+  })
+  h.fromFrame(READY)
+  h.fromFrame({ type: 'visvine:call', id: 'c1', method: 'context.read', params: { path: 'deals/a.md' } })
+  await flush()
+  assert.deepEqual(revoked, ['Suspended by Visvine'])
+  assert.deepEqual(h.frame.types(), ['visvine:init'], 'the Tool is told nothing — the host removes it')
+})
+
+test('every other refusal still reaches the Tool as its result', async () => {
+  const revoked: string[] = []
+  const h = harness({
+    send: async () => ({ ok: false, error: { code: 'perimeter', message: 'not declared' } }),
+    onRevoked: (message) => revoked.push(message),
+  })
+  h.fromFrame(READY)
+  h.fromFrame({ type: 'visvine:call', id: 'c1', method: 'context.read', params: { path: 'x.md' } })
+  await flush()
+  assert.deepEqual(revoked, [])
+  assert.deepEqual(h.frame.types(), ['visvine:init', 'visvine:result'])
+})

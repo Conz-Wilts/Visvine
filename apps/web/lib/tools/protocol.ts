@@ -65,7 +65,9 @@ export type ToolSubject =
  * Every refusal the bridge can give, as a code the SDK can branch on and a
  * message safe to render. `perimeter` means the Tool never declared this reach;
  * `forbidden` means the viewer lacks it — the distinction matters to an author
- * because only the first is theirs to fix.
+ * because only the first is theirs to fix. `revoked` is the one code a Tool
+ * never sees: the version was pulled (or its listing suspended), and the HOST
+ * answers it by removing the frame (lib/tools/verdicts.ts).
  */
 export type BridgeErrorCode =
   | 'perimeter'
@@ -76,6 +78,7 @@ export type BridgeErrorCode =
   | 'timeout'
   | 'invalid'
   | 'degraded'
+  | 'revoked'
   | 'internal'
 
 export interface BridgeError {
@@ -305,6 +308,7 @@ function isBridgeError(value: unknown): value is BridgeError {
     'timeout',
     'invalid',
     'degraded',
+    'revoked',
     'internal',
   ]
   return typeof value.code === 'string' && codes.includes(value.code)

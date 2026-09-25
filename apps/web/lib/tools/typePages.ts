@@ -26,6 +26,24 @@ import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { isReservedTypeName } from '@/lib/types/nodeTypeRegistry'
 import type { InstalledToolDto, TypeClaimMode } from './installs'
 import { logger } from '@/lib/logger'
+import { canAccessFeature, toolRailKey } from '@/lib/featureAccess'
+import type { SpaceFeatureConfig } from '@/lib/types/space'
+
+/**
+ * The installs this viewer may run anywhere — their rail row, their page, their
+ * tabs on type pages. An admin who locked a Tool's row locked the Tool, and a
+ * space that holds its directory to admins holds its Tools there too; a Tool
+ * pulled back (`stopped`) draws no tab. The bridge refuses the same viewers
+ * (lib/tools/target.ts), so hiding here is the courtesy, not the gate.
+ */
+export function runnableInstalls(
+  installs: readonly InstalledToolDto[] | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
+  isAdmin: boolean,
+): InstalledToolDto[] {
+  if (!installs?.length || !canAccessFeature(config, 'directory', isAdmin)) return []
+  return installs.filter((tool) => !tool.stopped && canAccessFeature(config, toolRailKey(tool.slug), isAdmin))
+}
 
 /**
  * The types no Tool may own the page for, lower-cased.

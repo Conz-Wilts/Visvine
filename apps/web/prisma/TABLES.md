@@ -97,6 +97,21 @@ the entity notes in Context. They're the shared graph primitives.
 | `resource_comments` | Comments on a resource, optionally pinned to a specific cell. |
 | `resource_changes` | Proposed edits to a specific cell, with an approve/reject workflow (who proposed, who reviewed). |
 
+## Tools
+
+User-built mini-apps (docs/tools.md). A Tool's source and config are notes in
+its folder; these rows are what those notes compiled to, what was published,
+where it runs, and what it did.
+
+| Table | Controls |
+| --- | --- |
+| `app_tool_builds` | The last compile of each Tool's working copy, one row per `(space, name)`: the bundles, the diagnostics, the parsed config and the sanitised icon. Derived, never authoritative — every write to the Tool's notes rebuilds it. |
+| `app_tool_versions` | Every published version: an immutable snapshot of config, perimeter, sources and bundles, numbered from 1 per Tool key. Two verdicts — `status` (the source space's) and `marketplace_status` (Visvine's, null until someone asks) — and a withdrawal (`revoked_at`) that stops the version wherever it runs. |
+| `app_tool_installs` | A space running one version: its slug and rail key, what it is missing (`requirements`), which type pages or tabs it owns, an offered upgrade, and the house it came down from when shared into a room. |
+| `app_tool_state` | A Tool's small key/value store per install (UI preferences, not space data). Cascades with the install. |
+| `app_tool_listings` | A Tool's global listing, one per Tool key Visvine was asked to list, and Visvine's hold over it: `active`, `suspended` or `revoked`. A hold stops every install outside the publisher's family. |
+| `app_tool_incidents` | What a running Tool did that a person should look at — a frame that navigated itself, a CSP violation, a report. Facts about the Tool only; the viewer is dropped when they delete their account. |
+
 ## MCP / OAuth (agents connecting in)
 
 | Table | Controls |
@@ -119,6 +134,13 @@ the entity notes in Context. They're the shared graph primitives.
 | `message_stars` | Per-user saved/bookmarked messages. |
 | `link_previews` | Cached unfurl per URL (title, description, image, site, favicon, media type), shared across messages. |
 | `message_link_previews` | Joins a message to the preview cards it shows. |
+
+## Throttles
+
+| Table | Controls |
+| --- | --- |
+| `rate_limit_buckets` | A token bucket per caller key (hashed), shared by every instance: sign-in, webhooks, message sends, a Tool's bridge calls. Idle buckets are pruned. |
+| `rate_limit_leases` | "At most N of these at once", shared by every instance: slot `0..N-1` of a key held until released or expired, so a crashed holder frees itself. A Tool's `data.call` cap is one. |
 
 ## Two things that look like duplicates but aren't
 

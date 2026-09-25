@@ -177,9 +177,10 @@ const liveDeps: AppToolDeps = {
     // marketplace identity, and a version its own space approved but never
     // offered to anyone is not something a key lookup may hand out. Installing
     // a space's own unlisted version is done by id, where the install gate
-    // re-asks the same question against the caller's lineage.
+    // re-asks the same question for the installing space. A withdrawn version
+    // is never handed out.
     const history = await versionHistoryService(key)
-    return history.find((v) => v.status === 'approved' && v.marketplaceStatus === 'approved') ?? null
+    return history.find((v) => v.status === 'approved' && v.marketplaceStatus === 'approved' && !v.revokedAt) ?? null
   },
   spaceFacts: spaceFactsService,
   appOrigin: liveAppOrigin,
@@ -647,10 +648,10 @@ async function publishTool(ctx: ActionCaller, args: PublishToolArgs, deps: AppTo
     scope: 'space',
     published:
       approved
-        ? 'This snapshot is immutable and is APPROVED in this space: an admin published it, and an admin publishing is the approval. It can be installed here (and in any space nested under this one), and installs of an older version are offered the upgrade. It is NOT on the marketplace and no other space can see it.'
-        : 'This snapshot is immutable and is now waiting on an admin of this space, who has been notified. Nothing installs until they approve it. It is NOT on the marketplace and no other space can see it.',
+        ? 'This snapshot is immutable and is APPROVED in this space: an admin published it, and an admin publishing is the approval. It can be installed here — and shared into this space\'s rooms with `share:` on its index note — and installs of an older version are offered the upgrade. It is NOT listed and no other space can see it.'
+        : 'This snapshot is immutable and is now waiting on an admin of this space, who has been notified. Nothing installs until they approve it. It is NOT listed and no other space can see it.',
     marketplace:
-      'Listing this on the marketplace is a separate act, by a space admin, in the app: Tools → Mine → Submit to marketplace. A Visvine super-admin then reviews the declared perimeter and a code diff. Nothing you do here makes a tool public.',
+      'Listing a tool for other spaces is a separate act by an admin of this space, and a Visvine reviewer then reads the declared perimeter and a code diff. Nothing you do here makes a tool public.',
     ...(result.warning ? { warning: result.warning } : {}),
   }
 }
@@ -896,12 +897,12 @@ export const APP_ACTIONS = [
       'Publish the working copy as an immutable version, INTO THE SPACE IT WAS WRITTEN IN and nowhere ' +
       'else. This does NOT put the tool on the marketplace and does not make it visible to any other ' +
       'space — a tool written in a private space stays private. Only when it compiles; run check_tool ' +
-      'first. If you are a space admin the version is approved as it lands and can be installed here (and ' +
-      'in spaces nested under this one); if you are a member it waits for one of your admins, who is ' +
+      'first. If you are a space admin the version is approved as it lands and can be installed here (its ' +
+      'rooms get it through `share:` on its index note); if you are a member it waits for one of your admins, who is ' +
       'notified — that is how an UPDATE to an already-installed tool is queued, and re-publishing simply ' +
       'supersedes your earlier submission. Installs of an older version in this space are offered the ' +
-      'upgrade, which an admin still applies by hand. Listing on the marketplace is a separate, ' +
-      'deliberate act by a space admin in the app, reviewed by a Visvine super-admin.',
+      'upgrade, which an admin still applies by hand. Listing it for other spaces is a separate, ' +
+      'deliberate act by a space admin, reviewed by Visvine.',
     input: {
       space_id: spaceArg,
       name: nameArg,
