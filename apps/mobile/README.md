@@ -102,6 +102,12 @@ URL, and register both `<origin>/api/auth/callback/google-mobile` and the
 `visvine://` scheme with the OAuth client. The mobile callback is a separate
 route from the web one (`/api/auth/callback/google`) for exactly this reason.
 
+The sign-in is PKCE, like the desktop's (`apps/web/lib/auth/handoff.ts`): the
+app sends a challenge and a nonce through Google's `state`, the callback always
+answers `visvine://auth/callback?handoff=…&state=…` — never a session, never
+another address — and the app trades the handoff and its verifier for the
+session at `POST /api/auth/mobile/token`.
+
 ## Signing in during development
 
 You usually do not need any of the OAuth setup above. The login screen has a

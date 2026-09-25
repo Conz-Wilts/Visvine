@@ -31,6 +31,15 @@ struct DevUsersResponse: Codable {
     let users: [DevUser]
 }
 
+struct HandoffRequest: Codable {
+    let handoff: String
+    let verifier: String
+}
+
+struct HandoffResponse: Codable {
+    let token: String
+}
+
 struct IssueTokenRequest: Codable {
     let userId: String
 }

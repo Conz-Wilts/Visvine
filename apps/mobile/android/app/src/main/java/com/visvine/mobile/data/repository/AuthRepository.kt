@@ -2,6 +2,7 @@ package com.visvine.mobile.data.repository
 
 import com.visvine.mobile.data.local.TokenStore
 import com.visvine.mobile.data.model.DevUser
+import com.visvine.mobile.data.model.HandoffRequest
 import com.visvine.mobile.data.model.IssueTokenRequest
 import com.visvine.mobile.data.model.IssueTokenResponse
 import com.visvine.mobile.data.model.User
@@ -38,6 +39,16 @@ class AuthRepository @Inject constructor(
                 if (user != null) ApiResult.Success(user.copy(image = MediaUrl.resolve(user.image)))
                 else ApiResult.Failure("No session")
             }
+            is ApiResult.Failure -> res
+        }
+
+    /**
+     * Trades the handoff the browser returned for a session, proving with the
+     * verifier that this app is the one that started the sign-in.
+     */
+    suspend fun redeemHandoff(handoff: String, verifier: String): ApiResult<String> =
+        when (val res = safeApiCall(json) { api.redeemHandoff(HandoffRequest(handoff, verifier)) }) {
+            is ApiResult.Success -> ApiResult.Success(res.data.token)
             is ApiResult.Failure -> res
         }
 

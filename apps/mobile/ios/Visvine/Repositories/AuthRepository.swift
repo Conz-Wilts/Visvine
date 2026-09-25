@@ -24,6 +24,17 @@ struct AuthRepository {
         }
     }
 
+    /// Trades the handoff the browser returned for a session, proving with the
+    /// verifier that this app is the one that started the sign-in.
+    func redeemHandoff(_ handoff: String, verifier: String) async -> APIResult<String> {
+        let body = try? JSONEncoder().encode(HandoffRequest(handoff: handoff, verifier: verifier))
+        let res: APIResult<HandoffResponse> = await api.request("/api/auth/mobile/token", method: "POST", body: body)
+        switch res {
+        case .success(let r): return .success(r.token)
+        case .failure(let m): return .failure(m)
+        }
+    }
+
     func signOut() async {
         let _: APIResult<EmptyResponse> = await api.request("/api/auth/signout", method: "POST")
     }

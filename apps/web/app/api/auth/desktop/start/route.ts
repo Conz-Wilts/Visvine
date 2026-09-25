@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isWellFormedChallenge } from '@/lib/auth/desktopHandoff';
+import { isWellFormedChallenge } from '@/lib/auth/handoff';
 
 /**
  * The door a shell built before the page existed knocks on. The sign-in itself

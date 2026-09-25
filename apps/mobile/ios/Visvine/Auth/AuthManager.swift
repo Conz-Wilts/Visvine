@@ -17,6 +17,9 @@ final class AuthManager {
 
     private let repo = AuthRepository()
     private var handledURLs = Set<String>()
+    /// The sign-in this app started: the verifier stays here, the nonce comes
+    /// back on the return link, and a return that does not carry it is ignored.
+    private var pendingSignIn: (verifier: String, nonce: String, startedAt: Date)?
 
     init() {
         Task { await checkSession() }
@@ -53,6 +56,15 @@ final class AuthManager {
         }
     }
 
+    /// Starts a sign-in: the challenge and nonce go to the browser, the
+    /// verifier stays in memory until the handoff comes back.
+    func beginSignIn() -> (challenge: String, nonce: String) {
+        let pkce = PKCE.make()
+        let nonce = UUID().uuidString
+        pendingSignIn = (pkce.verifier, nonce, Date())
+        return (pkce.challenge, nonce)
+    }
+
     func clearPendingRoute() { pendingRoute = nil }
     func clearAuthError() { authErrorMessage = nil }
 
@@ -73,12 +85,23 @@ final class AuthManager {
             isLoading = false
 
         case "callback":
-            guard let token = query("token") else { return }
+            guard let handoff = query("handoff"),
+                  let pending = pendingSignIn,
+                  query("state") == pending.nonce,
+                  Date().timeIntervalSince(pending.startedAt) < 600
+            else { return }
             handledURLs.insert(key)
+            pendingSignIn = nil
             let callbackURL = query("callbackUrl")
             isLoading = true
             Task {
-                repo.saveToken(token)
+                switch await repo.redeemHandoff(handoff, verifier: pending.verifier) {
+                case .success(let token):
+                    repo.saveToken(token)
+                case .failure(let message):
+                    authErrorMessage = message; isLoading = false
+                    return
+                }
                 switch await repo.getSession() {
                 case .success(let u):
                     pendingRoute = route(fromCallback: callbackURL)
@@ -105,6 +128,7 @@ final class AuthManager {
         switch code {
         // The web-only claim path can't complete on mobile (see google-mobile route).
         case "account_claim_required": return "Please sign in on web first to claim your account"
+        case "update_required": return "Update Visvine to sign in"
         default: return "Sign in failed. Please try again."
         }
     }

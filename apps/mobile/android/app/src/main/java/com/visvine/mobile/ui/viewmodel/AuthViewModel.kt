@@ -16,6 +16,9 @@ class AuthViewModel @Inject constructor(
     val state = authManager.state
     val authError: SharedFlow<String> = authManager.authError
 
-    fun startGoogleSignIn(context: Context) = oauthLauncher.launch(context)
+    fun startGoogleSignIn(context: Context) {
+        val (challenge, nonce) = authManager.beginSignIn()
+        oauthLauncher.launch(context, challenge, nonce)
+    }
     fun logout() = authManager.logout()
 }

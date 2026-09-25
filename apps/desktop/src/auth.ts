@@ -12,7 +12,7 @@ import { COOKIE_NAME, authHandoffIn, signInStartUrl } from "./urls";
  * you" forever. The browser is also where a saved password, a hardware key and
  * the address bar the person can actually read already are.
  *
- * The exchange is PKCE, and the web half is apps/web/lib/auth/desktopHandoff.ts:
+ * The exchange is PKCE, and the web half is apps/web/lib/auth/handoff.ts:
  * the verifier minted here never leaves this process, so the deep link is
  * worthless to anything that intercepts it.
  *

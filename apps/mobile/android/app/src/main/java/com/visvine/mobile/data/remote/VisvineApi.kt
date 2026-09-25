@@ -14,6 +14,8 @@ import com.visvine.mobile.data.model.Event
 import com.visvine.mobile.data.model.EventsResponse
 import com.visvine.mobile.data.model.FeedPage
 import com.visvine.mobile.data.model.FullProfile
+import com.visvine.mobile.data.model.HandoffRequest
+import com.visvine.mobile.data.model.HandoffResponse
 import com.visvine.mobile.data.model.IssueTokenRequest
 import com.visvine.mobile.data.model.IssueTokenResponse
 import com.visvine.mobile.data.model.Message
@@ -46,6 +48,9 @@ interface VisvineApi {
 
     @POST("api/auth/signout")
     suspend fun signOut(): retrofit2.Response<Unit>
+
+    @POST("api/auth/mobile/token")
+    suspend fun redeemHandoff(@Body body: HandoffRequest): HandoffResponse
 
     // Spaces
     @GET("api/data/spaces")

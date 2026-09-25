@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,6 +46,14 @@ class AuthManager @Inject constructor(
     val authError: SharedFlow<String> = _authError.asSharedFlow()
 
     private val handledUrls = mutableSetOf<String>()
+
+    /**
+     * The sign-in this app started: the verifier stays here, the nonce comes
+     * back on the return link, and a return that does not carry it is ignored.
+     */
+    private data class PendingSignIn(val verifier: String, val nonce: String, val startedAt: Long)
+
+    private var pendingSignIn: PendingSignIn? = null
 
     init {
         checkSession()
@@ -82,6 +91,17 @@ class AuthManager @Inject constructor(
         }
     }
 
+    /**
+     * Starts a sign-in: the challenge and nonce go to the browser, the verifier
+     * stays in memory until the handoff comes back.
+     */
+    fun beginSignIn(): Pair<String, String> {
+        val pkce = Pkce.make()
+        val nonce = UUID.randomUUID().toString()
+        pendingSignIn = PendingSignIn(pkce.verifier, nonce, System.currentTimeMillis())
+        return pkce.challenge to nonce
+    }
+
     fun clearPendingRoute() {
         _pendingRoute.value = null
     }
@@ -106,12 +126,23 @@ class AuthManager @Inject constructor(
             }
 
             "callback" -> {
-                val token = uri.getQueryParameter("token") ?: return
+                val handoff = uri.getQueryParameter("handoff") ?: return
+                val pending = pendingSignIn ?: return
+                if (uri.getQueryParameter("state") != pending.nonce) return
+                if (System.currentTimeMillis() - pending.startedAt > 10 * 60 * 1000) return
                 handledUrls.add(url)
+                pendingSignIn = null
                 val callbackUrl = uri.getQueryParameter("callbackUrl")
                 _state.value = _state.value.copy(isLoading = true)
                 scope.launch {
-                    authRepo.saveToken(token)
+                    when (val redeemed = authRepo.redeemHandoff(handoff, pending.verifier)) {
+                        is ApiResult.Success -> authRepo.saveToken(redeemed.data)
+                        is ApiResult.Failure -> {
+                            _authError.tryEmit(redeemed.error)
+                            _state.value = AuthState(null, false, false)
+                            return@launch
+                        }
+                    }
                     when (val res = authRepo.getSession()) {
                         is ApiResult.Success -> {
                             _pendingRoute.value = routeFromCallback(callbackUrl)
@@ -137,6 +168,7 @@ class AuthManager @Inject constructor(
     private fun messageForError(code: String?): String = when (code) {
         // The web-only claim path can't complete on mobile (see google-mobile route).
         "account_claim_required" -> "Please sign in on web first to claim your account"
+        "update_required" -> "Update Visvine to sign in"
         else -> "Sign in failed. Please try again."
     }
 }

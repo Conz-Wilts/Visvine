@@ -1,56 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSession } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { googleDisplayName } from "@/lib/auth/googleName";
 import { Prisma } from "@prisma/client";
 import { logger } from "@/lib/logger";
-import { ensureHomeNodeId, type SessionableUser } from "@/lib/auth/bootstrap";
+import { createHandoff } from "@/lib/auth/handoff";
+import {
+  mobileErrorUrl,
+  mobileHandoffUrl,
+  parseMobileState,
+  type MobileSignInState,
+} from "@/lib/auth/mobileState";
 
-async function buildSessionData(user: SessionableUser) {
-  const nodeId = await ensureHomeNodeId(user);
+/**
+ * Google's return for a phone app's sign-in. The app started it with a PKCE
+ * challenge in `state`; this answers over the app's own scheme with a handoff
+ * the app redeems, together with its verifier, at `/api/auth/mobile/token`
+ * (lib/auth/handoff.ts). No session ever travels over the link, and the link
+ * always goes to `visvine://auth/callback` — `state` is the caller's to write,
+ * so it names nothing about where a credential goes.
+ */
 
-  const token = await createSession({
-    userId: user.id,
-    name: user.name,
-    email: user.email,
-    image: user.image,
-    nodeId,
-  });
+function fail(state: MobileSignInState, error: string, message?: string) {
+  return NextResponse.redirect(mobileErrorUrl(error, state, message));
+}
 
-  return { token };
+async function signedIn(userId: string, state: MobileSignInState & { challenge: string }) {
+  const handoff = await createHandoff({ userId, challenge: state.challenge }, "mobile");
+  return NextResponse.redirect(mobileHandoffUrl(handoff, state));
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const code = searchParams.get("code");
-  const stateParam = searchParams.get("state");
+  const state = parseMobileState(searchParams.get("state"));
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  // This URI must exactly match what was registered in Google Cloud Console
-  // and what the mobile client sent in the initial auth request
+  // Must exactly match the redirect registered in Google Cloud Console and the
+  // one the app sent in its authorize request.
   const tokenExchangeRedirectUri = `${appUrl}/api/auth/callback/google-mobile`;
 
-  // Parse state to get mobile deep-link redirect info
-  let mobileRedirectUri: string | undefined;
-  let callbackUrl = "/home";
-
-  if (stateParam) {
-    try {
-      const state = JSON.parse(decodeURIComponent(stateParam));
-      mobileRedirectUri = state.redirectUri;
-      callbackUrl = state.callbackUrl || "/home";
-    } catch (e) {
-      logger.error('api.auth.callback.mobile.parse_state.failed', { err: e });
-    }
+  if (state.foreignRedirect) {
+    logger.warn("api.auth.callback.mobile.foreign_redirect");
+    return fail(state, "invalid_request");
   }
-
-  if (!code) {
-    // For mobile, redirect back with error in URL
-    const errorUrl = new URL('visvine://auth/error');
-    errorUrl.searchParams.set('error', 'no_code');
-    return NextResponse.redirect(errorUrl.toString());
+  const challenge = state.challenge;
+  if (!challenge) {
+    return fail(state, "update_required", "Update Visvine to sign in");
   }
+  const withChallenge = { ...state, challenge };
 
-  // Step 1: Exchange code for tokens
+  if (!code) return fail(state, "no_code");
+
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -62,73 +61,41 @@ export async function GET(req: NextRequest) {
       grant_type: "authorization_code",
     }),
   });
-
-  if (!tokenRes.ok) {
-    const errorUrl = new URL('visvine://auth/error');
-    errorUrl.searchParams.set('error', 'token_exchange');
-    return NextResponse.redirect(errorUrl.toString());
-  }
+  if (!tokenRes.ok) return fail(state, "token_exchange");
 
   const tokens = await tokenRes.json();
-  if (!tokens.access_token) {
-    const errorUrl = new URL('visvine://auth/error');
-    errorUrl.searchParams.set('error', 'token_exchange');
-    return NextResponse.redirect(errorUrl.toString());
-  }
+  if (!tokens.access_token) return fail(state, "token_exchange");
 
-  // Step 2: Get Google profile
-  const userRes = await fetch(
-    "https://www.googleapis.com/oauth2/v2/userinfo",
-    { headers: { Authorization: `Bearer ${tokens.access_token}` } }
-  );
-
-  if (!userRes.ok) {
-    const errorUrl = new URL('visvine://auth/error');
-    errorUrl.searchParams.set('error', 'userinfo');
-    return NextResponse.redirect(errorUrl.toString());
-  }
+  const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+  if (!userRes.ok) return fail(state, "userinfo");
 
   const googleUser = await userRes.json();
-  if (!googleUser.email) {
-    const errorUrl = new URL('visvine://auth/error');
-    errorUrl.searchParams.set('error', 'no_email');
-    return NextResponse.redirect(errorUrl.toString());
-  }
+  if (!googleUser.email) return fail(state, "no_email");
 
   const googleId: string = googleUser.id;
   const googleName = googleDisplayName(googleUser);
   const googlePicture: string = googleUser.picture ?? "";
 
-  // Step 3: Look up by Google ID first (fastest path — handles returning users)
-  let user = await prisma.user.findUnique({ where: { googleId } });
-
-  if (user) {
-    if (user.isActive) {
-      // Returning active user — refresh name/picture and sign in
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { name: googleName, image: googlePicture || user.image },
-      });
-      const { token } = await buildSessionData(user);
-
-      // Redirect back to mobile app with token
-      const successUrl = new URL(mobileRedirectUri || 'visvine://auth/callback');
-      successUrl.searchParams.set('token', token);
-      successUrl.searchParams.set('callbackUrl', callbackUrl);
-      return NextResponse.redirect(successUrl.toString());
-    }
+  // A returning user, found by their Google id.
+  const known = await prisma.user.findUnique({ where: { googleId } });
+  if (known?.isActive) {
+    await prisma.user.update({
+      where: { id: known.id },
+      data: { name: googleName, image: googlePicture || known.image },
+    });
+    return signedIn(known.id, withChallenge);
   }
 
-  // Step 4: Look up by email
   const userByEmail = await prisma.user.findUnique({
     where: { email: googleUser.email },
   });
 
   if (!userByEmail) {
-    // Brand new user — create active account
-    let newUser: SessionableUser;
+    let newUserId: string;
     try {
-      newUser = await prisma.user.create({
+      const created = await prisma.user.create({
         data: {
           email: googleUser.email,
           name: googleName,
@@ -136,34 +103,28 @@ export async function GET(req: NextRequest) {
           googleId,
           isActive: true,
         },
+        select: { id: true },
       });
+      newUserId = created.id;
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        newUser = (await prisma.user.findUniqueOrThrow({
+        const existing = await prisma.user.findUniqueOrThrow({
           where: { email: googleUser.email },
-        })) as SessionableUser;
+          select: { id: true },
+        });
+        newUserId = existing.id;
       } else {
         throw e;
       }
     }
-    const { token } = await buildSessionData(newUser);
-
-    const successUrl = new URL(mobileRedirectUri || 'visvine://auth/callback');
-    successUrl.searchParams.set('token', token);
-    successUrl.searchParams.set('callbackUrl', callbackUrl);
-    return NextResponse.redirect(successUrl.toString());
+    return signedIn(newUserId, withChallenge);
   }
 
-  // Email matched a shadow profile — not supported for mobile OAuth
-  // (claim flow requires email verification which is web-only)
+  // A shadow profile is claimed on the web, where the email is verified.
   if (!userByEmail.isActive) {
-    const errorUrl = new URL('visvine://auth/error');
-    errorUrl.searchParams.set('error', 'account_claim_required');
-    errorUrl.searchParams.set('message', 'Please sign in on web first to claim your account');
-    return NextResponse.redirect(errorUrl.toString());
+    return fail(state, "account_claim_required", "Please sign in on web first to claim your account");
   }
 
-  // Active user found by email — link Google ID if not yet linked
   if (!userByEmail.googleId) {
     await prisma.user.update({
       where: { id: userByEmail.id },
@@ -175,10 +136,5 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const { token } = await buildSessionData(userByEmail);
-
-  const successUrl = new URL(mobileRedirectUri || 'visvine://auth/callback');
-  successUrl.searchParams.set('token', token);
-  successUrl.searchParams.set('callbackUrl', callbackUrl);
-  return NextResponse.redirect(successUrl.toString());
+  return signedIn(userByEmail.id, withChallenge);
 }

@@ -6,10 +6,10 @@ import { readHandoff, verifierMatches } from '@/lib/auth/handoff';
 import { takeToken } from '@/lib/rateLimit';
 
 /**
- * The second half of the desktop round trip: the shell posts back the handoff
- * the browser gave it, together with the verifier it has held in memory since
- * it opened the browser. Only the two together are a session — which is what
- * makes the deep link safe to travel over a custom scheme.
+ * The second half of a phone sign-in: the app posts back the handoff Google's
+ * return gave it (`/api/auth/callback/google-mobile`), together with the
+ * verifier it has held in memory since it opened the browser. Only the two
+ * together are a session (lib/auth/handoff.ts).
  */
 
 export const dynamic = 'force-dynamic';
@@ -25,12 +25,12 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  const limit = await takeToken(`desktop:token:${ip}`, { capacity: 10, refillPerSec: 0.2 });
+  const limit = await takeToken(`mobile:token:${ip}`, { capacity: 10, refillPerSec: 0.2 });
   if (!limit.ok) {
     return NextResponse.json({ error: 'Too many attempts.' }, { status: 429 });
   }
 
-  const claims = await readHandoff(handoff, 'desktop');
+  const claims = await readHandoff(handoff, 'mobile');
   if (!claims || !verifierMatches(verifier, claims.challenge)) {
     return NextResponse.json({ error: 'That sign-in has expired. Try again.' }, { status: 401 });
   }
@@ -50,12 +50,8 @@ export async function POST(req: NextRequest) {
     email: user.email,
     image: user.image,
     nodeId,
+    cl: 'mobile',
   });
 
-  return NextResponse.json({
-    token,
-    maxAgeSeconds: MAX_AGE,
-    email: user.email,
-    name: user.name,
-  });
+  return NextResponse.json({ token, maxAgeSeconds: MAX_AGE });
 }

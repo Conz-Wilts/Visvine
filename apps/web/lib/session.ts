@@ -24,6 +24,12 @@ export interface SessionPayload {
   image?: string | null;
   /** The person's own node — their profile page (User.nodeId). */
   nodeId?: string | null;
+  /**
+   * Which sign-in door issued the token, set only by the phone apps' doors.
+   * It records the route, not the device — any client can walk a sign-in flow
+   * — so what keeps tools off the phones is the transport (`getSessionInfo`).
+   */
+  cl?: 'mobile';
 }
 
 /**

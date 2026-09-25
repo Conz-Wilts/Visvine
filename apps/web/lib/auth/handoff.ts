@@ -1,24 +1,26 @@
 /**
- * Signing in to the desktop shell happens in the SYSTEM BROWSER, never inside
- * the shell's own window — the browser is where a passkey, a saved password and
- * a hardware key already work, and where the person can see whose page they are
- * typing into. Electron has no platform authenticator at all
- * (`isUserVerifyingPlatformAuthenticatorAvailable()` is false), so an in-window
- * Google sign-in simply hangs on "verifying it's you".
+ * A native app signs in through a BROWSER and comes back over its own custom
+ * scheme — the desktop shell (`visvine-desktop://`) and the phone apps
+ * (`visvine://`). A custom scheme is not owned: any app on the device may
+ * register it, so nothing durable may ever travel over one.
  *
  * The round trip is PKCE (RFC 7636), and it holds no server state:
  *
- *   1. the shell mints a random VERIFIER, keeps it in memory, and opens
- *      `/api/auth/desktop/start?challenge=<sha256(verifier)>` in the browser;
- *   2. the browser signs the person in the ordinary way, and that page offers
- *      one link — the press is the approval;
- *   3. the link is `visvine-desktop://auth?handoff=<jwt>`, a 2-minute token
- *      naming the user and the challenge, and nothing else;
- *   4. the shell POSTs it back with the verifier and receives the real session.
+ *   1. the app mints a random VERIFIER, keeps it in memory, and starts the
+ *      sign-in with `challenge = base64url(sha256(verifier))`;
+ *   2. the browser signs the person in the ordinary way — for the desktop the
+ *      page at `/desktop/signin` offers one link (the press is the approval),
+ *      for the phones Google's consent returns to
+ *      `/api/auth/callback/google-mobile`;
+ *   3. the app's scheme receives a HANDOFF: a 2-minute token naming the user,
+ *      the challenge and which app it is for, and nothing else;
+ *   4. the app POSTs it back with the verifier and receives the real session
+ *      (`/api/auth/desktop/token`, `/api/auth/mobile/token`).
  *
  * So the deep link is worthless on its own: whoever intercepts it does not hold
  * the verifier, and the handoff is expired long before it could be guessed.
- * Nothing durable ever travels over the custom scheme.
+ * Each app's handoff carries its own audience, so one app's link can never be
+ * redeemed at the other's door.
  */
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
@@ -26,7 +28,12 @@ import { SignJWT, jwtVerify } from 'jose';
 /** How long the browser's press stays good for. */
 const HANDOFF_TTL_SECONDS = 120;
 
-const AUDIENCE = 'visvine-desktop-handoff';
+export type HandoffApp = 'desktop' | 'mobile';
+
+const AUDIENCE: Record<HandoffApp, string> = {
+  desktop: 'visvine-desktop-handoff',
+  mobile: 'visvine-mobile-handoff',
+};
 
 function secret(): Uint8Array {
   const value = process.env.AUTH_SECRET;
@@ -50,7 +57,7 @@ export function verifierMatches(verifier: string, challenge: string): boolean {
 }
 
 /** A challenge as it may arrive on a URL: base64url, sha256-sized. */
-export function isWellFormedChallenge(value: string | null): value is string {
+export function isWellFormedChallenge(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value);
 }
 
@@ -59,23 +66,23 @@ export interface HandoffClaims {
   challenge: string;
 }
 
-/** Mint the token the browser hands to the shell over the deep link. */
-export async function createHandoff(claims: HandoffClaims): Promise<string> {
+/** Mint the token the browser hands to the app over its deep link. */
+export async function createHandoff(claims: HandoffClaims, app: HandoffApp): Promise<string> {
   return new SignJWT({ chal: claims.challenge })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(claims.userId)
-    .setAudience(AUDIENCE)
+    .setAudience(AUDIENCE[app])
     .setIssuedAt()
     .setExpirationTime(`${HANDOFF_TTL_SECONDS}s`)
     .sign(secret());
 }
 
-/** The claims, or null if the token is forged, expired or for something else. */
-export async function readHandoff(token: string): Promise<HandoffClaims | null> {
+/** The claims, or null if the token is forged, expired or for another app. */
+export async function readHandoff(token: string, app: HandoffApp): Promise<HandoffClaims | null> {
   try {
     const { payload } = await jwtVerify(token, secret(), {
       algorithms: ['HS256'],
-      audience: AUDIENCE,
+      audience: AUDIENCE[app],
     });
     const userId = typeof payload.sub === 'string' ? payload.sub : null;
     const challenge = typeof payload.chal === 'string' ? payload.chal : null;

@@ -54,7 +54,8 @@ struct LoginView: View {
 
     private func signIn() {
         auth.clearAuthError()
-        oauth.start { url in
+        let (challenge, nonce) = auth.beginSignIn()
+        oauth.start(challenge: challenge, nonce: nonce) { url in
             if let url { auth.handleDeepLink(url) }
         }
     }

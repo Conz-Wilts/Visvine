@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { createHandoff, isWellFormedChallenge } from "@/lib/auth/desktopHandoff";
+import { createHandoff, isWellFormedChallenge } from "@/lib/auth/handoff";
 
 /**
- * The browser's half of a desktop sign-in (lib/auth/desktopHandoff.ts). The
+ * The browser's half of a desktop sign-in (lib/auth/handoff.ts). The
  * shell opens this page in the system browser — the one place a passkey, a
  * saved password and a hardware key all work — and the press below is what
  * hands it a session.
@@ -46,7 +46,7 @@ export default async function DesktopSignInPage({
   const session = await getSession();
   if (!session) redirect(`/signin?callbackUrl=${encodeURIComponent(here)}`);
 
-  const handoff = await createHandoff({ userId: session.userId, challenge });
+  const handoff = await createHandoff({ userId: session.userId, challenge }, "desktop");
 
   return (
     <Shell>

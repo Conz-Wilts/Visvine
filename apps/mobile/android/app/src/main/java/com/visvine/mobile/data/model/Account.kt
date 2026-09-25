@@ -38,6 +38,18 @@ data class DevUsersResponse(
     val users: List<DevUser> = emptyList(),
 )
 
+/** POST /api/auth/mobile/token: the browser's handoff and this app's verifier. */
+@Serializable
+data class HandoffRequest(
+    val handoff: String,
+    val verifier: String,
+)
+
+@Serializable
+data class HandoffResponse(
+    val token: String,
+)
+
 @Serializable
 data class IssueTokenRequest(
     val userId: String,
