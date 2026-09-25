@@ -45,6 +45,12 @@ export interface BridgeCallSite {
     | 'ai.complete'
     | 'ai.decide'
     | 'ui.download'
+    | 'collections.insert'
+    | 'collections.list'
+    | 'collections.get'
+    | 'collections.update'
+    | 'collections.delete'
+    | 'collections.count'
   /** The literal first argument (a path, glob, name or handler), or null when computed. */
   arg: string | null
   file: CheckFile
@@ -121,6 +127,21 @@ const BRIDGE_FAMILIES: Record<string, Record<string, BridgeCallSite['method']>> 
   actions: { run: 'actions.run' },
   ai: { complete: 'ai.complete', decide: 'ai.decide' },
   ui: { download: 'ui.download' },
+  collections: {
+    insert: 'collections.insert',
+    list: 'collections.list',
+    get: 'collections.get',
+    update: 'collections.update',
+    delete: 'collections.delete',
+    count: 'collections.count',
+  },
+}
+
+/** The kit's hooks that call the bridge for the Tool, by what they call. */
+const BRIDGE_HOOKS: Record<string, BridgeCallSite['method']> = {
+  usePagedList: 'context.list',
+  useCollection: 'collections.list',
+  useCollectionCount: 'collections.count',
 }
 
 type AnyNode = acorn.AnyNode
@@ -512,9 +533,9 @@ export function scanCode(unit: CodeUnit): CodeScan {
             }
           }
         }
-        // The kit's paging hook lists a glob on the Tool's behalf.
-        if (callee.type === 'Identifier' && callee.name === 'usePagedList') {
-          calls.push({ method: 'context.list', arg: stringValue(node.arguments[0] as AnyNode), file: unit.file, ...lineOf(where(node)) })
+        // The kit's hooks call the bridge on the Tool's behalf.
+        if (callee.type === 'Identifier' && Object.hasOwn(BRIDGE_HOOKS, callee.name)) {
+          calls.push({ method: BRIDGE_HOOKS[callee.name], arg: stringValue(node.arguments[0] as AnyNode), file: unit.file, ...lineOf(where(node)) })
         }
         if (callee.type === 'MemberExpression') {
           const method = propertyName(callee)

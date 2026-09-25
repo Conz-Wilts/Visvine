@@ -6,6 +6,8 @@
 export {
   LIVE_QUERY_POLL_MS,
   useBandAction,
+  useCollection,
+  useCollectionCount,
   useLiveQuery,
   usePagedList,
   useQuery,
@@ -15,13 +17,15 @@ export {
   useVisvine,
   VisvineProvider,
 } from './hooks';
-export type { LiveQueryOptions, PagedListOptions, PagedListResult, QueryResult, VisvineApi } from './hooks';
+export type { CollectionQuery, LiveQueryOptions, PagedListOptions, PagedListResult, QueryResult, VisvineApi } from './hooks';
 
 export { BridgeCallError } from './client';
 
 export type {
   BridgeError,
   BridgeErrorCode,
+  CollectionRow,
+  CollectionWhere,
   ContextEntry,
   ContextHit,
   ContextLink,

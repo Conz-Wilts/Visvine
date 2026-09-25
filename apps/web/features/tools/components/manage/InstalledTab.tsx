@@ -24,7 +24,7 @@ import { BlocksIcon, CircleArrowUpIcon, ExternalLinkIcon, TriangleAlertIcon } fr
 import { Chip, ConfirmDialog, EmptyState, Skeleton, Button, Select, Toggle } from '@visvine/ui';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import BindingFields from '@/features/tools/components/BindingFields';
-import { fetchBindable, fetchVersion, patchInstall, uninstallTool } from '@/features/tools/lib/client';
+import { fetchBindable, fetchVersion, installRecordsExportUrl, patchInstall, uninstallTool } from '@/features/tools/lib/client';
 import type { BindableSpace, BindingValues } from '@visvine/tool-protocol/bindings';
 import { describeRequirements } from '@/lib/tools/requirements';
 import type { InstallSummary, VersionDetail } from '@/lib/tools/api';
@@ -350,11 +350,18 @@ function InstallRow({
         </div>
       )}
 
-      {isAdmin && !install.sharedFrom && (
-        <div className="mt-3 flex justify-end">
-          <Button variant="danger-text" size="sm" onClick={onRemove} disabled={busy}>
-            Uninstall
-          </Button>
+      {isAdmin && (install.collections.length > 0 || !install.sharedFrom) && (
+        <div className="mt-3 flex items-center justify-end gap-2">
+          {install.collections.length > 0 && (
+            <a href={installRecordsExportUrl(spaceId, install.id)} download className="text-xs text-fg-secondary hover:text-fg">
+              Export data
+            </a>
+          )}
+          {!install.sharedFrom && (
+            <Button variant="danger-text" size="sm" onClick={onRemove} disabled={busy}>
+              Uninstall
+            </Button>
+          )}
         </div>
       )}
       {isAdmin && install.sharedFrom && (

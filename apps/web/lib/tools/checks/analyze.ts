@@ -28,7 +28,7 @@ import { scanSecrets, scanSourceText, scanStrings } from './textRules'
 import { declaredVsUsed, riskFindings, riskScore, sourceReach } from './usage'
 
 /** Bumped whenever a rule is added or changed, so a rescan knows which versions to re-read. */
-export const ANALYZER_VERSION = 'static-1'
+export const ANALYZER_VERSION = 'static-2'
 
 export interface StaticCheckInput {
   /** The sources as the author wrote them: index.md whole, ui.tsx and data.js unwrapped. */
@@ -123,7 +123,9 @@ export async function runStaticChecks(input: StaticCheckInput): Promise<CheckRep
   if (input.config) {
     const hasData = !!input.data?.trim()
     const calls = [...ui.calls, ...data.calls, ...moduleScans.flatMap((m) => m.scan.calls)]
-    findings.push(...declaredVsUsed(sourceReach(input.config), calls, hasData ? data.handlers : []))
+    findings.push(
+      ...declaredVsUsed(sourceReach(input.config), calls, hasData ? data.handlers : [], Object.keys(manifestOf(input.config).collections)),
+    )
     risk = riskScore(input.config)
     findings.push(...riskFindings(risk))
     // A known advisory flags, never blocks: the vendored version is the

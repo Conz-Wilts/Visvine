@@ -250,7 +250,7 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     kind: 'hook',
     what: 'The bridge: notes, records, files, connectors, agents, actions, the space\'s AI, state, the host\'s dialogs.',
     when: 'Every Tool that touches the space. Everything it reaches is inside the permissions its manifest declares, bound to this space.',
-    props: 'context.list/read/search/write/append/links · records.query/get/update · resources.list/get/read/blob · connectors.call · agents.run · actions.run · ai.complete/decide · data.call · state.get/set (per viewer by default) · ui.toast/confirm/download/openRecord/openResource · install.settings/bindings · viewer · navigate(path)',
+    props: 'context.list/read/search/write/append/links · records.query/get/update · resources.list/get/read/blob · connectors.call · agents.run · actions.run · ai.complete/decide · collections.insert/list/get/update/delete/count (useCollection, useCollectionCount) · data.call · state.get/set (per viewer by default) · ui.toast/confirm/download/openRecord/openResource · install.settings/bindings · viewer · navigate(path)',
     snippet: `const visvine = useVisvine()`,
   },
   {
@@ -278,6 +278,22 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     when: 'A folder that may hold more than one page of notes.',
     props: 'usePagedList(glob, { pageSize? }) → { items, loading, hasMore, loadMore, reload }',
     snippet: `const list = usePagedList('deals/**')`,
+  },
+  {
+    name: 'useCollection',
+    kind: 'hook',
+    what: 'A collection\'s rows, reloaded when anyone\'s write to it reaches the viewer.',
+    when: 'The Tool\'s own data — votes, sign-ups, check-ins — declared under `collections`.',
+    props: 'useCollection(name, { where?, mine?, order?, limit? }) → { data: rows, loading, error, reload }',
+    snippet: `const { data: rows } = useCollection('votes', { mine: true })`,
+  },
+  {
+    name: 'useCollectionCount',
+    kind: 'hook',
+    what: 'How many rows a collection holds, or its tally per value of one field.',
+    when: 'A poll\'s results, a sign-up count.',
+    props: 'useCollectionCount(name, { where?, mine?, groupBy? }) → { data: { total, groups? } }',
+    snippet: `const { data: tally } = useCollectionCount('votes', { groupBy: 'choice' })`,
   },
   {
     name: 'useSubject',

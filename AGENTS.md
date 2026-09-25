@@ -1426,6 +1426,15 @@ iframe on a cookie-less origin. `docs/tools.md` is the guide. The invariants:
   `ui.*` is answered by the host page, never the server. `state` is per viewer
   (`scope: 'user'`, kit 2's default) or shared (`'install'`, what a call naming
   none gets).
+- **A Tool's own data is a collection, not a note.** Declared in the
+  manifest with a JSON Schema subset (no `pattern`) and `read`/`write` rules
+  (all · own · admin), kept per install in `app_tool_records`
+  (`lib/tools/collections.ts`, rules pure in `shared/collections.ts`). Rows
+  are written as the viewer and never say who — only `mine`; `user_id`
+  cascades, so an account takes its rows. An uninstall DETACHES rows for the
+  same Tool installed again to take back; the tick purges them after 30 days.
+  A write is announced as `:collection:<name>` on the changes stream, only to
+  viewers the rules let read it.
 - **Two kit majors, chosen per Tool by its `sdk`.** Kit 2 is `@visvine/ui`
   plus the kit's data-bound components and the compiled `tool-kit.css`; kit 1
   (`features/tools/kit/legacy`, `tool-kit-1.js`) is frozen so a Tool written

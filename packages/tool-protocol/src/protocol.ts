@@ -108,6 +108,21 @@ export interface BridgeError {
 
 // ── methods ──
 
+/**
+ * One row of a Tool's collection. Who wrote it is never shown — only whether
+ * the viewer did (`mine`), so a poll's votes stay the voters' own.
+ */
+export interface CollectionRow<T = Record<string, unknown>> {
+  id: string
+  data: T
+  mine: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+/** A collection filter: each top-level field equal to its value, at most eight. */
+export type CollectionWhere = Record<string, string | number | boolean | null>
+
 /** One row of `context.list`. */
 export interface ContextEntry {
   path: string
@@ -279,6 +294,33 @@ export interface BridgeMethods {
     result: { text: string }
   }
   'ai.decide': { params: { items: string[]; questions: DecideQuestion[] }; result: Array<DecideAnswer | null> }
+  'collections.insert': { params: { collection: string; data: Record<string, unknown> }; result: CollectionRow }
+  'collections.list': {
+    params: {
+      collection: string
+      /** Equality on top-level fields. */
+      where?: CollectionWhere
+      /** Only the viewer's own rows. */
+      mine?: boolean
+      order?: 'asc' | 'desc'
+      limit?: number
+      cursor?: string
+    }
+    result: { rows: CollectionRow[]; nextCursor: string | null }
+  }
+  'collections.get': { params: { collection: string; id: string }; result: CollectionRow }
+  'collections.update': { params: { collection: string; id: string; data: Record<string, unknown> }; result: CollectionRow }
+  'collections.delete': { params: { collection: string; id: string }; result: { id: string } }
+  'collections.count': {
+    params: {
+      collection: string
+      where?: CollectionWhere
+      mine?: boolean
+      /** Count per value of this top-level field instead of one total. */
+      groupBy?: string
+    }
+    result: { total: number; groups?: Array<{ value: string | null; count: number }> }
+  }
 }
 
 export type BridgeMethod = keyof BridgeMethods
@@ -309,6 +351,12 @@ export const BRIDGE_METHODS = [
   'actions.run',
   'ai.complete',
   'ai.decide',
+  'collections.insert',
+  'collections.list',
+  'collections.get',
+  'collections.update',
+  'collections.delete',
+  'collections.count',
 ] as const satisfies readonly BridgeMethod[]
 
 export function isBridgeMethod(value: unknown): value is BridgeMethod {

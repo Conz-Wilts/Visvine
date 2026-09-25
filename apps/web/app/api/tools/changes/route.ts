@@ -5,6 +5,7 @@ import { changedPathsFor } from '@/lib/tools/changes'
 import { resolveBridgeTarget } from '@/lib/tools/target'
 import { MAX_STREAMS_PER_USER, streamCounter } from '@/lib/tools/streamLimit'
 import { subscribeVerdicts } from '@/lib/tools/verdicts'
+import { subscribeCollectionChanges } from '@/lib/tools/collections'
 
 /**
  * `GET /api/tools/changes?target=<BridgeTarget JSON>` — an SSE stream of
@@ -15,8 +16,10 @@ import { subscribeVerdicts } from '@/lib/tools/verdicts'
  *
  * The target is resolved once, the same way `POST /api/tools/bridge` does it,
  * so a viewer who may not use the Tool never subscribes; each event is then
- * filtered by `changedPathsFor` (perimeter + viewer grants). Nothing but paths
- * ever crosses — the frame re-reads through the bridge.
+ * filtered by `changedPathsFor` (perimeter + viewer grants). A write to one of
+ * the Tool's collections arrives as `:collection:<name>`, only for a
+ * collection the viewer may read. Nothing but paths ever crosses — the frame
+ * re-reads through the bridge.
  *
  * Best-effort, per-process: see lib/notes/changes.ts. The stream also closes
  * itself after `MAX_STREAM_MS`; EventSource reconnects, which is how the
@@ -85,9 +88,16 @@ export async function GET(req: NextRequest) {
         write(`event: changed\ndata: ${JSON.stringify({ paths })}\n\n`)
       }
 
+      const schedule = () => {
+        if (pending.size > 0 && flushTimer === null) flushTimer = setTimeout(flush, COALESCE_MS)
+      }
       const unsubscribe = subscribeChanges(resolved.spaceId, (change) => {
         for (const path of changedPathsFor(resolved, change)) pending.add(path)
-        if (pending.size > 0 && flushTimer === null) flushTimer = setTimeout(flush, COALESCE_MS)
+        schedule()
+      })
+      const unsubscribeCollections = subscribeCollectionChanges(resolved, (path) => {
+        pending.add(path)
+        schedule()
       })
       // A verdict moved on this Tool (lib/tools/verdicts.ts): say so and end the
       // stream. The host re-checks the target, which is what decides.
@@ -112,6 +122,7 @@ export async function GET(req: NextRequest) {
         clearTimeout(lifetime)
         if (flushTimer !== null) clearTimeout(flushTimer)
         unsubscribe()
+        unsubscribeCollections()
         unsubscribeVerdicts()
         try {
           controller.close()

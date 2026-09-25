@@ -474,6 +474,7 @@ test('the install shapes carry what the rail, the page and the banner need', () 
     bindings: {},
     settingSpecs: {},
     settings: {},
+    collections: [],
   }
   const dto: InstalledToolDto = {
     id: install.id,

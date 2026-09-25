@@ -12,6 +12,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type {
+  CollectionRow,
+  CollectionWhere,
   ContextEntry,
   ContextHit,
   ContextLink,
@@ -66,6 +68,24 @@ export interface VisvineApi {
     read(id: string, offset?: number): Promise<{ text: string; offset: number; totalChars: number; nextOffset: number | null }>;
     /** Its bytes — or an image made from it — as a data URL an `<img>` can draw. */
     blob(id: string, rendition?: 'original' | 'thumb' | 'preview'): Promise<{ mimeType: string; dataUrl: string }>;
+  };
+  collections: {
+    /** Add a row to one of this Tool's collections (`collections` in the manifest). */
+    insert<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, data: T): Promise<CollectionRow<T>>;
+    /** Rows, oldest first unless `order: 'desc'`, a page at a time; `mine` for the viewer's own. */
+    list<T = Record<string, unknown>>(
+      collection: string,
+      opts?: { where?: CollectionWhere; mine?: boolean; order?: 'asc' | 'desc'; limit?: number; cursor?: string | null },
+    ): Promise<{ rows: CollectionRow<T>[]; nextCursor: string | null }>;
+    get<T = Record<string, unknown>>(collection: string, id: string): Promise<CollectionRow<T>>;
+    /** Replace a row's data. */
+    update<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, id: string, data: T): Promise<CollectionRow<T>>;
+    delete(collection: string, id: string): Promise<{ id: string }>;
+    /** How many rows match — per value of `groupBy` when it is given. */
+    count(
+      collection: string,
+      opts?: { where?: CollectionWhere; mine?: boolean; groupBy?: string },
+    ): Promise<{ total: number; groups?: Array<{ value: string | null; count: number }> }>;
   };
   actions: {
     /** One of the space's actions a Tool may run, in this space (`permissions.actions`). */
@@ -225,6 +245,28 @@ export function VisvineProvider({
         get: (id) => client.call('resources.get', { id }),
         read: (id, offset) => client.call('resources.read', offset === undefined ? { id } : { id, offset }),
         blob: (id, rendition) => client.call('resources.blob', rendition ? { id, rendition } : { id }),
+      },
+      collections: {
+        insert: (collection, data) => client.call('collections.insert', { collection, data }) as never,
+        list: (collection, opts) =>
+          client.call('collections.list', {
+            collection,
+            ...(opts?.where ? { where: opts.where } : {}),
+            ...(opts?.mine ? { mine: true } : {}),
+            ...(opts?.order ? { order: opts.order } : {}),
+            ...(opts?.limit === undefined ? {} : { limit: opts.limit }),
+            ...(opts?.cursor ? { cursor: opts.cursor } : {}),
+          }) as never,
+        get: (collection, id) => client.call('collections.get', { collection, id }) as never,
+        update: (collection, id, data) => client.call('collections.update', { collection, id, data }) as never,
+        delete: (collection, id) => client.call('collections.delete', { collection, id }),
+        count: (collection, opts) =>
+          client.call('collections.count', {
+            collection,
+            ...(opts?.where ? { where: opts.where } : {}),
+            ...(opts?.mine ? { mine: true } : {}),
+            ...(opts?.groupBy ? { groupBy: opts.groupBy } : {}),
+          }),
       },
       actions: {
         run: <T,>(name: string, input?: Record<string, unknown>) =>
@@ -525,6 +567,50 @@ export function useLiveQuery<T>(fn: () => Promise<T>, deps: unknown[], opts: Liv
   }, [pollMs, refresh]);
 
   return { data, error, loading: base.loading, reload: base.reload, refreshing };
+}
+
+// ── collections ──
+
+/** The change path a collection's writes arrive under on the live stream. */
+function collectionPath(name: string): string {
+  return `:collection:${name}`;
+}
+
+export interface CollectionQuery {
+  where?: CollectionWhere;
+  /** Only the viewer's own rows. */
+  mine?: boolean;
+  order?: 'asc' | 'desc';
+  /** Rows to load; the bridge's cap is 200. Default 50. */
+  limit?: number;
+}
+
+/**
+ * A collection's rows, kept current: reloaded when anyone's write to it
+ * reaches this viewer, and on the live poll behind that.
+ */
+export function useCollection<T = Record<string, unknown>>(
+  name: string,
+  query: CollectionQuery = {},
+): QueryResult<CollectionRow<T>[]> & { refreshing: boolean } {
+  const visvine = useVisvine();
+  const key = JSON.stringify(query);
+  const live = useLiveQuery(
+    async () => (await visvine.collections.list<T>(name, query)).rows,
+    [visvine, name, key],
+    { paths: [collectionPath(name)] },
+  );
+  return live;
+}
+
+/** A collection's count — or its tally per value of `groupBy` — kept current like `useCollection`. */
+export function useCollectionCount(
+  name: string,
+  query: { where?: CollectionWhere; mine?: boolean; groupBy?: string } = {},
+): QueryResult<{ total: number; groups?: Array<{ value: string | null; count: number }> }> & { refreshing: boolean } {
+  const visvine = useVisvine();
+  const key = JSON.stringify(query);
+  return useLiveQuery(() => visvine.collections.count(name, query), [visvine, name, key], { paths: [collectionPath(name)] });
 }
 
 // ── paging ──

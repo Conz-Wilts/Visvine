@@ -15,6 +15,7 @@
  * the abstract form; the bridge enforces the bound one.
  */
 import { isValidGlobEntry, parseToolPerimeter, type ToolPerimeter } from './perimeter'
+import { schemaDenial } from './schema'
 
 export const MANIFEST_VERSION = 2
 
@@ -74,7 +75,11 @@ export interface ToolPermissions {
   ui: { download: boolean }
 }
 
-/** A per-install ledger a Tool writes one row per event into (M10's collections). */
+/**
+ * A collection: a per-install store of rows the Tool writes through the
+ * bridge, each row checked against `schema` (./schema.ts) and written as the
+ * viewer. `read` and `write` say who may (apps/web lib/tools/shared/collections.ts).
+ */
 export interface CollectionSpec {
   schema: Record<string, unknown>
   read: 'all' | 'own' | 'admin'
@@ -345,6 +350,8 @@ function parseCollections(raw: unknown): ParseResult<Record<string, CollectionSp
   for (const [name, value] of Object.entries(raw)) {
     if (!SLOT_RE.test(name)) return { ok: false, error: `Collection "${name}": a name is lower-case letters, digits and underscores` }
     if (!isRecord(value) || !isRecord(value.schema)) return { ok: false, error: `Collection "${name}" needs a JSON Schema` }
+    const schemaProblem = schemaDenial(value.schema)
+    if (schemaProblem) return { ok: false, error: `Collection "${name}": ${schemaProblem}` }
     const read = typeof value.read === 'string' ? value.read : 'all'
     const write = typeof value.write === 'string' ? value.write : 'own'
     if (!rules.includes(read) || !rules.includes(write)) return { ok: false, error: `Collection "${name}": read and write are all, own or admin` }

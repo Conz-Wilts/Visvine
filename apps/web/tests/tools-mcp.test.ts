@@ -150,6 +150,7 @@ function install(over: Partial<InstallSummary> = {}): InstallSummary {
     bindings: {},
     settingSpecs: {},
     settings: {},
+    collections: [],
     ...over,
   }
 }

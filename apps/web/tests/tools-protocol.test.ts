@@ -58,6 +58,12 @@ test('BRIDGE_METHODS lists every method exactly once', () => {
     'actions.run': true,
     'ai.complete': true,
     'ai.decide': true,
+    'collections.insert': true,
+    'collections.list': true,
+    'collections.get': true,
+    'collections.update': true,
+    'collections.delete': true,
+    'collections.count': true,
   }
   assert.deepEqual([...BRIDGE_METHODS].sort(), Object.keys(everyMethod).sort())
   assert.equal(new Set(BRIDGE_METHODS).size, BRIDGE_METHODS.length)

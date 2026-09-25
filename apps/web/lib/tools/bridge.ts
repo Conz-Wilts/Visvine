@@ -104,6 +104,9 @@ import { declaresTool, toolFolderOfIndex } from './config'
 import { actingReachOf, actsAsViewer, consentCovers, consentSentence, isActingMethod, type ActingReach } from './shared/listing'
 import { consentFor } from './consents'
 import { recordReviewEvent } from './review/events'
+import { countRows, deleteRow, getRow, insertRow, listRows, updateRow, type CollectionAnswer } from './collections'
+import { collectionDenial, LIST_LIMIT_MAX } from './shared/collections'
+import { manifestOf } from './config'
 
 /**
  * Everything the handlers touch that isn't pure. Injectable as one object so a
@@ -146,6 +149,15 @@ export interface BridgeDeps {
   consentFor?: (installId: string, userId: string) => Promise<ActingReach | null>
   /** Where a dynamic run's evidence goes (lib/tools/review/events.ts). Absent: nothing recorded (tests). */
   recordReviewEvent?: typeof recordReviewEvent
+  /** The Tool's collections (lib/tools/collections.ts). */
+  collections: {
+    insert: typeof insertRow
+    list: typeof listRows
+    get: typeof getRow
+    update: typeof updateRow
+    delete: typeof deleteRow
+    count: typeof countRows
+  }
 }
 
 /** The real ones, named in exactly one place. Not exported: a caller wanting
@@ -182,6 +194,7 @@ const REAL_DEPS: BridgeDeps = {
   decide: toolDecide,
   consentFor,
   recordReviewEvent,
+  collections: { insert: insertRow, list: listRows, get: getRow, update: updateRow, delete: deleteRow, count: countRows },
 }
 
 // ── shapes ────────────────────────────────────────────────────────────────────
@@ -243,6 +256,11 @@ const RECORD_WHERE = z.discriminatedUnion('op', [
 const RECORD_TARGET = z
   .object({ path: z.string().min(1).max(PATH_MAX).optional(), nodeId: z.string().min(1).max(200).optional() })
   .refine((v) => (v.path === undefined) !== (v.nodeId === undefined), { message: 'pass exactly one of path or nodeId' })
+
+const COLLECTION = z.string().min(1).max(64)
+const ROW_ID = z.string().min(1).max(200)
+const ROW_DATA = z.record(z.string().min(1).max(64), z.unknown())
+const COLLECTION_WHERE = z.record(z.string().min(1).max(64), z.union([z.string().max(500), z.number(), z.boolean(), z.null()]))
 
 const P = {
   list: z.object({
@@ -315,6 +333,23 @@ const P = {
   decide: z.object({
     items: z.array(z.string().max(6_000)).min(1).max(BRIDGE_LIMITS.aiMaxDecideItems),
     questions: z.array(z.unknown()).min(1).max(6),
+  }),
+  collectionInsert: z.object({ collection: COLLECTION, data: ROW_DATA }),
+  collectionList: z.object({
+    collection: COLLECTION,
+    where: COLLECTION_WHERE.optional(),
+    mine: z.boolean().optional(),
+    order: z.enum(['asc', 'desc']).optional(),
+    limit: z.number().int().min(1).max(LIST_LIMIT_MAX).optional(),
+    cursor: z.string().min(1).max(CURSOR_MAX).optional(),
+  }),
+  collectionRow: z.object({ collection: COLLECTION, id: ROW_ID }),
+  collectionUpdate: z.object({ collection: COLLECTION, id: ROW_ID, data: ROW_DATA }),
+  collectionCount: z.object({
+    collection: COLLECTION,
+    where: COLLECTION_WHERE.optional(),
+    mine: z.boolean().optional(),
+    groupBy: z.string().min(1).max(64).optional(),
   }),
 }
 
@@ -1305,6 +1340,63 @@ async function consentRefusal(t: ResolvedTarget, method: BridgeMethod, deps: Bri
   return err('consent_required', consentSentence({ title: t.config.title, publisher: t.publisher ?? null, acting }))
 }
 
+// ── collections ───────────────────────────────────────────────────────────────
+
+type CollectionMethod = Extract<BridgeMethod, `collections.${string}`>
+
+function answered<T>(answer: CollectionAnswer<T>): BridgeResponse {
+  return answer.ok ? ok(answer.value) : err(answer.code, answer.message)
+}
+
+/**
+ * The Tool's own store. Whether it declared the collection, and whether the
+ * viewer may read or write it at all, is settled here before anything is
+ * read; whether they may change THIS row (`write: own`) is the row's to say,
+ * so the service asks it after finding the row. A preview's rows are keyed
+ * apart from every install's, so a draft reads and writes only its own.
+ */
+async function collectionsCall(t: ResolvedTarget, method: CollectionMethod, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const name = (params as { collection?: unknown } | null)?.collection
+  if (typeof name !== 'string' || !name) return err('invalid', 'collection: name the collection')
+  const spec = manifestOf(t.config).collections[name]
+  const act = method === 'collections.list' || method === 'collections.get' || method === 'collections.count' ? 'read' : 'insert'
+  const refused = collectionDenial(spec, name, act, { isAdmin: t.isAdmin })
+  if (refused) return err(refused.code, refused.message)
+  switch (method) {
+    case 'collections.insert': {
+      const parsed = parseParams(P.collectionInsert, params)
+      if (!parsed.ok) return parsed.response
+      return answered(await deps.collections.insert(t, name, parsed.value.data))
+    }
+    case 'collections.list': {
+      const parsed = parseParams(P.collectionList, params)
+      if (!parsed.ok) return parsed.response
+      return answered(await deps.collections.list(t, name, parsed.value))
+    }
+    case 'collections.get': {
+      const parsed = parseParams(P.collectionRow, params)
+      if (!parsed.ok) return parsed.response
+      return answered(await deps.collections.get(t, name, parsed.value.id))
+    }
+    case 'collections.update': {
+      const parsed = parseParams(P.collectionUpdate, params)
+      if (!parsed.ok) return parsed.response
+      return answered(await deps.collections.update(t, name, parsed.value.id, parsed.value.data))
+    }
+    case 'collections.delete': {
+      const parsed = parseParams(P.collectionRow, params)
+      if (!parsed.ok) return parsed.response
+      return answered(await deps.collections.delete(t, name, parsed.value.id))
+    }
+    case 'collections.count': {
+      const parsed = parseParams(P.collectionCount, params)
+      if (!parsed.ok) return parsed.response
+      return answered(await deps.collections.count(t, name, parsed.value))
+    }
+  }
+  return err('invalid', `Unknown method ${String(method)}.`)
+}
+
 // ── the door ──────────────────────────────────────────────────────────────────
 
 /**
@@ -1368,6 +1460,13 @@ export async function handleBridgeCall(
         return await aiComplete(t, params, deps)
       case 'ai.decide':
         return await aiDecide(t, params, deps)
+      case 'collections.insert':
+      case 'collections.list':
+      case 'collections.get':
+      case 'collections.update':
+      case 'collections.delete':
+      case 'collections.count':
+        return await collectionsCall(t, method, params, deps)
       default:
         return err('invalid', `Unknown method ${String(method)}.`)
     }
@@ -1428,5 +1527,11 @@ export function bridgeCapabilities(t: ResolvedTarget, deps: BridgeDeps = REAL_DE
     'actions.run': (args) => call('actions.run', { name: args[0], ...(args[1] === undefined ? {} : { input: args[1] }) }),
     'ai.complete': (args) => call('ai.complete', typeof args[0] === 'string' ? { prompt: args[0] } : (args[0] ?? {})),
     'ai.decide': (args) => call('ai.decide', args[0] ?? {}),
+    'collections.insert': (args) => call('collections.insert', { collection: args[0], data: args[1] }),
+    'collections.list': (args) => call('collections.list', { collection: args[0], ...((args[1] as object | undefined) ?? {}) }),
+    'collections.get': (args) => call('collections.get', { collection: args[0], id: args[1] }),
+    'collections.update': (args) => call('collections.update', { collection: args[0], id: args[1], data: args[2] }),
+    'collections.delete': (args) => call('collections.delete', { collection: args[0], id: args[1] }),
+    'collections.count': (args) => call('collections.count', { collection: args[0], ...((args[1] as object | undefined) ?? {}) }),
   }
 }

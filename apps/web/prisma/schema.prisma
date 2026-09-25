@@ -112,6 +112,7 @@ model Space {
   appToolConfigChanges AppToolConfigChange[]
   contextRecordFields ContextRecordField[]
   appToolInstalls    AppToolInstall[]
+  appToolRecords     AppToolRecord[]
   sharedToolInstalls AppToolInstall[]      @relation("SharedToolInstalls")
   resources          Resource[]
   resourceShares     ResourceShare[]
@@ -1049,6 +1050,38 @@ model AppToolInstall {
   @@map("app_tool_installs")
 }
 
+/// A row of a Tool's COLLECTION: the per-install store a manifest declares by
+/// name, JSON Schema and read/write rules (lib/tools/collections.ts). Keyed by
+/// what the Tool runs as (`targetKey`: the install, or a working copy's
+/// preview), written by one person (`userId`, never shown to other viewers —
+/// only whether a row is theirs), and gone with that person's account. An
+/// uninstall DETACHES the rows rather than deleting them: a re-install of the
+/// same Tool in the space takes them back, and the minute tick drops what has
+/// stayed detached for 30 days.
+model AppToolRecord {
+  id         String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String    @map("space_id")
+  /// The install's id, or `preview:<space>/<name>` for a working copy.
+  targetKey  String    @map("target_key")
+  /// The Tool's key (`<source-space>/<name>`) — what a re-install is matched by.
+  toolKey    String    @map("tool_key")
+  collection String
+  userId     String    @map("user_id")
+  data       Json
+  detachedAt DateTime? @map("detached_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  space      Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([targetKey, collection, createdAt, id])
+  @@index([targetKey, collection, userId])
+  @@index([spaceId, toolKey])
+  @@index([detachedAt])
+  @@index([userId])
+  @@map("app_tool_records")
+}
+
 /// A member's answer to a listed Tool's first-use notice: "this Tool from
 /// outside the space will act as you". Remembered per install and person, with
 /// the acting reach it was given for (lib/tools/shared/listing.ts#ActingReach)
@@ -1817,6 +1850,7 @@ model User {
 
   appToolVersionsAuthored AppToolVersion[] @relation("AppToolVersionAuthor")
   appToolConsents         AppToolConsent[]
+  appToolRecords          AppToolRecord[]
 
   // Deleting a person must take their ACCESS and their CREDENTIALS with it. Each
   // of these was a bare scalar that only lib/account/deleteAccount.ts knew to

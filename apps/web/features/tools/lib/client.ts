@@ -315,6 +315,11 @@ export function workingCopyExportUrl(spaceId: string, name: string): string {
   return `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/export`
 }
 
+/** Where an install's collection rows download, for its space's admins. */
+export function installRecordsExportUrl(spaceId: string, installId: string): string {
+  return `/api/spaces/${encodeURIComponent(spaceId)}/tools/${encodeURIComponent(installId)}/records`
+}
+
 // ── the directory (Discover → Tools) ─────────────────────────────────────────
 
 /** One page of listed Tools; 404 when the directory is not open to this viewer. */

@@ -121,6 +121,14 @@ function deps(over: Partial<BridgeDeps> = {}): BridgeDeps {
     runAction: forbidden('runAction'),
     complete: forbidden('complete'),
     decide: forbidden('decide'),
+    collections: {
+      insert: forbidden('collections.insert'),
+      list: forbidden('collections.list'),
+      get: forbidden('collections.get'),
+      update: forbidden('collections.update'),
+      delete: forbidden('collections.delete'),
+      count: forbidden('collections.count'),
+    },
     logResourceAccess: async () => {},
     // Auditing is a record, never a gate: it is a no-op rather than a trap.
     logAudit: async () => {},

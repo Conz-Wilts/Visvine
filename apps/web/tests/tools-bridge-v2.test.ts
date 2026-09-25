@@ -80,7 +80,10 @@ function deps(over: Partial<BridgeDeps> = {}): BridgeDeps {
     'requireVisibleResource', 'readResourceText', 'resourceBlob', 'tenantArgDenial', 'runAction', 'complete', 'decide',
   ]
   const base = Object.fromEntries(names.map((n) => [n, trap(n)])) as unknown as BridgeDeps
-  return { ...base, logAudit: async () => {}, logResourceAccess: async () => {}, ...over }
+  const collections = Object.fromEntries(
+    (['insert', 'list', 'get', 'update', 'delete', 'count'] as const).map((n) => [n, trap(`collections.${n}`)]),
+  ) as unknown as BridgeDeps['collections']
+  return { ...base, collections, logAudit: async () => {}, logResourceAccess: async () => {}, ...over }
 }
 
 function refusal(response: BridgeResponse): { code: string; message: string } {
@@ -108,6 +111,12 @@ const VALID: Partial<Record<BridgeMethod, unknown>> = {
   'actions.run': { name: 'list_events', input: {} },
   'ai.complete': { prompt: 'Summarise' },
   'ai.decide': { items: ['a'], questions: [{ id: 'q', ask: 'It is urgent' }] },
+  'collections.insert': { collection: 'votes', data: { choice: 'a' } },
+  'collections.list': { collection: 'votes' },
+  'collections.get': { collection: 'votes', id: 'row-1' },
+  'collections.update': { collection: 'votes', id: 'row-1', data: { choice: 'b' } },
+  'collections.delete': { collection: 'votes', id: 'row-1' },
+  'collections.count': { collection: 'votes', groupBy: 'choice' },
 }
 
 /** Methods that carry no permission of their own: the Tool's own code, state and subject. */

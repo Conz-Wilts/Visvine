@@ -15,6 +15,7 @@ import { purgeTrash } from '@/lib/resources/service'
 import { drainToolReviews } from '@/lib/tools/review/run'
 import { flushTelemetry, rollUpTelemetry } from '@/lib/tools/telemetry'
 import { sweepAnomalies } from '@/lib/tools/monitor'
+import { purgeDetachedRows } from '@/lib/tools/collections'
 
 // The tick awaits the dispatches it fans out (each its own request to the run
 // endpoint), so it can last as long as the longest claimed run.
@@ -80,6 +81,8 @@ export async function POST(req: NextRequest) {
     telemetryRows: await flushTelemetry(),
     rolledUp: await rollUpTelemetry(),
     anomalies: await sweepAnomalies(),
+    // Rows an uninstalled Tool left, once nobody installed it back in time.
+    detachedRowsPurged: await purgeDetachedRows(),
   }))().catch((err) => {
     logger.error('tools.monitor.tick_failed', { err })
     return null

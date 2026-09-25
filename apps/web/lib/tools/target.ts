@@ -349,7 +349,12 @@ function degradedOfRequirements(raw: unknown): ToolDegraded | null {
  */
 export function targetKey(t: ResolvedTarget): string {
   if (t.review) return `review:${t.review.runId}`
-  return t.installId ?? `preview:${t.spaceId}/${t.config.name}`
+  return t.installId ?? previewTargetKey(t.spaceId, t.config.name)
+}
+
+/** What a working copy's preview runs as. */
+export function previewTargetKey(spaceId: string, name: string): string {
+  return `preview:${spaceId}/${name}`
 }
 
 /**

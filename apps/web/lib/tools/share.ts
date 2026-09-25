@@ -20,6 +20,7 @@
  * The decision is pure (`sharedInstallPlan`); everything else is rows.
  */
 import prisma from '@/lib/prisma'
+import { adoptRows, detachRows } from './collections'
 import { logger } from '@/lib/logger'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { parentShare } from '@/lib/notes/federation'
@@ -190,7 +191,7 @@ export async function syncSharedToolInstalls(houseId: string, name: string): Pro
         const siblings = await tx.appToolInstall.findMany({ where: { spaceId: room }, select: { key: true, slug: true } })
         if (siblings.some((row) => row.key === key)) return {}
         const slug = uniqueSlug(name, new Set(siblings.map((row) => row.slug)))
-        await tx.appToolInstall.create({
+        const created = await tx.appToolInstall.create({
           data: {
             spaceId: room,
             versionId: version.versionId,
@@ -204,7 +205,9 @@ export async function syncSharedToolInstalls(houseId: string, name: string): Pro
             // Tool the room chose for itself. Its tabs and rail row still show.
             typeClaims: {},
           },
+          select: { id: true },
         })
+        await adoptRows(room, created.id, { key }, tx)
         if (!config.surfaces.rail) return {}
         const railKey = toolRailKey(slug)
         return {
@@ -248,6 +251,7 @@ export async function syncSharedToolInstalls(houseId: string, name: string): Pro
         })
         if (!row) return {}
         await tx.appToolInstall.deleteMany({ where: { id: row.id } })
+        await detachRows(row.id, tx)
         return { featureConfig: featureConfigWithoutRail(stored.featureConfig, toolRailKey(row.slug)) }
       })
     } catch (err) {

@@ -18,6 +18,7 @@ import { BRIDGE_LIMITS } from './protocol'
 import { STATE_MAX_BYTES, STATE_MAX_KEYS } from './state'
 import { MAX_TOOL_MODULES } from './config'
 import { TOOL_ACTIONS } from './actionAllowlist'
+import { DETACHED_DAYS, LIST_LIMIT_MAX } from './shared/collections'
 import { CURATED_DEPENDENCIES } from '@visvine/tool-protocol/dependencies'
 
 /**
@@ -156,6 +157,17 @@ declare module '@visvine/tool-kit' {
   /** The viewer's own value (kit 2's default), or one every viewer shares. */
   export type StateScope = 'user' | 'install'
 
+  /** One row of a collection. Who wrote it is never shown — only whether the viewer did. */
+  export interface CollectionRow<T = Record<string, unknown>> {
+    id: string
+    data: T
+    mine: boolean
+    createdAt: string
+    updatedAt: string
+  }
+  /** Each top-level field equal to its value; at most eight. */
+  export type CollectionWhere = Record<string, string | number | boolean | null>
+
   export type BridgeErrorCode =
     | 'perimeter'
     | 'forbidden'
@@ -212,6 +224,24 @@ declare module '@visvine/tool-kit' {
       read(id: string, offset?: number): Promise<{ text: string; offset: number; totalChars: number; nextOffset: number | null }>
       /** The bytes (or a thumb/preview image) as a data URL an <img> can draw; ${BRIDGE_LIMITS.maxBlobBytes.toLocaleString('en-US')} bytes at most. */
       blob(id: string, rendition?: 'original' | 'thumb' | 'preview'): Promise<{ mimeType: string; dataUrl: string }>
+    }
+    collections: {
+      /** Add a row to a collection this Tool declares; checked against its schema, 16 KB at most. */
+      insert<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, data: T): Promise<CollectionRow<T>>
+      /** Rows, oldest first unless order is 'desc', ${LIST_LIMIT_MAX} a page at most; mine for the viewer's own. */
+      list<T = Record<string, unknown>>(
+        collection: string,
+        opts?: { where?: CollectionWhere; mine?: boolean; order?: 'asc' | 'desc'; limit?: number; cursor?: string | null },
+      ): Promise<{ rows: CollectionRow<T>[]; nextCursor: string | null }>
+      get<T = Record<string, unknown>>(collection: string, id: string): Promise<CollectionRow<T>>
+      /** Replace a row's data (write: own — only the viewer's rows, unless they are an admin). */
+      update<T extends Record<string, unknown> = Record<string, unknown>>(collection: string, id: string, data: T): Promise<CollectionRow<T>>
+      delete(collection: string, id: string): Promise<{ id: string }>
+      /** How many rows match; with groupBy, how many per value of that field. */
+      count(
+        collection: string,
+        opts?: { where?: CollectionWhere; mine?: boolean; groupBy?: string },
+      ): Promise<{ total: number; groups?: Array<{ value: string | null; count: number }> }>
     }
     actions: {
       /** One of the space's actions tools may run, declared in permissions.actions, in this space. */
@@ -332,6 +362,21 @@ declare module '@visvine/tool-kit' {
   }
   /** Page through context.list(glob); items accumulate across loadMore. */
   export function usePagedList(glob: string | undefined, opts?: PagedListOptions): PagedListResult<ContextEntry>
+
+  export interface CollectionQuery {
+    where?: CollectionWhere
+    mine?: boolean
+    order?: 'asc' | 'desc'
+    /** Rows to load (default 50, at most ${LIST_LIMIT_MAX}). */
+    limit?: number
+  }
+  /** A collection's rows, reloaded when a write to it reaches this viewer (and on the live poll). */
+  export function useCollection<T = Record<string, unknown>>(name: string, query?: CollectionQuery): QueryResult<CollectionRow<T>[]> & { refreshing: boolean }
+  /** A collection's count, or its tally per value of groupBy, kept current the same way. */
+  export function useCollectionCount(
+    name: string,
+    query?: { where?: CollectionWhere; mine?: boolean; groupBy?: string },
+  ): QueryResult<{ total: number; groups?: Array<{ value: string | null; count: number }> }> & { refreshing: boolean }
 
   // ── components ──
   // The app's own components (@visvine/ui), and the kit's data-bound ones built
@@ -673,6 +718,12 @@ permissions:
   ui: { download: true }
 settings:                                  # filled by an admin on the install sheet
   currency: { type: string, label: Currency, enum: [USD, EUR, GBP], default: USD }
+collections:                               # the Tool's own rows, kept per install
+  votes:
+    schema: { type: object, properties: { choice: { type: string, enum: [a, b, c] } }, required: [choice] }
+    read: all                              # all | own | admin
+    write: own                             # own | all | admin
+    maxRows: 20000                         # default 10000, at most 100000
 dependencies: { date-fns: ^4 }             # from the curated list below
 tags: [crm, kanban]                        # optional marketplace tags: ≤8, [a-z0-9-]{1,24}
 ---
@@ -1000,6 +1051,32 @@ Handlers also get \`visvine.crypto\` — \`hmac(alg, key, data)\`, \`hash(alg, d
 connector's isolate; \`visvine.connectors.call(name, { action, args })\` runs one
 of the connector's named actions instead — the reviewable choice when the
 connector offers one.
+
+## Collections
+
+A collection is the Tool's own store — votes, sign-ups, check-ins — kept per
+install, not in the space's notes. Declare it under \`collections\` with a JSON
+Schema (\`type\`, \`properties\`, \`required\`, \`additionalProperties\`, \`enum\`,
+\`const\`, \`minimum\`/\`maximum\`, \`minLength\`/\`maxLength\`, \`items\`,
+\`minItems\`/\`maxItems\`; no \`pattern\`), and who reads and writes it:
+
+| Rule | all | own | admin |
+| --- | --- | --- | --- |
+| \`read\` | everyone reads every row | each viewer their own rows; admins all | admins only |
+| \`write\` | anyone changes any row | anyone adds; a row is changed by whoever wrote it, or an admin | admins only |
+
+\`\`\`tsx
+const { data: votes } = useCollectionCount('votes', { groupBy: 'choice' })
+const { data: mine } = useCollection('votes', { mine: true })
+await visvine.collections.insert('votes', { choice: 'a' })
+\`\`\`
+
+A row never says who wrote it — only \`mine\`. Rows are written as the viewer:
+their account going takes their rows with it. Uninstalling keeps the rows for
+${DETACHED_DAYS} days, for the Tool installed here again to take back; an admin can
+export them from the install's row in the console. \`where\` matches top-level
+fields exactly; \`groupBy\` counts per value of one field. A preview keeps its
+own rows, apart from any install's.
 
 ## State
 

@@ -27,6 +27,7 @@
  * admins pressing Install at once.
  */
 import prisma from '@/lib/prisma'
+import { adoptRows, detachRows, dropPreviewRows } from './collections'
 import { isAdmin } from '@/lib/auth'
 import { principalForUser } from '@/lib/agents/principal'
 import { listAgents } from '@/lib/agents/service'
@@ -113,6 +114,8 @@ export interface InstallSummary {
   settings: Record<string, unknown>
   /** For a Tool from outside the space: who published it, and whether Visvine reviewed it. */
   provenance?: { publisher: string | null; reviewed: boolean; verified: boolean } | null
+  /** The collections the version keeps rows in — what an admin's export holds. */
+  collections: string[]
 }
 
 /**
@@ -592,6 +595,7 @@ function toSummary(row: InstallRow, pending: PendingLookup, holds: HoldLookup): 
     bindings: values,
     settingSpecs: manifest.settings,
     settings: declaredSettings(row.settings, manifest),
+    collections: Object.keys(manifest.collections),
     pendingVersion: upgrade
       ? {
           id: upgrade.id,
@@ -852,6 +856,7 @@ export async function installVersion(
         },
         select: INSTALL_SELECT,
       })
+      await adoptRows(spaceId, out.created.id, { key: version.key, listingId: version.listingId }, tx)
       if (!config.surfaces.rail) return {}
       return { featureConfig: featureConfigWithRail(stored.featureConfig, toolRailKey(slug), opts.placement) }
     })
@@ -930,7 +935,9 @@ function refusalOf(err: unknown): RegistryError {
  *
  * `AppToolState` rows (the Tool's per-install KV) cascade with the row, which is
  * the intended reading of uninstall: the Tool's own stored state is its, and it
- * goes with it. Context notes it wrote are the space's and stay.
+ * goes with it. Its collections' rows are detached rather than dropped, for
+ * the same Tool installed here again to take back (lib/tools/collections.ts).
+ * Context notes it wrote are the space's and stay.
  */
 export async function uninstall(
   spaceId: string,
@@ -953,7 +960,8 @@ export async function uninstall(
     await updateSpaceConfig(spaceId, async (stored, tx) => {
       // deleteMany, so a row another admin removed while we waited on the lock is
       // a no-op rather than a 500 — and the space scope is re-checked inside it.
-      await tx.appToolInstall.deleteMany({ where: { id: installId, spaceId } })
+      const removed = await tx.appToolInstall.deleteMany({ where: { id: installId, spaceId } })
+      if (removed.count > 0) await detachRows(installId, tx)
       return { featureConfig: featureConfigWithoutRail(stored.featureConfig, toolRailKey(install.slug)) }
     })
   } catch (err) {
@@ -983,6 +991,8 @@ export async function uninstall(
  * snapshot and keep it.
  */
 export async function removeInstallForTool(spaceId: string, name: string): Promise<void> {
+  // What its previews kept goes with the working copy.
+  await dropPreviewRows(spaceId, name)
   const install = await prisma.appToolInstall.findUnique({
     where: { app_tool_install_identity: { spaceId, key: toolKey(spaceId, name) } },
     select: { id: true, slug: true },
@@ -990,6 +1000,7 @@ export async function removeInstallForTool(spaceId: string, name: string): Promi
   if (!install) return
   await updateSpaceConfig(spaceId, async (stored, tx) => {
     await tx.appToolInstall.deleteMany({ where: { id: install.id, spaceId } })
+    await detachRows(install.id, tx)
     return { featureConfig: featureConfigWithoutRail(stored.featureConfig, toolRailKey(install.slug)) }
   })
 }

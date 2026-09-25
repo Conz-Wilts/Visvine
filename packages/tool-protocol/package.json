@@ -2,7 +2,7 @@
   "name": "@visvine/tool-protocol",
   "version": "0.1.0",
   "private": true,
-  "description": "A Visvine Tool's contract — the wire protocol, the manifest, the permission grammar and bindings — pure, for the server, the host, the kit and the CLI",
+  "description": "A Visvine Tool's contract \u2014 the wire protocol, the manifest, the permission grammar and bindings \u2014 pure, for the server, the host, the kit and the CLI",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -11,7 +11,8 @@
     "./manifest": "./src/manifest.ts",
     "./bindings": "./src/bindings.ts",
     "./reach": "./src/reach.ts",
-    "./dependencies": "./src/dependencies.ts"
+    "./dependencies": "./src/dependencies.ts",
+    "./schema": "./src/schema.ts"
   },
   "types": "./src/index.ts",
   "scripts": {

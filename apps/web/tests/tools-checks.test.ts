@@ -321,7 +321,7 @@ test('both stages run in well under a second on a real tool', async () => {
     build: { ok: true, errors: [], warnings: [], configError: null },
   })
   assert.ok(performance.now() - started < 1000)
-  assert.equal(report.security.analyzer, 'static-1')
+  assert.equal(report.security.analyzer, 'static-2')
 })
 
 // ── manifest 2 ──

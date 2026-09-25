@@ -76,12 +76,22 @@ export function sourceReach(config: Pick<ToolConfig, 'perimeter' | 'manifest'>):
 }
 
 const RECORDS = new Set<BridgeCallSite['method']>(['records.query', 'records.get', 'records.update'])
+const COLLECTIONS = new Set<BridgeCallSite['method']>([
+  'collections.insert',
+  'collections.list',
+  'collections.get',
+  'collections.update',
+  'collections.delete',
+  'collections.count',
+])
 const RESOURCES = new Set<BridgeCallSite['method']>(['resources.list', 'resources.get', 'resources.read', 'resources.blob'])
 
 export function declaredVsUsed(
   declared: ToolPerimeter | ToolReach,
   calls: readonly BridgeCallSite[],
   handlers: readonly string[] | null,
+  /** The collections the manifest declares, by name. */
+  collections: readonly string[] = [],
 ): CheckFinding[] {
   const reach = asReach(declared)
   const perimeter: ToolPerimeter = reach
@@ -108,6 +118,8 @@ export function declaredVsUsed(
       findings.push({ rule: 'usage.unknown-action', severity: 'medium', message: `Runs ${call.arg}, which is not an action a tool may run`, ...at(call) })
     } else if (call.method === 'actions.run' && refuseAction(reach, call.arg)) {
       findings.push({ rule: 'usage.undeclared-action', severity: 'medium', message: `Runs ${call.arg}, which permissions.actions does not declare`, ...at(call) })
+    } else if (COLLECTIONS.has(call.method) && !collections.includes(call.arg)) {
+      findings.push({ rule: 'usage.undeclared-collection', severity: 'medium', message: `Uses collection ${call.arg}, which collections does not declare`, ...at(call) })
     }
   }
 
@@ -140,6 +152,12 @@ export function declaredVsUsed(
   if (reach.ai.complete && !uses(new Set(['ai.complete']))) unused('usage.unused-ai', 'Declares ai.complete and never asks')
   if (reach.ai.decide && !uses(new Set(['ai.decide']))) unused('usage.unused-ai', 'Declares ai.decide and never asks')
   if (reach.ui.download && !uses(new Set(['ui.download']))) unused('usage.unused-download', 'Declares downloads it never offers')
+  // A collection named only through a computed argument counts as used.
+  const named = new Set(calls.filter((call) => COLLECTIONS.has(call.method)).map((call) => call.arg))
+  if (!named.has(null)) {
+    const idle = collections.filter((name) => !named.has(name))
+    if (idle.length > 0) unused('usage.unused-collection', `Declares collections (${idle.join(', ')}) it never uses`)
+  }
   return findings
 }
 

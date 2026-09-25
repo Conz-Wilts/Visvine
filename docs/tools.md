@@ -869,6 +869,7 @@ Methods (`lib/tools/protocol.ts#BridgeMethods`):
 | `data.call` | Call a `data.js` handler in the isolate. |
 | `state.get` / `state.set` | A small key/value store (there is no `localStorage` in the sandbox), `scope: 'user'` (the viewer's own — kit 2's default) or `'install'` (one value everyone shares — what a call naming no scope gets). |
 | `subject.get` | What the Tool is being shown about (set by the host on a type page; null otherwise). |
+| `collections.insert` / `list` / `get` / `update` / `delete` / `count` | The Tool's own rows, in a collection its manifest declares (see [Collections](#collections)). |
 
 **`actions.run` keeps four rules** (`lib/tools/actionAllowlist.ts`,
 `toolActions.ts`): the bridge sets `space_id` to the install's space and
@@ -942,6 +943,58 @@ a frame streaming from instance B. That is why `useLiveQuery` polls, and why the
 author guide calls the stream a hint and the poll the guarantee. Cross-instance
 realtime needs an external pub/sub (an explicit non-goal for now); when it
 arrives, `publishChange` is the one seam to fan out through.
+
+### Collections
+
+A collection is a Tool's own store — votes, sign-ups, check-ins — declared in
+the manifest by name with a JSON Schema and two rules, and kept per install in
+`app_tool_records` (`lib/tools/collections.ts`, the rules pure in
+`lib/tools/shared/collections.ts`, the schema subset in
+`@visvine/tool-protocol/schema`).
+
+```yaml
+collections:
+  votes:
+    schema: { type: object, properties: { choice: { type: string, enum: [a, b, c] } }, required: [choice] }
+    read: all        # all | own (each viewer their own; admins all) | admin
+    write: own       # own (anyone adds; the writer or an admin changes) | all | admin
+    maxRows: 20000   # default 10,000, at most 100,000
+```
+
+- **The schema is a subset, checked twice.** `schemaDenial` at parse refuses
+  what the server cannot hold a Tool to: a root that is not `type: object`,
+  nesting past six, an unknown keyword — and `pattern`, because an author's
+  regular expression run over every write is a way to stall the server.
+  `rowDenial` holds every insert and update to it, naming where a row fails.
+- **Rows are written as the viewer and never say who.** A row carries
+  `user_id` (a foreign key that cascades, so an account going takes its rows)
+  but a Tool only ever sees `mine`. The export is data and times, no authors.
+- **The bridge answers the declaration before the rules, and the rules
+  before any row.** An undeclared collection is `perimeter`; an admin-only
+  one refuses a member with `forbidden`; `write: own` is asked of the row once
+  found. `read: own` reads only the viewer's rows, and another's by id is
+  `not_found`, not `forbidden`.
+- **Limits:** 16 KB a row (`MAX_ROW_BYTES`), `maxRows` a collection (`too_large`
+  past it), 200 rows a page, `where` as equality on at most eight top-level
+  fields (`null` matching a field set to null or absent), `groupBy` one field.
+  Pages are keyset on `(created_at, id)`, so a page never repeats or skips a
+  row written meanwhile; a cursor carries no authority.
+- **Keyed by what the Tool runs as.** An install's rows are its own; a
+  preview's are `preview:<space>/<name>` (dropped with the working copy); a
+  dynamic review run's live in its honeypot and go with it. An uninstall
+  **detaches** the rows; installing the same Tool — by key, or any key its
+  listing has had — in that space again takes them back, and the minute tick
+  purges what stayed detached for 30 days (`DETACHED_DAYS`).
+- **Live.** A write is announced on the changes stream as `:collection:<name>`
+  — a path no note can have — only to viewers who may read that collection
+  (a `read: own` viewer hears only about their own rows), per process, with
+  the kit's poll behind it. `useCollection(name, query)` and
+  `useCollectionCount(name, { groupBy })` are `useLiveQuery` over it.
+- **Export.** A space's admins download an install's rows as JSON from its row
+  in Console → Tools (`GET /api/spaces/<id>/tools/<installId>/records`).
+- **The checks read it.** `usage.undeclared-collection` for a literal name the
+  manifest lacks, `usage.unused-collection` for a declared one nothing uses
+  (the hooks count; a computed name counts as using them all).
 
 ### Limits
 
@@ -1330,6 +1383,10 @@ pnpm --filter @visvine/web verify:tools:monitoring  # a sleeper listed through V
                                                   # then a second — the listing suspended, a bridge call revoked at once, an open
                                                   # frame elsewhere taken down within a minute; the review console; telemetry,
                                                   # the anomaly rules, a forced rescan, a verified publisher
+pnpm --filter @visvine/web verify:tools:collections  # a poll holding 10,000 votes through the bridge: the tally per answer, every
+                                                  # row paged once, no author shown; schema, size, quota and write: own; a vote
+                                                  # reaching another viewer's open frame live; the admin's export; a member's
+                                                  # deleted account leaving none of their rows; detach, re-adopt and purge
 ```
 
 `verify:tools:escape`'s first step asks the running app for its
@@ -1366,12 +1423,13 @@ dataRun,limits,state,requirements,registry,installs,origin,csp,frameToken,
 frameDocument,vendorBundle,sdkDocs,screenshot,changes,verdicts,draftAuthors,
 configReach,incidents,indexFacts,toolFacts,bindable,actionAllowlist,toolActions,
 toolResources,toolAi,catalog,listings,consents,directory,about,publishers,
-telemetry,monitor,rescan,advisories,reviewConsole}.ts`, the monitoring rules
+telemetry,monitor,rescan,advisories,reviewConsole,collections}.ts`, the collection rules
+`lib/tools/shared/collections.ts`, the monitoring rules
 `lib/tools/shared/monitoring.ts`, the going-global
 rules `lib/tools/shared/{listing,reachWords}.ts`, packages `lib/tools/package/`
 (the pure layout in `shared/layout.ts`), the signing ring `lib/crypto/signing.ts`,
 Visvine's global stages `lib/tools/review/` (the pure halves in `shared/`), the pure contract in `packages/tool-protocol`
-(`protocol`, `perimeter`, `manifest`, `bindings`, `reach`, `dependencies`), the change bus `lib/notes/changes.ts`, runtime
+(`protocol`, `perimeter`, `manifest`, `bindings`, `reach`, `dependencies`, `schema`), the change bus `lib/notes/changes.ts`, runtime
 routes under `app/api/tools/runtime/*` (the report sink included) and
 `app/api/tools/{bridge,frame-token,changes,status,incidents,consent}/route.ts`,
 the review run's sign-in `app/api/tools/review-run/enter` and page
