@@ -147,13 +147,23 @@ const SPACE_QUESTIONS: readonly IntakeQuestion[] = [
 const TOOL_QUESTIONS: readonly IntakeQuestion[] = [
   {
     ask: 'What should it show or let people do — the one screen you picture?',
-    decides: 'The whole of `ui.tsx`, and which notes or rows `data.js` reads.',
+    decides: 'The whole of `ui.tsx`, its sections (`surfaces.nav`) if it has more than one view, and which notes `data.js` reads.',
     skipWhen: 'The request already describes the screen ("a table of this week\'s RSVPs") — then build it and offer the next step.',
   },
   {
+    ask: 'What does it read or change — which folders, which kinds of notes, which of the space\'s connectors?',
+    decides: 'The perimeter: the narrowest `read`/`write` globs, `types` and `connectors` that do the job. Everything else is refused at the bridge.',
+    skipWhen: 'The space\'s folders make it obvious (list_context shows one `deals/` folder for a deals board) — then say which you chose.',
+  },
+  {
     ask: 'Who uses it — everyone in the space, or the admins?',
-    decides: 'What it may write, and whether it lands on the rail for everyone once installed.',
+    decides: 'What it may write, and whether its sections for admins are marked `admin: true`.',
     skipWhen: 'Default to everyone in the space, read-only, and say so.',
+  },
+  {
+    ask: 'Should it look like the rest of the app, or its own way?',
+    decides: 'Whether you build from the kit and the `tool_design` guide (the default) or style it yourself.',
+    skipWhen: 'Almost always — build it to look like the app unless the person has already asked for a look of its own.',
   },
 ]
 

@@ -106,7 +106,7 @@ function InstalledTool({ install, spaceId, isAdmin }: { install: InstalledToolDt
   const menu: MenuItem[] = [
     { id: 'about', label: 'About', onSelect: () => setAbout(true) },
     ...(madeHere
-      ? [{ id: 'edit', label: 'Edit', onSelect: () => router.push(`/directory/tool:${encodeURIComponent(install.name)}`) }]
+      ? [{ id: 'edit', label: 'Edit', onSelect: () => router.push(`/tools/preview/${encodeURIComponent(install.name)}`) }]
       : []),
     ...(isAdmin ? [{ id: 'manage', label: 'Manage', onSelect: () => router.push('/admin?section=tools') }] : []),
     { id: 'report', label: 'Report', onSelect: () => setReport(true) },

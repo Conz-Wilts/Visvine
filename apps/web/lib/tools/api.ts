@@ -19,6 +19,8 @@ import type { ToolRequirements } from './requirements'
 import type { BrowseEntry, ToolVersionStatus, ToolVersionSummary } from './registry'
 import type { AuthoredToolDetail, AuthoredToolSummary } from './service'
 import type { CheckReport } from './checks/findings'
+import type { BuilderReadiness } from './builder'
+import type { ChatMessageDto } from '@/lib/agents/shared/chat'
 import type { StoredReport } from './checks/runs'
 
 export type { InstallSummary } from './installs'
@@ -226,6 +228,19 @@ export interface PublishBlockedResponse {
   build: BuildSummary | null
   /** Set when the checks, not the compiler, stopped it. */
   report?: CheckReport
+}
+
+/** What a Workbench save answers with: the build the write produced. */
+export interface WriteFileResponse {
+  build: BuildSummary
+}
+
+/** The person's builder thread, and whether the space can answer (else the MCP address). */
+export interface BuilderResponse {
+  messages: ChatMessageDto[]
+  nextCursor: string | null
+  ready: BuilderReadiness
+  mcp: string
 }
 
 /** What running the checks on a working copy answers with. */

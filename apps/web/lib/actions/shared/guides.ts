@@ -16,6 +16,8 @@
  * `deals/people/craig.md`, matches no entity, and silently draws no edge.
  */
 
+import { renderCatalog } from '@/lib/tools/catalog'
+
 export interface Guide {
   id: string
   title: string
@@ -88,7 +90,24 @@ const WRITING_NOTES: Guide = {
   body: ['## Folders', '', FOLDERS, '', '## Mentions', '', MENTIONS, '', '## Lifecycle', '', LIFECYCLE].join('\n'),
 }
 
-export const GUIDES: readonly Guide[] = [WRITING_NOTES]
+/**
+ * The Tool kit's components and hooks, and the rules that make a Tool look like
+ * the app — what an AI building a Tool is handed without being asked. The
+ * catalog itself is lib/tools/catalog.ts, held to the kit by a test.
+ */
+const TOOL_DESIGN: Guide = {
+  id: 'tool_design',
+  title: 'Tool design',
+  summary: "The Tool kit's components and hooks, and the rules that make a Tool look like the rest of the app.",
+  body: [
+    'Build with these, and a Tool looks like the app it runs in. Everything below is importable from `@visvine/tool-kit`. ' +
+      'A person who wants a different look can ask for one; these are the default, not a wall.',
+    '',
+    renderCatalog(),
+  ].join('\n'),
+}
+
+export const GUIDES: readonly Guide[] = [WRITING_NOTES, TOOL_DESIGN]
 
 export function guideById(id: string): Guide | null {
   return GUIDES.find((g) => g.id === id) ?? null

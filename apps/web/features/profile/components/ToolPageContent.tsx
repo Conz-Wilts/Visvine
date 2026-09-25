@@ -32,7 +32,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, CopyIcon, ExternalLinkIcon, TriangleAlertIcon, UploadIcon } from '@/features/shared/icons';
-import { Button, ConfirmDialog, Modal, Skeleton, Textarea } from '@visvine/ui';
+import { ConfirmDialog, Skeleton } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import ShareWithRooms, { type ShareValue } from '@/features/shared/components/ShareWithRooms';
 import { setAuthoredToolShare } from '@/features/tools/lib/client';
@@ -51,8 +51,9 @@ import BuildDiagnostics from '@/features/tools/components/BuildDiagnostics';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import InstallSheet from '@/features/tools/components/InstallSheet';
 import { TONE_CHIP, TONE_CLASSES, type Tone } from '@/features/shared/lib/statusTone';
-import { blockedReport, fetchAuthoredTool, publishTool, revokeToolVersion, runToolChecks } from '@/features/tools/lib/client';
+import { fetchAuthoredTool, revokeToolVersion, runToolChecks } from '@/features/tools/lib/client';
 import CheckReport, { checkWord } from '@/features/tools/components/CheckReport';
+import PublishDialog from '@/features/tools/components/PublishDialog';
 import type { CheckReport as CheckReportData } from '@/lib/tools/checks/findings';
 
 // ── Chrome ───────────────────────────────────────────────────────────────────
@@ -188,92 +189,6 @@ function VersionTrail({
         </li>
       ))}
     </ul>
-  );
-}
-
-/**
- * Publishing snapshots the working copy — its code and its declared reach — as
- * an immutable version of this space: approved as it lands when an admin
- * publishes, waiting on the space's admins otherwise. A dialog showing that
- * reach, not a button that fires.
- */
-function PublishDialog({
-  view,
-  spaceId,
-  onClose,
-  onDone,
-}: {
-  view: AuthoredToolView;
-  spaceId: string;
-  onClose: () => void;
-  onDone: (message: string) => void;
-}) {
-  const [notes, setNotes] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [blocked, setBlocked] = useState<CheckReportData | null>(null);
-
-  const { tool, versions } = view;
-  const nextVersion = (versions[0]?.version ?? 0) + 1;
-
-  const submit = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await publishTool(spaceId, tool.name, undefined, notes.trim() || undefined);
-      onDone(
-        res.warning ??
-          (res.version.status === 'approved'
-            ? `Published v${res.version.version} · approved in this space`
-            : `Published v${res.version.version} · waiting on an admin`),
-      );
-    } catch (e) {
-      const report = blockedReport(e);
-      setBlocked(report);
-      setError(report ? 'Checks blocked it' : e instanceof Error ? e.message : 'Could not publish');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Modal
-      onClose={onClose}
-      title={`Publish ${tool.title} v${nextVersion}`}
-      size="sm"
-      footer={
-        <div className="flex items-center justify-end gap-2 px-6 py-3">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button variant="brand" size="sm" onClick={submit} loading={busy} loadingText="Publishing…">
-            Publish
-          </Button>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-4 px-6 py-4 text-sm">
-        {tool.config ? (
-          <div>
-            <p className="pb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Reach</p>
-            <PerimeterSummary perimeter={tool.config.perimeter} />
-          </div>
-        ) : (
-          <p className="border-l-2 border-danger-bright pl-3 text-[13px] text-danger-strong">The config does not parse.</p>
-        )}
-
-        <Textarea
-          rows={3}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          aria-label="What changed"
-          placeholder="What changed"
-        />
-
-        {error && <p className="border-l-2 border-danger-bright pl-3 text-[13px] text-danger-strong">{error}</p>}
-        {blocked && <CheckReport report={blocked} />}
-      </div>
-    </Modal>
   );
 }
 
@@ -458,7 +373,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Link href={`/tools/preview/${encodeURIComponent(tool.name)}`} className={HEADER_BUTTON}>
             <ExternalLinkIcon className="h-3.5 w-3.5" />
-            Preview
+            {view.canEdit ? 'Edit' : 'Preview'}
           </Link>
           <button type="button" onClick={copyMcpHint} className={HEADER_BUTTON}>
             {copied ? <CheckIcon className="h-3.5 w-3.5 text-accent-strong" /> : <CopyIcon className="h-3.5 w-3.5" />}

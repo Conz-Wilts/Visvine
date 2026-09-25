@@ -52,6 +52,7 @@ import { BRIDGE_METHODS } from '@/lib/tools/protocol'
 import { TOOL_PHONE_REFUSAL } from '@/lib/tools/clientClass'
 import { computeRequirements, describeRequirements, isDegraded } from '@/lib/tools/requirements'
 import { TOOL_AUTHOR_GUIDE, TOOL_KIT_DTS } from '@/lib/tools/sdkDocs'
+import { renderCatalog } from '@/lib/tools/catalog'
 import {
   captureToolPreview,
   SCREENSHOT_BUDGET_MS,
@@ -555,6 +556,9 @@ async function getToolSdk(_ctx: ActionCaller, _args: Record<string, never>) {
   return {
     guide: TOOL_AUTHOR_GUIDE,
     tool_kit_dts: TOOL_KIT_DTS,
+    // The kit's components and hooks with snippets, and the design rules — build
+    // from these and the Tool looks like the app (lib/tools/catalog.ts).
+    catalog: renderCatalog(),
     // Everything a tool can ask the host for. `ui.tsx` reaches these through
     // @visvine/tool-kit; `data.js` gets the same set as isolate capabilities.
     bridge_methods: [...BRIDGE_METHODS],
@@ -853,6 +857,7 @@ export const APP_ACTIONS = [
   defineAction({
     name: 'create_tool',
     scope: 'tools:author',
+    guides: ['tool_design'],
     summary: 'Scaffold a new Tool in a space — the entity, its config note and two source files that already compile.',
     description:
       `BEFORE YOU CALL THIS: ${intakeSummary('tool')}\n` +
@@ -906,6 +911,7 @@ export const APP_ACTIONS = [
   defineAction({
     name: 'write_tool',
     scope: 'tools:author',
+    guides: ['tool_design'],
     summary: "Replace one of a Tool's three files and get the fresh build back in the same answer.",
     description:
       "Write one of a tool's three files, replacing it, and get the fresh build back in the same answer — " +

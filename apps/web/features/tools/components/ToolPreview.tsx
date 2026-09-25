@@ -218,7 +218,7 @@ export default function ToolPreview({ name }: { name: string }) {
  * share, so this is not a warning about the viewer's data — it is the moment
  * to decide whether to run code nobody has approved.
  */
-function RunGate({ tool, onRun }: { tool: AuthoredToolDetail; onRun: () => void }) {
+export function RunGate({ tool, onRun }: { tool: AuthoredToolDetail; onRun: () => void }) {
   const names = tool.draft.authors.map((author) => author.name);
   const edited = tool.draft.lastEdit;
   return (
@@ -246,7 +246,7 @@ function RunGate({ tool, onRun }: { tool: AuthoredToolDetail; onRun: () => void 
  * agent gets back from `write_tool`, so an author holding both is holding one
  * account of the problem rather than two.
  */
-function NotBuilding({ tool }: { tool: AuthoredToolDetail }) {
+export function NotBuilding({ tool }: { tool: AuthoredToolDetail }) {
   return (
     <div className="flex flex-col gap-3 border-l-2 border-danger-bright pl-4 py-1">
       <div className="flex items-center gap-2">

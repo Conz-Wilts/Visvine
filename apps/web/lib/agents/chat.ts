@@ -29,7 +29,9 @@ import { connectorReachFor } from '@/lib/connectors/service'
 import { readVisible } from '@/lib/notes/contextService'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
-import type { ChatFn } from '@/lib/notes/toolLoop'
+import type { ChatFn, ToolHandler } from '@/lib/notes/toolLoop'
+import type { ChatConfig } from '@/lib/notes/ai'
+import type { ModelPricing } from './registry'
 import { costMicros, preRunStop, type BudgetState } from './budget'
 import { agentConfigOf, composeAgent, findAgentBrief } from './briefs'
 import { runChatTurn } from './chatTurn'
@@ -256,6 +258,93 @@ export async function sendChatMessage(
     }
   }
 
+  // The prompt: preamble + brief, the memory read-only, the words.
+  const [tz, memoryNote, reach, actionCatalogue] = await Promise.all([
+    effectiveTimezone(spaceId, null),
+    readVisible(p, context, memoryPath(folder)).catch(() => null),
+    connectorReachFor(p, context, brief.connectors),
+    brief.tools.includes('actions')
+      ? (await import('@/lib/actions/registry'))
+          .allActions()
+          .map((a) => `- ${a.name} (${a.scope}): ${a.summary}`)
+          .join('\n')
+      : Promise.resolve(undefined),
+  ])
+  const memoryText = memoryForPrompt(memoryNote)
+  const chatInputs = inputValuesFor(brief, p.userId, state?.runAsUserId ?? null)
+  const tools = chatToolFilter(
+    agentTools({
+      principal: p,
+      agentFolder: folder,
+      context,
+      spaceId,
+      agentName,
+      brief,
+      connectorActions: reach.actions,
+      machineAllow: reach.hosts,
+      attended: true,
+      actionCatalogue,
+      client: opts.client ?? 'app',
+    }),
+  )
+
+  return runThreadTurn({
+    p,
+    spaceId,
+    threadName: agentName,
+    meterName: agentName,
+    text,
+    // The person chatting is who the tools run as, so the values are theirs.
+    system: [
+      `${agentChatPreamble(agentName, folder)}\n\n---\n\n${applyInputs(brief.body, brief.inputs, chatInputs)}`,
+      inputsMessage(brief.inputs, chatInputs, p.name || null),
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    memoryMessage: memoryText ? `Your memory (${memoryPath(folder)}), to read:\n\n${memoryText}` : null,
+    tools,
+    config,
+    modelUsed,
+    pricing: ref.pricing,
+    budget,
+    maxTurns: Math.min(CHAT_MAX_TURNS, brief.maxTurns),
+    turnMs: CHAT_TURN_MS,
+    timezone: tz,
+    opts,
+  })
+}
+
+/**
+ * One turn of a thread whose owner has already decided the prompt, the tools
+ * and the model — an agent's chat above, the Tool builder
+ * (lib/tools/builder.ts). The claim, the replay, the loop, the stored answer
+ * and the metering are the same for both, so they are written once.
+ */
+export interface ThreadTurnInput {
+  p: ContextPrincipal
+  spaceId: string
+  /** The thread's name beside (space, person): an agent's, or a reserved one no agent can take. */
+  threadName: string
+  /** What the spend is metered under. */
+  meterName: string
+  text: string
+  system: string
+  memoryMessage: string | null
+  tools: ToolHandler[]
+  config: ChatConfig
+  modelUsed: string
+  pricing: ModelPricing | null
+  budget: BudgetState
+  maxTurns: number
+  /** How long one turn may take; the claim goes stale a little after it. */
+  turnMs: number
+  timezone: string
+  opts: Pick<SendChatOptions, 'signal' | 'onEvent' | 'chatFn'>
+}
+
+export async function runThreadTurn(input: ThreadTurnInput): Promise<SendChatResult> {
+  const { p, spaceId, threadName: agentName, text, opts } = input
+  const now = new Date()
   // The claim and the two rows, in one transaction.
   const claimed = await prisma.$transaction(async (tx) => {
     const thread = await tx.agentChatThread.upsert({
@@ -264,7 +353,8 @@ export async function sendChatMessage(
       update: {},
       select: { id: true },
     })
-    const stale = new Date(now.getTime() - CHAT_CLAIM_MS)
+    // A claim goes stale the same grace after its own turn clock as an agent's does.
+    const stale = new Date(now.getTime() - (input.turnMs + (CHAT_CLAIM_MS - CHAT_TURN_MS)))
     const pending = await tx.agentChatMessage.create({
       data: { threadId: thread.id, role: 'assistant', text: '', status: 'pending' },
       select: { id: true },
@@ -293,43 +383,15 @@ export async function sendChatMessage(
   const userMessage = toDto(claimed.user)
   opts.onEvent?.({ type: 'user', message: userMessage })
 
-  // The prompt: preamble + brief, the memory read-only, the history, the words.
-  const [tz, memoryNote, history, reach, actionCatalogue] = await Promise.all([
-    effectiveTimezone(spaceId, null),
-    readVisible(p, context, memoryPath(folder)).catch(() => null),
-    prisma.agentChatMessage.findMany({
-      where: { threadId: claimed.threadId, id: { notIn: [claimed.pendingId, claimed.user.id] } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: 60,
-      select: { role: true, text: true, status: true },
-    }),
-    connectorReachFor(p, context, brief.connectors),
-    brief.tools.includes('actions')
-      ? (await import('@/lib/actions/registry'))
-          .allActions()
-          .map((a) => `- ${a.name} (${a.scope}): ${a.summary}`)
-          .join('\n')
-      : Promise.resolve(undefined),
-  ])
-  const memoryText = memoryForPrompt(memoryNote)
-  const chatInputs = inputValuesFor(brief, p.userId, state?.runAsUserId ?? null)
-  const tools = chatToolFilter(
-    agentTools({
-      principal: p,
-      agentFolder: folder,
-      context,
-      spaceId,
-      agentName,
-      brief,
-      connectorActions: reach.actions,
-      machineAllow: reach.hosts,
-      attended: true,
-      actionCatalogue,
-      client: opts.client ?? 'app',
-    }),
-  )
+  // The history: this thread's rows, less the two just written.
+  const history = await prisma.agentChatMessage.findMany({
+    where: { threadId: claimed.threadId, id: { notIn: [claimed.pendingId, claimed.user.id] } },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: 60,
+    select: { role: true, text: true, status: true },
+  })
 
-  const signals = [AbortSignal.timeout(CHAT_TURN_MS), ...(opts.signal ? [opts.signal] : [])]
+  const signals = [AbortSignal.timeout(input.turnMs), ...(opts.signal ? [opts.signal] : [])]
   const startedAt = new Date()
   let finalText: string | null = null
   let status: ChatStatus = 'failed'
@@ -340,21 +402,15 @@ export async function sendChatMessage(
   let turns = 0
   try {
     const result = await runChatTurn({
-      // The person chatting is who the tools run as, so the values are theirs.
-      system: [
-        `${agentChatPreamble(agentName, folder)}\n\n---\n\n${applyInputs(brief.body, brief.inputs, chatInputs)}`,
-        inputsMessage(brief.inputs, chatInputs, p.name || null),
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
-      memoryMessage: memoryText ? `Your memory (${memoryPath(folder)}), to read:\n\n${memoryText}` : null,
+      system: input.system,
+      memoryMessage: input.memoryMessage,
       history: historyMessages(history.reverse().map((r) => ({ role: r.role as ChatRole, text: r.text, status: r.status as ChatStatus }))),
-      userTurn: chatUserTurn({ now: nowIso(startedAt, tz), personName: p.name, text }),
-      tools,
-      config,
-      maxTurns: Math.min(CHAT_MAX_TURNS, brief.maxTurns),
+      userTurn: chatUserTurn({ now: nowIso(startedAt, input.timezone), personName: p.name, text }),
+      tools: input.tools,
+      config: input.config,
+      maxTurns: input.maxTurns,
       signal: AbortSignal.any(signals),
-      budget,
+      budget: input.budget,
       chatFn: opts.chatFn,
       onEvent: (e) => {
         if (e.type === 'tool') opts.onEvent?.({ type: 'tool', tool: e.tool, detail: e.detail })
@@ -398,7 +454,7 @@ export async function sendChatMessage(
     logger.error('agents.chat.turn_crashed', { err, spaceId, agentName })
   }
 
-  const cost = costMicros(usage, ref.pricing)
+  const cost = costMicros(usage, input.pricing)
   const answer = (status === 'done' && finalText ? finalText : failureText(reason ?? 'error', errorMessage)).slice(0, CHAT_ANSWER_MAX)
   const stored = await prisma.$transaction(async (tx) => {
     const message = await tx.agentChatMessage.update({
@@ -409,7 +465,7 @@ export async function sendChatMessage(
         reason,
         errorMessage,
         trace: trace as unknown as object[],
-        model: modelUsed,
+        model: input.modelUsed,
         turns,
         promptTokens: usage.promptTokens,
         completionTokens: usage.completionTokens,
@@ -432,7 +488,7 @@ export async function sendChatMessage(
     return message
   })
   try {
-    await meterModelUsage({ spaceId, name: agentName, model: modelUsed, startedAt, promptTokens: usage.promptTokens, completionTokens: usage.completionTokens, costMicros: cost })
+    await meterModelUsage({ spaceId, name: input.meterName, model: input.modelUsed, startedAt, promptTokens: usage.promptTokens, completionTokens: usage.completionTokens, costMicros: cost })
   } catch (err) {
     logger.error('agents.chat.meter_failed', { err, spaceId, agentName })
   }

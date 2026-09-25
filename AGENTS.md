@@ -281,8 +281,12 @@ reconnect and when the tab comes back.
 **Nothing in the apps creates anything. Every new thing is asked of an AI over
 the Visvine MCP server**, which runs the action for it; web, desktop, iOS and
 Android are where what it made is read, edited, published and switched on.
-There is no Create button, no draft surface, no `/events/new`. The one
-exception is a file or link posted in a channel, as in Slack. The Directory's
+There is no Create button, no draft surface, no `/events/new`. The exceptions
+are a file or link posted in a channel, as in Slack, and **Build a tool** in
+the rail's More sheet: the in-app builder (`lib/tools/builder.ts`) is still
+an AI doing the creating — a chat on the space's model whose tools are the
+authoring actions, run as the person — for someone with no AI client of
+their own. The Directory's
 Resources tab adds nothing — a resource comes in over MCP so its note is
 written with it.
 
@@ -294,7 +298,7 @@ written with it.
 | Event | `create_event` → edited and published at `/events/<id>/edit` |
 | Space, sub-space | `create_space` — **and** New space on the switcher (`NewSpaceDialog`), the one create the app keeps, because a new account has no space to act in |
 | Agent | `create_agent`, then `activate_agent` |
-| Tool | `create_tool` → `write_tool` → `publish_tool` |
+| Tool | `create_tool` → `write_tool` → `publish_tool` — **and** Build a tool in More (the builder, over the same actions) |
 | Channel, section | `create_channel`, `create_section` (`lib/actions/defs/channels.ts`) |
 | Type | `add_type` |
 | A file (image, PDF, document) | `upload_file`, or `request_upload` for a chat attachment the model can only see |
@@ -1331,9 +1335,22 @@ guide. The invariants:
   Edit, Manage and Report. The section is `?section=`, pushed into the frame as
   `visvine:route` — a tab press never reloads the frame. Nav and actions are
   surfaces, so changing them is reviewed like a new rail row.
-- The working copy renders live at `/tools/preview/<name>` for anyone who can
-  read the note. That path is load-bearing: `create_tool`, `write_tool` and
-  `preview_tool` all hand it back, and the desktop deep link resolves to it.
+- **`/tools/preview/<name>` is the Workbench** for anyone who can edit the
+  Tool — files, the builder, checks and the kit's Components on the left, the
+  working copy running on the right, Publish on the band — and the preview
+  alone for anyone who can only read it. That path is load-bearing:
+  `create_tool`, `write_tool` and `preview_tool` all hand it back, and the
+  desktop deep link resolves to it. A Workbench save is `writeToolFile`, the
+  write `write_tool` makes. `/tools/build` is the same page before the Tool
+  has a name.
+- **The builder is agent chat with authoring tools** (`lib/agents/chat.ts#runThreadTurn`,
+  thread `:tool-builder` per person per space): `context:read` +
+  `tools:author` only, the space id filled in by the server, no publish or
+  install. With no model in the space it shows the MCP address instead.
+- **The kit's catalog is one list** (`lib/tools/catalog.ts`): `get_tool_sdk`,
+  the `tool_design` guide on `create_tool`/`write_tool`, the builder's prompt
+  and the Workbench's Components panel all read it, and
+  `tests/tools-catalog.test.ts` holds it to the kit's exports.
 
 ## Production
 

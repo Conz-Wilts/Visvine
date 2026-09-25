@@ -14,8 +14,11 @@
  */
 import { fetchJson, fetchJsonBody, FetchJsonError } from '@/lib/fetchJson'
 import type { CheckReport } from '@/lib/tools/checks/findings'
+import type { BuilderStreamEvent } from '@/lib/tools/builder'
 import type {
+  BuilderResponse,
   CheckResponse,
+  WriteFileResponse,
   ApprovalDecisionResponse,
   ApprovalQueueResponse,
   InstallCreatedResponse,
@@ -147,6 +150,74 @@ export function publishTool(
     'POST',
     { action: 'publish', ...(note ? { note } : {}), ...(releaseNotes ? { releaseNotes } : {}) },
   )
+}
+
+/** Save one of a Tool's files from the Workbench; answers with the fresh build. */
+export function saveToolFile(spaceId: string, name: string, file: string, content: string): Promise<WriteFileResponse> {
+  return fetchJsonBody<WriteFileResponse>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/files/${encodeURIComponent(file)}`,
+    'PUT',
+    { content },
+  )
+}
+
+// ── the builder ──────────────────────────────────────────────────────────────
+
+const builderUrl = (spaceId: string) => `/api/spaces/${encodeURIComponent(spaceId)}/tools/builder`
+
+/** The person's builder thread in this space, newest first, and whether the space can answer. */
+export function fetchBuilder(spaceId: string, signal?: AbortSignal): Promise<BuilderResponse> {
+  return fetchJson<BuilderResponse>(builderUrl(spaceId), { signal })
+}
+
+/** Start the builder thread over. */
+export function clearBuilder(spaceId: string): Promise<{ ok: true }> {
+  return fetchJsonBody<{ ok: true }>(builderUrl(spaceId), 'DELETE', {})
+}
+
+/**
+ * Send one message to the builder and read its turn as it happens. Resolves
+ * when the stream ends; every event — the stored question, each call, the
+ * `workbench` notices, the answer — goes to `onEvent` on the way.
+ */
+export async function streamBuilder(
+  spaceId: string,
+  body: { text: string; tool: string | null },
+  onEvent: (event: BuilderStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${builderUrl(spaceId)}/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (!res.ok || !res.body) {
+    const data = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new FetchJsonError(res.status, data?.error ?? `Request failed (${res.status})`)
+  }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    let end = buffer.indexOf('\n\n')
+    while (end >= 0) {
+      const frame = buffer.slice(0, end)
+      buffer = buffer.slice(end + 2)
+      for (const line of frame.split('\n')) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          onEvent(JSON.parse(line.slice(6)) as BuilderStreamEvent)
+        } catch {
+          // A frame that is not JSON is not an event.
+        }
+      }
+      end = buffer.indexOf('\n\n')
+    }
+  }
 }
 
 /** Run the static checks on the working copy now; the report is recorded and returned. */

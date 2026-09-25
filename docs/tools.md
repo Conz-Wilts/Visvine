@@ -380,6 +380,45 @@ act with a second reviewer. That split is carried by two independent columns on
    between the flag and the click. This is the *only* way a space's Tool code
    ever changes — publishing a new version never touches an install by itself.
 
+### Building in the app
+
+**The Workbench** (`features/tools/components/workbench/Workbench.tsx`) is
+`/tools/preview/<name>` for anyone who can edit the Tool: the band carries
+**Builder · ui.tsx · data.js · index.md · Checks · Components** and, at its
+trailing end, the Tool's status and **Publish**; the working copy runs on the
+right and reloads whenever a file lands. The files are plain text — a save is
+`PUT /api/spaces/<id>/tools/authoring/<name>/files/<file>`, which is
+`writeToolFile`, the same write and compile `write_tool` makes. **Components**
+lists the kit (`lib/tools/catalog.ts`); pressing one inserts its snippet at the
+caret in `ui.tsx` with its import merged in (`insertSnippet`). **Checks** runs
+the stages a publish runs. Someone who can read a Tool but not edit it gets the
+preview alone. Edit in a Tool's ⋯ menu and on its Tool tab open it.
+
+**The builder** (`lib/tools/builder.ts`) is Build a tool in the rail's More
+sheet — `/tools/build`, the Workbench before the Tool has a name. It is agent
+chat with authoring tools: one thread per person per space
+(`:tool-builder`, a name no agent can take), one turn through
+`lib/agents/chat.ts#runThreadTurn` on the space's model, metered like any
+chat. Its tools are `list_tools`, `read_tool`, `create_tool`, `write_tool`,
+`check_tool`, `list_context` and `read_context`, each `runAction` as the
+person with `context:read` and `tools:author` only and the space id filled
+in by the server — so a draft lands only where they can write, and nothing
+is published or installed. Its prompt is the build rules, the tool intake
+(`lib/actions/shared/intake.ts`), `TOOL_AUTHOR_GUIDE` and the catalog. The
+stream (`POST …/tools/builder/stream`) adds a `workbench { tool }` event to
+agent chat's whenever a call created or wrote a Tool, and the page follows
+it: a new Tool becomes the page's own address without remounting it. With no
+model in the space the panel shows the MCP address instead. Phones are
+refused, as everywhere tools run.
+
+**The catalog** is one list of the kit's components and hooks — what each is
+for, when the app draws that shape, its props and a snippet — plus the design
+rules in brief. `get_tool_sdk` returns it as `catalog`; the `tool_design`
+guide (named in `create_tool` and `write_tool`'s `guides:`) hands it to any AI
+client; the builder has it from its first turn. `tests/tools-catalog.test.ts`
+fails when the kit exports something the catalog does not describe, the
+catalog names something the kit lacks, or a snippet does not compile.
+
 ### Checks
 
 Every publish runs two automated stages first, inside the request
