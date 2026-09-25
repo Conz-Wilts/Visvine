@@ -207,7 +207,7 @@ other action uses — so a Tool's notes obey the caller's real grants.
 | `read_tool` | `context:read` | One Tool's `index.md`/`ui.tsx`/`data.js` (unwrapped) + parsed config + build diagnostics. |
 | `create_tool` | `tools:author` | Creates the entity folder + scaffolds (`lib/tools/service.ts#createTool`); returns the file list, the preview deep link and web URL, and a pointer to `get_tool_sdk`. |
 | `write_tool` | `tools:author` | Writes one of the three files (`writeToolFile`); the response **always** carries the fresh build result, and the preview links. |
-| `check_tool` | `tools:author` | Rebuilds and returns a lint report: config errors, compile diagnostics, `describePerimeter`, `computeRequirements` against this space, and warnings (empty perimeter, a downgraded page claim, a missing description). `render: true` also mounts the working copy headlessly and folds its console errors into the warnings (`runtime` block, no image). |
+| `check_tool` | `tools:author` | Rebuilds and runs [the checks](#checks) a publish runs — `checks`: `status`, `blocking` (what stops a publish), `flags`, `notes`, `risk` — recorded against the working copy, plus `describePerimeter`, `computeRequirements` against this space and the surfaces. `ready_to_publish` is false only when something blocks. `render: true` also mounts the working copy headlessly and folds its console errors into the warnings (`runtime` block, no image); a failed render is not ready either. |
 | `preview_tool` | `tools:author` | The two preview URLs plus current build status. `screenshot: true` renders the preview headlessly as the caller and returns the image + console errors — see [Preview](#preview). |
 | `publish_tool` | `tools:author` | `publishTool` — publishes into the tool's OWN space and never the marketplace; an admin's is approved as it lands, a member's queues for one. Accepts `release_notes` (≤2KB); the response carries the preview links and says where the version went. |
 | `install_tool` | `tools:install` | `installVersion` — admin-only; `placement: rail \| more`; returns the install plus any type-claim conflicts and unmet requirements. |
@@ -325,7 +325,8 @@ act with a second reviewer. That split is carried by two independent columns on
    is invisible outside it. Re-publishing **supersedes** an earlier submission
    still waiting on an admin (marked `withdrawn`, note `Superseded by vN`) rather
    than being refused — the newer snapshot is what the author means. Refuses a
-   working copy that doesn't compile. Version numbers count from 1 and never
+   working copy that doesn't compile, and one [the checks](#checks) block —
+   for an admin exactly as for a member. Version numbers count from 1 and never
    repeat, even across a rejection.
 2. **Approve** (`reviewSpaceVersion`, `POST …/tools/versions/<id>` with
    `action: 'review'`) is the space admin's verdict, in Console → **Approvals**
@@ -349,15 +350,17 @@ act with a second reviewer. That split is carried by two independent columns on
    comma-separated space ids) names spaces whose *re*-listings may skip the
    queue: `submitToMarketplace` runs the pure `shouldAutoApprove` right after the
    submission lands and, when the space is trusted **and** an earlier listed
-   version exists **and** the perimeter diff against it is empty, marks the
-   listing `approved` with `marketplaceReviewedBy: 'auto'`. The `surfaces` block
-   (rail label/icon, type page/tab claims — `surfacesUnchanged`, compared after
-   normalising, claim order aside) must match too: a new rail entry or a claim on
-   a node type's page is new real estate in every installing space even when the
-   reach is the same. A first listing, any perimeter or surfaces change, or any
-   untrusted space stays super-admin. Code changes are not inspected — what an
-   install can do is bounded by the perimeter and the viewer's grants, and that
-   bound is what the check proves has not moved.
+   version exists **and** the manifest diff against it is empty **and** the
+   version's security findings hold nothing medium or high, marks the listing
+   `approved` with `marketplaceReviewedBy: 'auto'`. The diff is
+   `lib/tools/manifestDiff.ts#diffManifest` over `REVIEWED_FIELDS` — the five
+   perimeter lists and every surface (rail, type claims, nav, band actions),
+   order that means nothing aside. Whatever it cannot see a trusted publisher
+   could widen unread, so `tests/tools-diff-coverage.test.ts` walks every key a
+   parsed manifest carries and fails until each is reviewed or named
+   descriptive, then widens each reviewed field alone and proves the fast path
+   refuses it. A first listing, any reviewed change, a flag from the scan, or
+   an untrusted space stays super-admin.
 5. **Install** (`install_tool` / `lib/tools/installs.ts#installVersion`, space
    admin only) pins the version, picks a free slug (`deals` → `deals-2` on a
    clash), and resolves the declared type surfaces against the space (see
@@ -376,6 +379,46 @@ act with a second reviewer. That split is carried by two independent columns on
    `installability`** rather than trusting the offer — a listing can be rejected
    between the flag and the click. This is the *only* way a space's Tool code
    ever changes — publishing a new version never touches an install by itself.
+
+### Checks
+
+Every publish runs two automated stages first, inside the request
+(`lib/tools/checks/analyze.ts#runStaticChecks`, well under a second): a
+**blocking** finding writes no version and the author reads why; everything
+else rides the version to whoever approves it. **No path skips them** — an
+admin's publish is the space's approval, not a bypass. `check_tool` and the
+Tool tab's **Check** run the same stages on the working copy, so what passes
+there is what publish accepts.
+
+| stage | blocks on | flags |
+| --- | --- | --- |
+| **Compatibility** (`compatibility.ts`) | an index note that does not parse, a compile error, no `ui.tsx` | design lint, no description, an inert `agents/` write glob, a page claim this space will downgrade |
+| **Security** (`codeRules.ts`, `textRules.ts`, `usage.ts`) | escape and exfiltration intent (other windows, navigation, cookies, dynamic code, network primitives, WebRTC, workers, nested documents, `<meta http-equiv>`, prefetch links, direct `postMessage`, beacons built from data), a password field or credential autocomplete, obfuscation (computed global names, bidi and invisible characters, escaped identifiers, minified code), a secret in any file, a `data.js` reaching for Node | storage, powerful features, off-site links, encoded blobs, high-entropy strings, credential copy, a call the perimeter will refuse, reach it never uses, a high risk score |
+
+The security rules read INTENT: the frame already refuses almost all of it
+(`connect-src 'none'`, an opaque origin, no popups), so a `fetch` in a Tool can
+never work and its only reason to be there is someone trying. `ui.tsx` is read
+after esbuild strips its types and lowers its JSX to calls — one rule covers
+`<input type="password">` and `jsx("input", …)` — with the source map carrying
+each finding back to the author's line; names are checked for being the
+global, so a local `parent` or `fetch` is the author's own. **Declared vs
+used** extracts the bridge calls with literal arguments: a call outside the
+perimeter will fail (flag), reach never exercised is least privilege (low).
+The **risk score** reads the manifest alone — broad reads beside writes (the
+laundering shape), a connector beside reads (the way out), configuration
+reads, every agent — and at 45 or more flags the version for a person; it
+never blocks.
+
+Each run writes an `app_tool_check_runs` row per stage (status, findings, the
+risk score, `analyzer`, timing): on the working copy (`version_id` null, the
+newest six kept) and on the version a publish wrote. The author's Tool tab,
+Approvals and Visvine's review queue all read those rows — nothing is re-run
+for a person. `ANALYZER_VERSION` is bumped when a rule changes, which is what a
+rescan will key on. The corpus in `scripts/fixtures/tools/corpus/` —
+benign and malicious Tools, each malicious one naming the rule it trips — is
+`tests/tools-checks-corpus.test.ts`; the escape suite publishes its hostile
+Tool past the checks on purpose, because the frame, not the scan, is the
+control.
 
 ### Pulling a Tool back
 
@@ -849,8 +892,8 @@ production deployment answer `preview_tool { screenshot }` / `check_tool
 and a Chromium — it is a devDependency and is **not** in the standalone image
 today, so the flag alone is not enough there); unset, production is link-only
 and dev is always on. `TOOLS_TRUSTED_PUBLISHERS=space_a,space_b` names the
-spaces whose unchanged-perimeter re-publishes are auto-approved (see the
-review step above); unset means every version is read by a person.
+spaces whose unchanged-manifest, clean-scan re-listings are auto-approved (see
+the review step above); unset means every version is read by a person.
 
 ### Local dev
 

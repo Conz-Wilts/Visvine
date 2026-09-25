@@ -38,7 +38,16 @@ import type { Context } from '@/lib/notes/store'
 import { toBuildSummary, rebuildTool, toolDiagnosticLine, type BuildSummary } from '@/lib/tools/builds'
 import type { ToolConfig } from '@/lib/tools/config'
 import { appOrigin as liveAppOrigin } from '@/lib/tools/origin'
-import { describePerimeter, perimeterIsEmpty } from '@/lib/tools/perimeter'
+import { describePerimeter } from '@/lib/tools/perimeter'
+import { runStaticChecks, type StaticCheckInput } from '@/lib/tools/checks/analyze'
+import {
+  blockingFindings,
+  findingLine,
+  reportStatus,
+  sortFindings,
+  type CheckReport,
+} from '@/lib/tools/checks/findings'
+import { recordReport } from '@/lib/tools/checks/runs'
 import { BRIDGE_METHODS } from '@/lib/tools/protocol'
 import { TOOL_PHONE_REFUSAL } from '@/lib/tools/clientClass'
 import { computeRequirements, describeRequirements, isDegraded } from '@/lib/tools/requirements'
@@ -151,6 +160,8 @@ export interface AppToolDeps {
     opts?: { placement?: 'rail' | 'more' },
   ): Promise<InstallResult>
   listInstalls(spaceId: string): Promise<InstallSummary[]>
+  /** The static stages over a working copy, recorded against it (lib/tools/checks/). */
+  checkWorkingCopy(spaceId: string, name: string, sourceHash: string, input: StaticCheckInput): Promise<CheckReport>
   /** The four changes `update_install` makes, each admin-gated by the service. */
   setInstallEnabled(spaceId: string, installId: string, actor: Actor, enabled: boolean): Promise<InstallUpdateResult>
   setTypeClaims(spaceId: string, installId: string, actor: Actor, claims: Record<string, TypeClaimChoice>): Promise<InstallUpdateResult>
@@ -187,6 +198,11 @@ const liveDeps: AppToolDeps = {
   publishTool: publishToolService,
   installVersion: installVersionService,
   listInstalls: listInstallsService,
+  checkWorkingCopy: async (spaceId, name, sourceHash, input) => {
+    const report = await runStaticChecks(input)
+    await recordReport({ spaceId, name, versionId: null, sourceHash, trigger: 'check', report })
+    return report
+  },
   setInstallEnabled: setInstallEnabledService,
   setTypeClaims: setTypeClaimsService,
   applyUpgrade: applyUpgradeService,
@@ -233,6 +249,25 @@ function buildReport(build: BuildSummary | null) {
     config_error: build.configError,
     size_bytes: build.sizeBytes,
     built_at: build.updatedAt,
+  }
+}
+
+/**
+ * A check report as an authoring agent reads it: what blocks a publish, what an
+ * admin will be asked about, what is only said, and the risk score — lines,
+ * worst first, each naming its file and line.
+ */
+function checksView(report: CheckReport) {
+  const all = sortFindings([...report.compatibility.findings, ...report.security.findings])
+  const risk = report.security.risk
+  return {
+    status: reportStatus(report),
+    compatibility: report.compatibility.status,
+    security: report.security.status,
+    blocking: blockingFindings(report).map(findingLine),
+    flags: all.filter((f) => f.severity === 'medium' || f.severity === 'low').map((f) => `${f.severity}: ${findingLine(f)}`),
+    notes: all.filter((f) => f.severity === 'info').map(findingLine),
+    risk: risk ? { score: risk.score, level: risk.level, factors: risk.factors } : null,
   }
 }
 
@@ -461,53 +496,29 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
   const build = await deps.rebuild(target.context.spaceId, args.name)
   const config = build.config ?? detail.config
 
-  const warnings: string[] = []
-  if (!config) {
-    warnings.push('index.md does not parse as a tool config, so nothing below could be checked.')
-  }
-  if (config && perimeterIsEmpty(config.perimeter)) {
-    warnings.push(
-      'The perimeter is empty — this tool can read and write no space data. Declare note globs in `perimeter.read`/`perimeter.write` and any node types, connectors and agents it uses.',
-    )
-  }
-  if (config && !config.description.trim()) {
-    warnings.push(
-      'index.md has no `description:` — it is what the marketplace card and the install checklist show.',
-    )
-  }
-  // A write glob under `agents/` buys nothing on its own: the seal is create-only
-  // and scoped to the briefs of agents the config DECLARES. Without that list the
-  // glob is inert, and the author gets no other signal that it is.
-  if (
-    config &&
-    config.perimeter.agents.length === 0 &&
-    config.perimeter.write.some((glob) => glob.split('/')[0] === 'agents')
-  ) {
-    warnings.push(
-      '`perimeter.write` names a path under `agents/` but `perimeter.agents` is empty, so the glob grants nothing. The only permitted write there is CREATING the brief of an agent this tool declares.',
-    )
-  }
-
   const facts = await deps.spaceFacts(target.principal, target.context)
-  const custom = new Set(facts.customTypes)
-  for (const claim of config?.surfaces.types ?? []) {
-    if (claim.mode !== 'page' || custom.has(claim.type)) continue
-    // parseToolConfig already refuses `page` on a built-in type, so what is
-    // left is a page claim on a type this space simply hasn't invented: the
-    // install resolves it down to a tab rather than refusing.
-    warnings.push(
-      `\`surfaces.types\` claims the page for "${claim.type}", which is not a member-invented type in this space — installing will downgrade it to a tab.`,
-    )
-  }
-
   const requirements = config
     ? computeRequirements(config.perimeter, facts.available)
     : { connectors: [], types: [], agents: [] }
+
+  // The same static stages a publish runs — so what check_tool says passes is
+  // what publish will accept — recorded, so the Tool tab shows the same report.
+  const report = await deps.checkWorkingCopy(target.context.spaceId, args.name, build.sourceHash, {
+    index: detail.sources['index.md'],
+    ui: detail.sources['ui.tsx'],
+    data: detail.sources['data.js'],
+    config,
+    build: { ok: build.ok, errors: build.errors, warnings: build.warnings, configError: build.configError },
+    facts: { customTypes: facts.customTypes, missing: describeRequirements(requirements) },
+  })
+  const checks = checksView(report)
+  const warnings = [...checks.flags]
 
   // Optional runtime check: mount the working copy in a headless browser and
   // report what the console said. Only when it compiles — an error card has no
   // runtime errors worth reading — and never an image here (that is preview_tool).
   let runtime: RuntimeReport | undefined
+  let runtimeFailed = false
   if (args.render && ctx.client === 'mobile') throw new ActionError(403, TOOL_PHONE_REFUSAL)
   if (args.render && build.ok) {
     runtime = runtimeReport(
@@ -517,6 +528,7 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
     if (runtime.available && !runtime.rendered) {
       warnings.push('Runtime: the tool did not mount anything within the render budget.')
     }
+    runtimeFailed = runtime.console_errors.length > 0 || (runtime.available && !runtime.rendered)
   }
 
   return {
@@ -531,8 +543,11 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
       degraded_here: isDegraded(requirements),
       missing: describeRequirements(requirements),
     },
+    checks,
     warnings,
-    ready_to_publish: build.ok && warnings.length === 0,
+    // A blocking finding stops a publish, and so does a render that failed when
+    // one was asked for; flags are what an admin reads.
+    ready_to_publish: build.ok && checks.blocking.length === 0 && !runtimeFailed,
   }
 }
 
@@ -653,7 +668,13 @@ async function publishTool(ctx: ActionCaller, args: PublishToolArgs, deps: AppTo
     note: args.note,
     releaseNotes: args.release_notes,
   })
-  if (!result.ok) refuse(result)
+  if (!result.ok) {
+    if (result.report) {
+      const blocking = blockingFindings(result.report).map(findingLine)
+      throw new ActionError(result.status, [result.error, ...blocking.map((line) => `  ${line}`)].join('\n'))
+    }
+    refuse(result)
+  }
   const approved = result.version.status === 'approved'
   return {
     version_id: result.version.id,
@@ -675,6 +696,7 @@ async function publishTool(ctx: ActionCaller, args: PublishToolArgs, deps: AppTo
         : 'This snapshot is immutable and is now waiting on an admin of this space, who has been notified. Nothing installs until they approve it. It is NOT listed and no other space can see it.',
     marketplace:
       'Listing a tool for other spaces is a separate act by an admin of this space, and a Visvine reviewer then reads the declared perimeter and a code diff. Nothing you do here makes a tool public.',
+    checks: checksView(result.report),
     ...(result.warning ? { warning: result.warning } : {}),
   }
 }

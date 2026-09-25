@@ -76,6 +76,10 @@ import {
   type ToolPerimeter,
 } from './perimeter'
 import { decodeListingState, ensureListing, type ListingState } from './verdicts'
+import { runStaticChecks, type StaticCheckInput } from './checks/analyze'
+import { blockingFindings, findingLine, reportStatus, type CheckFinding, type CheckReport } from './checks/findings'
+import { recordReport, versionReports } from './checks/runs'
+import { diffManifest } from './manifestDiff'
 
 /**
  * Where a verdict stands. `pending` is in a queue, `approved` is the yes,
@@ -170,8 +174,10 @@ export type PublishResult =
       version: ToolVersionSummary
       /** Set when the registry row landed but the note's `version:` bump didn't. */
       warning: string | null
+      /** The static checks it passed, as they are stored against the version. */
+      report: CheckReport
     }
-  | RegistryError
+  | (RegistryError & { report?: CheckReport })
 
 export type VersionResult = { ok: true; version: ToolVersionSummary } | RegistryError
 
@@ -454,7 +460,7 @@ const RELEASE_NOTES_MAX = 2048
 
 /** What `reviewedBy` reads on a version nobody looked at — a marker, not a user id. */
 export const AUTO_REVIEWER = 'auto'
-export const AUTO_APPROVE_NOTE = 'auto-approved: trusted publisher, unchanged perimeter and surfaces'
+export const AUTO_APPROVE_NOTE = 'auto-approved: trusted publisher, unchanged manifest, clean scan'
 
 /**
  * `TOOLS_TRUSTED_PUBLISHERS` — space ids whose re-publishes may skip the queue,
@@ -470,66 +476,37 @@ export function trustedPublishers(raw: string | undefined = process.env.TOOLS_TR
   )
 }
 
-/** True when a diff adds and removes nothing in any of the five lists. */
-export function perimeterDiffIsEmpty(diff: PerimeterDiff): boolean {
-  return (['read', 'write', 'types', 'connectors', 'agents'] as const).every(
-    (key) => diff[key].added.length === 0 && diff[key].removed.length === 0,
-  )
-}
-
 /**
- * The `surfaces` half of a config, in a canonical shape for comparison: rail
- * (label + icon, or none) and the type claims sorted by type. Order of claims
- * is not a change; anything else is.
- */
-function normalizeSurfaces(surfaces: ToolConfig['surfaces']): string {
-  return JSON.stringify({
-    rail: surfaces.rail ? { label: surfaces.rail.label, icon: surfaces.rail.icon } : null,
-    types: [...surfaces.types].map((t) => ({ type: t.type, mode: t.mode })).sort((a, b) => a.type.localeCompare(b.type)),
-    // The band's buttons and sections are the app's chrome too.
-    nav: surfaces.nav
-      ? { style: surfaces.nav.style, sections: surfaces.nav.sections.map((x) => ({ id: x.id, label: x.label, admin: !!x.admin })) }
-      : null,
-    actions: (surfaces.actions ?? []).map((a) => ({ id: a.id, label: a.label })),
-  })
-}
-
-/** True when the two versions claim the same UI surfaces (rail, type pages/tabs). */
-export function surfacesUnchanged(previous: ToolConfig['surfaces'], next: ToolConfig['surfaces']): boolean {
-  return normalizeSurfaces(previous) === normalizeSurfaces(next)
-}
-
-/**
- * Whether a freshly published version may be approved without a super-admin.
+ * Whether a version offered for listing may be listed without a Visvine reviewer.
  *
  * Four conditions, all required, and each one is a real half of the review:
  *   • the publishing space is TRUSTED (an operator put its id in the env) —
  *     code from a stranger is always read by a person;
- *   • an EARLIER APPROVED version exists — the first version of anything is
- *     read by a person, because there is nothing to diff it against; and
- *   • the perimeter diff against that version is EMPTY — the review's real
- *     question is "what does this reach that the last one didn't?", and a
- *     re-publish that reaches nothing new from a trusted space is a code
- *     update the space is entitled to ship to its own installs; and
- *   • the SURFACES are unchanged — a new rail entry or a claim on a node
- *     type's page is new real estate in every installing space, and a person
- *     reads that even when the reach is the same.
- *
- * Code changes are NOT inspected: what an install of a trusted publisher's
- * Tool can do is bounded by the perimeter and the viewer's own grants, and
- * that bound is exactly what this checks has not moved.
+ *   • an EARLIER LISTED version exists — the first version of anything is
+ *     read by a person, because there is nothing to diff it against;
+ *   • the MANIFEST diff against it is empty — every field that grants reach
+ *     or places UI (`manifestDiff.ts#REVIEWED_FIELDS`, held complete by
+ *     tests/tools-diff-coverage.test.ts): what an install can do is bounded by
+ *     what it declares and the viewer's own grants, and that bound has not
+ *     moved; and
+ *   • the SCANS came back clean — no high or medium security finding on this
+ *     version. The fast path skips a person, never the automated stages.
  */
 export function shouldAutoApprove(input: {
   trustedPublishers: ReadonlySet<string>
   sourceSpaceId: string
-  previous: { id: string; version: number; surfaces: ToolConfig['surfaces'] } | null
-  diff: PerimeterDiff
-  surfaces: ToolConfig['surfaces']
+  /** The last listed version's manifest; null for a first listing. */
+  previous: ToolConfig | null
+  next: ToolConfig
+  /** This version's security findings as published; null when it was never scanned. */
+  securityFindings: readonly CheckFinding[] | null
 }): boolean {
   if (!input.trustedPublishers.has(input.sourceSpaceId)) return false
   if (!input.previous) return false
-  if (!surfacesUnchanged(input.previous.surfaces, input.surfaces)) return false
-  return perimeterDiffIsEmpty(input.diff)
+  if (!input.securityFindings || input.securityFindings.some((f) => f.severity === 'high' || f.severity === 'medium')) {
+    return false
+  }
+  return diffManifest(input.previous, input.next).length === 0
 }
 
 // ── publish ──────────────────────────────────────────────────────────────────
@@ -587,7 +564,12 @@ export async function publishTool(
   p: ContextPrincipal,
   context: Context,
   name: string,
-  opts: { note?: string; releaseNotes?: string } = {},
+  opts: {
+    note?: string
+    releaseNotes?: string
+    /** The static stages; replaced only by a verify script that needs a hostile Tool to reach the runtime. */
+    checks?: (input: StaticCheckInput) => Promise<CheckReport>
+  } = {},
 ): Promise<PublishResult> {
   if (!TOOL_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad tool name.' }
   const isSpaceAdmin = principalIsSuperAdmin(p)
@@ -651,6 +633,26 @@ export async function publishTool(
   const indexNote = sources.index
 
   const config = build.config
+  // The static stages run inside the publish, for an admin exactly as for a
+  // member: an admin's publish is the space's approval, never a bypass. A
+  // blocking finding writes no version, and the author reads why.
+  const report = await (opts.checks ?? runStaticChecks)({
+    index: indexNote,
+    ui: unwrapSource(sources.ui)?.code ?? sources.ui,
+    data: sources.data ? (unwrapSource(sources.data)?.code ?? sources.data) : null,
+    config,
+    build: { ok: build.ok, errors: build.errors, warnings: build.warnings, configError: build.configError },
+  })
+  if (reportStatus(report) === 'blocked') {
+    await recordReport({ spaceId, name, versionId: null, sourceHash: buildRow.sourceHash, trigger: 'publish', report })
+    const blocking = blockingFindings(report)
+    return {
+      ok: false,
+      status: 422,
+      error: `Checks blocked this publish: ${findingLine(blocking[0])}${blocking.length > 1 ? ` (and ${blocking.length - 1} more)` : ''}`,
+      report,
+    }
+  }
   const key = toolKey(spaceId, name)
   const created = await prisma.$transaction(async (tx) => {
     // Serialize publishes of one key: superseding, the number it picks and the
@@ -712,6 +714,7 @@ export async function publishTool(
     })
     return row
   })
+  await recordReport({ spaceId, name, versionId: created.id, sourceHash: buildRow.sourceHash, trigger: 'publish', report })
   void logAudit(spaceId, {
     userId: p.userId,
     name: p.name,
@@ -743,7 +746,7 @@ export async function publishTool(
       warning = `Published as version ${created.version}, but ${indexPath} could not be updated: ${written.reason}`
     }
   }
-  return { ok: true, version: toSummary(created), warning }
+  return { ok: true, version: toSummary(created), warning, report }
 }
 
 /**
@@ -889,18 +892,19 @@ export async function submitToMarketplace(
     detail: `submitted v${row.version} to the marketplace`,
   })
 
-  // The trusted-publisher fast path (see shouldAutoApprove), computed exactly
-  // the way a human reviewer's screen computes it.
-  const config = decodeToolConfig(row.config, row.name)
-  const diffed = await perimeterDiffForVersion(versionId)
+  // The trusted-publisher fast path (see shouldAutoApprove): this manifest
+  // against the last LISTED one, and the scan this version was published with.
+  const [previous, reports] = await Promise.all([
+    previousApprovedVersion(row.key, row.version, 'marketplace'),
+    versionReports([versionId]),
+  ])
   if (
-    diffed &&
     shouldAutoApprove({
       trustedPublishers: trustedPublishers(),
       sourceSpaceId: row.sourceSpaceId,
-      previous: diffed.previous,
-      diff: diffed.diff,
-      surfaces: config.surfaces,
+      previous: previous?.config ?? null,
+      next: decodeToolConfig(row.config, row.name),
+      securityFindings: reports.get(versionId)?.report.security.findings ?? null,
     })
   ) {
     const approved = await prisma.appToolVersion.update({

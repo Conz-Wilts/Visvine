@@ -51,7 +51,9 @@ import BuildDiagnostics from '@/features/tools/components/BuildDiagnostics';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import InstallSheet from '@/features/tools/components/InstallSheet';
 import { TONE_CHIP, TONE_CLASSES, type Tone } from '@/features/shared/lib/statusTone';
-import { fetchAuthoredTool, publishTool, revokeToolVersion } from '@/features/tools/lib/client';
+import { blockedReport, fetchAuthoredTool, publishTool, revokeToolVersion, runToolChecks } from '@/features/tools/lib/client';
+import CheckReport, { checkWord } from '@/features/tools/components/CheckReport';
+import type { CheckReport as CheckReportData } from '@/lib/tools/checks/findings';
 
 // ── Chrome ───────────────────────────────────────────────────────────────────
 
@@ -142,9 +144,12 @@ const VERSION_TONES: Record<ToolVersionSummary['status'], Tone> = {
  */
 function VersionTrail({
   versions,
+  checks,
   onWithdraw,
 }: {
   versions: ToolVersionSummary[];
+  /** The checks each version was published with. */
+  checks: Record<string, CheckReportData>;
   /** An admin of this space may pull an approved version back. */
   onWithdraw?: (version: ToolVersionSummary) => void;
 }) {
@@ -159,6 +164,7 @@ function VersionTrail({
             </span>
             <span className="text-fg-muted">
               {version.author.name ?? 'someone'} · {timeAgo(new Date(version.submittedAt).getTime(), { style: 'short' })}
+              {checkWord(checks[version.id]) ? ` · ${checkWord(checks[version.id])}` : ''}
             </span>
             <span className="ml-auto shrink-0 font-mono text-fg-muted">{fmtBytes(version.sizeBytes)}</span>
             {onWithdraw && version.status === 'approved' && !version.revokedAt && (
@@ -205,6 +211,7 @@ function PublishDialog({
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<CheckReportData | null>(null);
 
   const { tool, versions } = view;
   const nextVersion = (versions[0]?.version ?? 0) + 1;
@@ -221,7 +228,9 @@ function PublishDialog({
             : `Published v${res.version.version} · waiting on an admin`),
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not publish');
+      const report = blockedReport(e);
+      setBlocked(report);
+      setError(report ? 'Checks blocked it' : e instanceof Error ? e.message : 'Could not publish');
     } finally {
       setBusy(false);
     }
@@ -262,6 +271,7 @@ function PublishDialog({
         />
 
         {error && <p className="border-l-2 border-danger-bright pl-3 text-[13px] text-danger-strong">{error}</p>}
+        {blocked && <CheckReport report={blocked} />}
       </div>
     </Modal>
   );
@@ -292,6 +302,13 @@ function statusOf(view: AuthoredToolView): { label: string; tone: Tone; hint: st
       tone: 'bad',
       hint: 'It will render an error card until it compiles — the diagnostics are below.',
     };
+  }
+  // A current report that blocks is the one thing standing between it and a publish.
+  if (view.checks && !view.checks.stale) {
+    const report = view.checks.report;
+    if (report.compatibility.status === 'blocked' || report.security.status === 'blocked') {
+      return { label: 'Blocked', tone: 'bad', hint: 'The checks block a publish until the findings below are fixed.' };
+    }
   }
   const missing = requirements ? describeRequirements(requirements) : [];
   if (missing.length > 0) {
@@ -338,6 +355,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const [installing, setInstalling] = useState<ToolVersionSummary | null>(null);
   const [withdrawing, setWithdrawing] = useState<ToolVersionSummary | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const [copied, copy] = useCopied(2000);
   const spaceHref = useSpaceHref();
 
@@ -484,6 +502,37 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       >
         <BuildReport build={tool.build} />
       </Section>
+
+      {/* ══ CHECKS — the stages a publish runs, run now or as last run ══ */}
+      {tool.build && (
+        <Section
+          title="Checks"
+          meta={view.checks ? (view.checks.stale ? 'out of date' : timeAgo(new Date(view.checks.ranAt).getTime(), { style: 'short' })) : undefined}
+          action={
+            <button
+              type="button"
+              disabled={checking || !spaceId}
+              onClick={async () => {
+                if (!spaceId) return;
+                setChecking(true);
+                try {
+                  const res = await runToolChecks(spaceId, tool.name);
+                  setView((current) => (current ? { ...current, checks: res.checks } : current));
+                } catch (e) {
+                  setNotice(e instanceof Error ? e.message : 'Could not run the checks');
+                } finally {
+                  setChecking(false);
+                }
+              }}
+              className={HEADER_BUTTON}
+            >
+              {checking ? 'Checking…' : 'Check'}
+            </button>
+          }
+        >
+          {view.checks && <CheckReport report={view.checks.report} />}
+        </Section>
+      )}
 
       {/* ══ SHARE — install this Tool into the sub-spaces ══ */}
       {isAdmin && hasSubspaces && !tool.invalid && spaceId && (
@@ -633,7 +682,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
           title="Versions"
           meta={pending ? `v${pending.version} waiting` : `${versions.length} version${versions.length === 1 ? '' : 's'}`}
         >
-          <VersionTrail versions={versions} onWithdraw={isAdmin ? setWithdrawing : undefined} />
+          <VersionTrail versions={versions} checks={view.versionChecks} onWithdraw={isAdmin ? setWithdrawing : undefined} />
         </Section>
       )}
 

@@ -12,8 +12,10 @@
  * Plain TypeScript, no React — this is the seam the components sit on, and it is
  * the only file in features/tools that knows a URL.
  */
-import { fetchJson, fetchJsonBody } from '@/lib/fetchJson'
+import { fetchJson, fetchJsonBody, FetchJsonError } from '@/lib/fetchJson'
+import type { CheckReport } from '@/lib/tools/checks/findings'
 import type {
+  CheckResponse,
   ApprovalDecisionResponse,
   ApprovalQueueResponse,
   InstallCreatedResponse,
@@ -145,6 +147,22 @@ export function publishTool(
     'POST',
     { action: 'publish', ...(note ? { note } : {}), ...(releaseNotes ? { releaseNotes } : {}) },
   )
+}
+
+/** Run the static checks on the working copy now; the report is recorded and returned. */
+export function runToolChecks(spaceId: string, name: string): Promise<CheckResponse> {
+  return fetchJsonBody<CheckResponse>(
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/check`,
+    'POST',
+    {},
+  )
+}
+
+/** The report a refused publish carried, when checks — not the compiler — refused it. */
+export function blockedReport(error: unknown): CheckReport | null {
+  if (!(error instanceof FetchJsonError) || error.status !== 422) return null
+  const body = error.body as { report?: CheckReport } | null | undefined
+  return body?.report ?? null
 }
 
 // ── approvals and listings (a version, not a working copy) ───────────────────

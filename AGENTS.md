@@ -1313,6 +1313,13 @@ guide. The invariants:
   submission rather than being refused. **A draft runs with its authors' reach**: a preview's principal is
   the viewer intersected with everyone who wrote it since its last approval
   (`lib/tools/draftAuthors.ts`), and it starts by itself only for them.
+- **Checks run before powers.** Every publish runs the compatibility and
+  static security stages inline (`lib/tools/checks/`) — for an admin exactly
+  as for a member — and a blocking finding writes no version. Each run is an
+  `app_tool_check_runs` row the author, the admins and Visvine's reviewers
+  read as written. The trusted-publisher fast path needs an empty
+  `manifestDiff.ts#diffManifest` and a clean scan; a new manifest field must
+  be classified there before it lands (`tests/tools-diff-coverage.test.ts`).
 - **A Tool is its folder, filed anywhere.** `tools/<name>/` is where one
   lands; a folder of the space's own whose index declares `type: tool` is the
   same Tool. The folder name is its name (build, installs, versions and node

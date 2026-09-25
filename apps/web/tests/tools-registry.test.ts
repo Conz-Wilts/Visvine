@@ -31,9 +31,7 @@ import {
   toolKey,
   versionHistory,
   previousApprovedVersion,
-  perimeterDiffIsEmpty,
   shouldAutoApprove,
-  surfacesUnchanged,
   trustedPublishers,
   AUTO_APPROVE_NOTE,
   AUTO_REVIEWER,
@@ -70,9 +68,9 @@ import {
   type TypeClaims,
   type UninstallResult,
 } from '@/lib/tools/installs'
-import { parseToolConfig, TOOL_NAME_RE, type ToolConfig, type ToolTypeSurface } from '@/lib/tools/config'
+import { parseToolConfig, TOOL_NAME_RE, type ToolTypeSurface } from '@/lib/tools/config'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
-import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
+import { EMPTY_PERIMETER } from '@/lib/tools/perimeter'
 
 // ── version numbering ──
 
@@ -431,7 +429,15 @@ test('the published shapes are what the routes and the space DTO carry', () => {
   const entry: BrowseEntry = { ...summary, installs: 2 }
   const page: BrowsePage = { items: [entry], nextCursor: null }
   const refusal: RegistryError = { ok: false, status: 403, error: 'nope' }
-  const published: PublishResult = { ok: true, version: summary, warning: null }
+  const published: PublishResult = {
+    ok: true,
+    version: summary,
+    warning: null,
+    report: {
+      compatibility: { stage: 'compatibility', status: 'passed', findings: [], analyzer: 'static-1', durationMs: 0 },
+      security: { stage: 'security', status: 'passed', findings: [], analyzer: 'static-1', durationMs: 0 },
+    },
+  }
   const reviewed: ReviewResult = { ok: true, version: summary, upgraded: 1 }
   const withdrawn: VersionResult = { ok: true, version: summary }
 
@@ -501,57 +507,45 @@ test('trustedPublishers reads a comma-separated list, trimmed, and unset means n
   assert.deepEqual([...trustedPublishers(' space_a, space_b ,,')], ['space_a', 'space_b'])
 })
 
-test('perimeterDiffIsEmpty is true only when nothing was added or removed anywhere', () => {
-  const same = { ...EMPTY_PERIMETER, read: ['deals/**'], connectors: ['hubspot'] }
-  assert.equal(perimeterDiffIsEmpty(diffPerimeter(same, same)), true)
-  assert.equal(perimeterDiffIsEmpty(diffPerimeter(same, { ...same, write: ['deals/**'] })), false)
-  assert.equal(perimeterDiffIsEmpty(diffPerimeter(same, { ...same, connectors: [] })), false)
-})
-
-test('shouldAutoApprove needs a trusted space AND a previous approved version AND an empty diff', () => {
+test('shouldAutoApprove needs a trusted space, a listed predecessor, an unchanged manifest and a clean scan', () => {
   const trusted = new Set(['space_trusted'])
-  const perimeter = { ...EMPTY_PERIMETER, read: ['deals/**'] }
-  const unchanged = diffPerimeter(perimeter, perimeter)
-  const widened = diffPerimeter(perimeter, { ...perimeter, write: ['deals/**'] })
-  const surfaces = { rail: { label: 'Deals', icon: 'briefcase' }, types: [{ type: 'deal', mode: 'page' as const }] }
-  const previous = { id: 'v1', version: 1, surfaces }
+  const base = decodeToolConfig(
+    {
+      title: 'Deals',
+      surfaces: { rail: { label: 'Deals', icon: 'briefcase' }, types: [{ type: 'deal', mode: 'page' }] },
+      perimeter: { read: ['deals/**'] },
+    },
+    'deals',
+  )
+  const go = (over: Partial<Parameters<typeof shouldAutoApprove>[0]> = {}) =>
+    shouldAutoApprove({
+      trustedPublishers: trusted,
+      sourceSpaceId: 'space_trusted',
+      previous: base,
+      next: { ...base, version: 2, description: 'Now with totals' },
+      securityFindings: [],
+      ...over,
+    })
 
-  assert.equal(shouldAutoApprove({ trustedPublishers: trusted, sourceSpaceId: 'space_trusted', previous, diff: unchanged, surfaces }), true)
+  // A code-and-copy update from a trusted space with nothing new declared.
+  assert.equal(go(), true)
   // A stranger's code is always read by a person.
-  assert.equal(shouldAutoApprove({ trustedPublishers: trusted, sourceSpaceId: 'space_other', previous, diff: unchanged, surfaces }), false)
+  assert.equal(go({ sourceSpaceId: 'space_other' }), false)
   // The first version of anything is read by a person — there is nothing to diff against.
-  assert.equal(shouldAutoApprove({ trustedPublishers: trusted, sourceSpaceId: 'space_trusted', previous: null, diff: unchanged, surfaces }), false)
-  // Any change in reach goes to the queue, trusted or not.
-  assert.equal(shouldAutoApprove({ trustedPublishers: trusted, sourceSpaceId: 'space_trusted', previous, diff: widened, surfaces }), false)
+  assert.equal(go({ previous: null }), false)
+  // Any change in reach or placement goes to the queue, trusted or not.
+  assert.equal(go({ next: { ...base, perimeter: { ...base.perimeter, write: ['deals/**'] } } }), false)
+  assert.equal(go({ next: { ...base, surfaces: { ...base.surfaces, rail: null } } }), false)
+  // The fast path skips a person, never the scan: a medium finding or no scan at all is read by one.
+  assert.equal(go({ securityFindings: [{ rule: 'exfil.built-url', severity: 'medium', message: 'x' }] }), false)
+  assert.equal(go({ securityFindings: [{ rule: 'usage.unused-write', severity: 'low', message: 'x' }] }), true)
+  assert.equal(go({ securityFindings: null }), false)
   // Nobody trusted, nothing skips.
-  assert.equal(shouldAutoApprove({ trustedPublishers: new Set(), sourceSpaceId: 'space_trusted', previous, diff: unchanged, surfaces }), false)
-})
-
-test('shouldAutoApprove also needs the surfaces unchanged — a new rail entry or type claim is reviewed by a person', () => {
-  const trusted = new Set(['space_trusted'])
-  const perimeter = { ...EMPTY_PERIMETER, read: ['deals/**'] }
-  const unchanged = diffPerimeter(perimeter, perimeter)
-  const surfaces: ToolConfig['surfaces'] = { rail: { label: 'Deals', icon: 'briefcase' }, types: [{ type: 'deal', mode: 'page' }, { type: 'org', mode: 'tab' }] }
-  const previous = { id: 'v1', version: 1, surfaces }
-  const go = (next: typeof surfaces) =>
-    shouldAutoApprove({ trustedPublishers: trusted, sourceSpaceId: 'space_trusted', previous, diff: unchanged, surfaces: next })
-
-  // Same claims, different order: not a change.
-  assert.equal(go({ ...surfaces, types: [surfaces.types[1], surfaces.types[0]] }), true)
-  // Rail dropped, relabelled or re-iconed; a claim added, removed, or its mode changed: all reviewed.
-  assert.equal(go({ ...surfaces, rail: null }), false)
-  assert.equal(go({ ...surfaces, rail: { label: 'Pipeline', icon: 'briefcase' } }), false)
-  assert.equal(go({ ...surfaces, rail: { label: 'Deals', icon: 'star' } }), false)
-  assert.equal(go({ ...surfaces, types: [...surfaces.types, { type: 'person', mode: 'tab' as const }] }), false)
-  assert.equal(go({ ...surfaces, types: [surfaces.types[0]] }), false)
-  assert.equal(go({ ...surfaces, types: [{ type: 'deal', mode: 'tab' as const }, surfaces.types[1]] }), false)
-  // The pure comparison behind it.
-  assert.equal(surfacesUnchanged({ rail: null, types: [] }, { rail: null, types: [] }), true)
-  assert.equal(surfacesUnchanged({ rail: null, types: [] }, { rail: { label: 'X', icon: 'star' }, types: [] }), false)
+  assert.equal(go({ trustedPublishers: new Set() }), false)
 })
 
 test('the auto-review markers are what the audit line and the panel read', () => {
   assert.equal(AUTO_REVIEWER, 'auto')
   assert.match(AUTO_APPROVE_NOTE, /trusted publisher/)
-  assert.match(AUTO_APPROVE_NOTE, /unchanged perimeter and surfaces/)
+  assert.match(AUTO_APPROVE_NOTE, /unchanged manifest, clean scan/)
 })

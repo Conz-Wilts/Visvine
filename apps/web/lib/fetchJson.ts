@@ -8,10 +8,14 @@ export class FetchJsonError extends Error {
   /** The server's machine-readable `{ code }`, when it sent one (e.g. 'name_taken'). */
   code?: string;
 
-  constructor(status: number, message: string, code?: string) {
+  /** The whole JSON body of the refusal, for a caller whose server says more than a message. */
+  body?: unknown;
+
+  constructor(status: number, message: string, code?: string, body?: unknown) {
     super(message);
     this.status = status;
     this.code = code;
+    this.body = body;
   }
 }
 
@@ -44,7 +48,7 @@ export async function fetchJson<T = unknown>(input: RequestInfo | URL, init?: Re
       data && typeof data === 'object' && typeof (data as { code?: unknown }).code === 'string'
         ? (data as { code: string }).code
         : undefined;
-    throw new FetchJsonError(res.status, message, code);
+    throw new FetchJsonError(res.status, message, code, data);
   }
   return data as T;
 }

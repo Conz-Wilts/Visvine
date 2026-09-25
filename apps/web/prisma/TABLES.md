@@ -110,6 +110,7 @@ where it runs, and what it did.
 | `app_tool_installs` | A space running one version: its slug and rail key, what it is missing (`requirements`), which type pages or tabs it owns, an offered upgrade, and the house it came down from when shared into a room. |
 | `app_tool_state` | A Tool's small key/value store per install (UI preferences, not space data). Cascades with the install. |
 | `app_tool_listings` | A Tool's global listing, one per Tool key Visvine was asked to list, and Visvine's hold over it: `active`, `suspended` or `revoked`. A hold stops every install outside the publisher's family. |
+| `app_tool_check_runs` | One stage of the automated checks — compatibility or security — per run: on a working copy (`version_id` null, the newest few kept) or on the version a publish wrote. Status, findings, the risk score and the analyzer that ran; read as written by the author, the admins and Visvine's reviewers alike. |
 | `app_tool_incidents` | What a running Tool did that a person should look at — a frame that navigated itself, a CSP violation, a report. Facts about the Tool only; the viewer is dropped when they delete their account. |
 
 ## MCP / OAuth (agents connecting in)

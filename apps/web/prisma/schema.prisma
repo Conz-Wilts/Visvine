@@ -106,6 +106,7 @@ model Space {
   channelSections ChannelSection[]
 
   appToolBuilds      AppToolBuild[]
+  appToolCheckRuns   AppToolCheckRun[]
   appToolInstalls    AppToolInstall[]
   sharedToolInstalls AppToolInstall[]      @relation("SharedToolInstalls")
   resources          Resource[]
@@ -920,6 +921,7 @@ model AppToolVersion {
   createdAt              DateTime         @default(now()) @map("created_at")
   author                 User?            @relation("AppToolVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
   installs               AppToolInstall[]
+  checkRuns              AppToolCheckRun[]
 
   @@unique([key, version], name: "app_tool_version_identity")
   @@index([status, submittedAt])
@@ -999,6 +1001,35 @@ model AppToolListing {
 /// navigated itself, a CSP violation, a report. Counts and facts only, never
 /// the viewer's content. `viewerId` is redacted when that person deletes their
 /// account; the incident stays.
+/// One stage of the automated checks over a Tool — compatibility or security —
+/// as it ran on a working copy (`versionId` null) or on the version a publish
+/// wrote (lib/tools/checks/). The author, the space's admins and a Visvine
+/// reviewer all read this row: nothing is re-run for a person. A version's
+/// rows outlive its space the way the version does (`spaceId` goes null).
+model AppToolCheckRun {
+  id         String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String?         @map("space_id")
+  name       String
+  versionId  String?         @map("version_id")
+  sourceHash String          @map("source_hash")
+  stage      String // compatibility | security
+  status     String // passed | flagged | blocked
+  trigger    String // check | publish | rescan
+  findings   Json            @default("[]")
+  /// The permission risk score, security stage only: { score, level, factors }.
+  risk       Json?
+  /// Which rules ran — a rescan re-reads versions an older analyzer passed.
+  analyzer   String
+  durationMs Int             @map("duration_ms")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  space      Space?          @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  version    AppToolVersion? @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, name, createdAt])
+  @@index([versionId, createdAt])
+  @@map("app_tool_check_runs")
+}
+
 model AppToolIncident {
   id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   kind      String // navigation | csp | report | canary | anomaly

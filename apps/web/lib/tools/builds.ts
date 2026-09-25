@@ -119,6 +119,8 @@ export interface BuildSummary {
   config: ToolConfig | null
   configError: string | null
   updatedAt: string
+  /** Which sources this build was compiled from — what a check report is stamped with. */
+  sourceHash: string
   /**
    * The author's own rail glyph, sanitized. Null = the Tool uses a built-in
    * shape. Carried on the summary so the author's roster can SHOW the icon it
@@ -442,6 +444,7 @@ export function toBuildSummary(row: AppToolBuild): BuildSummary {
     config: (row.config as unknown as ToolConfig | null) ?? null,
     configError: row.configError,
     updatedAt: row.updatedAt.toISOString(),
+    sourceHash: row.sourceHash,
     iconSvg: row.iconSvg,
   }
 }

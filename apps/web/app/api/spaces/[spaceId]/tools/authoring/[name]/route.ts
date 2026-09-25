@@ -9,6 +9,7 @@ import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes
 import { toolIndexPath } from '@/lib/tools/config'
 import { toolFolderIn } from '@/lib/tools/location'
 import prisma from '@/lib/prisma'
+import { latestWorkingReport, versionReports } from '@/lib/tools/checks/runs'
 import { principalCanWrite } from '@/lib/notes/shared/permissions'
 import type {
   AuthoredToolDetail,
@@ -23,9 +24,9 @@ import type {
  * this space fails to satisfy of the declared reach, and every version ever
  * published from it. This is what the author page and the preview header read.
  *
- * The last two ride along rather than sitting behind requests of their own: an
- * author opening their Tool always wants all four, and the checklist and the
- * publication trail are each one query.
+ * The rest ride along rather than sitting behind requests of their own: an
+ * author opening their Tool always wants them, and the checklist, the
+ * publication trail and the check reports are each one query.
  */
 export async function GET(
   _req: NextRequest,
@@ -40,7 +41,7 @@ export async function GET(
   if (!tool) return bad('Tool not found', 404)
 
   const key = toolKey(ctx.resolved.spaceId, name)
-  const [requirements, versions, install] = await Promise.all([
+  const [requirements, versions, install, checks] = await Promise.all([
     // Null when the config doesn't parse: there is no declared reach to check,
     // and an empty checklist would read as "nothing missing".
     tool.config
@@ -53,10 +54,20 @@ export async function GET(
       where: { app_tool_install_identity: { spaceId: ctx.resolved.spaceId, key } },
       select: { id: true },
     }),
+    latestWorkingReport(ctx.resolved.spaceId, name),
   ])
   const canEdit = principalCanWrite(ctx.principal, tool.path)
+  const reports = await versionReports(versions.map((version) => version.id))
 
-  const body: AuthoredToolView = { tool, requirements, versions, canEdit, installId: install?.id ?? null }
+  const body: AuthoredToolView = {
+    tool,
+    requirements,
+    versions,
+    canEdit,
+    installId: install?.id ?? null,
+    checks: checks ? { ...checks, stale: checks.sourceHash !== tool.build?.sourceHash } : null,
+    versionChecks: Object.fromEntries([...reports].map(([id, stored]) => [id, stored.report])),
+  }
   return NextResponse.json(body)
 }
 
@@ -108,7 +119,13 @@ export async function POST(
     note: body.note,
     releaseNotes: body.releaseNotes,
   })
-  if (!result.ok) return bad(result.error, result.status)
+  if (!result.ok) {
+    if (result.report) {
+      const blocked: PublishBlockedResponse = { error: result.error, build: tool.build, report: result.report }
+      return NextResponse.json(blocked, { status: result.status })
+    }
+    return bad(result.error, result.status)
+  }
 
   const answer: PublishResponse = { version: result.version, warning: result.warning }
   return NextResponse.json(answer, { status: 201 })

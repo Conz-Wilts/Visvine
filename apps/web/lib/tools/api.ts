@@ -18,6 +18,8 @@ import type { PerimeterDiff } from './perimeter'
 import type { ToolRequirements } from './requirements'
 import type { BrowseEntry, ToolVersionStatus, ToolVersionSummary } from './registry'
 import type { AuthoredToolDetail, AuthoredToolSummary } from './service'
+import type { CheckReport } from './checks/findings'
+import type { StoredReport } from './checks/runs'
 
 export type { InstallSummary } from './installs'
 export type { ToolVersionSummary } from './registry'
@@ -70,6 +72,8 @@ export interface VersionDetail extends ToolVersionSummary {
   history: VersionHistoryEntry[]
   uiSource?: string
   dataSource?: string
+  /** The checks it was published with; null for a version published before there were any. */
+  checks: CheckReport | null
 }
 
 export interface VersionResponse {
@@ -89,6 +93,8 @@ export interface VersionResponse {
 export interface ApprovalQueueItem extends ToolVersionSummary {
   perimeterDiff: PerimeterDiff
   previousVersion: { id: string; version: number } | null
+  /** The checks it was published with; null for a version published before there were any. */
+  checks: CheckReport | null
 }
 
 export interface ApprovalQueueResponse {
@@ -112,6 +118,8 @@ export interface ListingResponse {
 export interface ReviewQueueItem extends ToolVersionSummary {
   perimeterDiff: PerimeterDiff
   previousVersion: { id: string; version: number } | null
+  /** The checks it was published with; null for a version published before there were any. */
+  checks: CheckReport | null
 }
 
 export interface ReviewQueueResponse {
@@ -196,6 +204,10 @@ export interface AuthoredToolView {
   canEdit: boolean
   /** The install of this Tool in this space, when it runs here. */
   installId: string | null
+  /** The last check report on the working copy; `stale` once the sources moved on. */
+  checks: (StoredReport & { stale: boolean }) | null
+  /** The checks each published version carries, by version id. */
+  versionChecks: Record<string, CheckReport>
 }
 
 export interface PublishResponse {
@@ -212,4 +224,11 @@ export interface PublishResponse {
 export interface PublishBlockedResponse {
   error: string
   build: BuildSummary | null
+  /** Set when the checks, not the compiler, stopped it. */
+  report?: CheckReport
+}
+
+/** What running the checks on a working copy answers with. */
+export interface CheckResponse {
+  checks: StoredReport & { stale: boolean }
 }

@@ -151,6 +151,7 @@ async function cleanup(spaceId: string, dropOrder: boolean): Promise<void> {
 
   await prisma.appToolInstall.deleteMany({ where: { key } });
   await prisma.appToolVersion.deleteMany({ where: { key } });
+  await prisma.appToolCheckRun.deleteMany({ where: { spaceId, name: TOOL } });
 
   for (const path of OWN_NOTES) await store.deleteNote(context, path);
   // After the notes, never before: every one of those deletions runs the

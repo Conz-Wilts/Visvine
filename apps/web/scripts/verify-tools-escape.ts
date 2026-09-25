@@ -59,10 +59,12 @@ import { isAdmin } from '../lib/auth';
 import { createSession } from '../lib/session';
 import type { SpaceFeatureConfig } from '../lib/types/space';
 import { toolRailKey } from '../lib/featureAccess';
-import { resolveContext } from '../lib/notes/resolve';
+import { principalOf, resolveContext } from '../lib/notes/resolve';
+import { publishTool as publishToolPastChecks } from '../lib/tools/registry';
+import { runStaticChecks } from '../lib/tools/checks/analyze';
 import * as store from '../lib/notes/store';
 import { readSpaceConfig, updateSpaceConfig } from '../lib/spaces/spaceConfig';
-import type { ActionCaller } from '../lib/actions/types';
+import { ActionError, type ActionCaller } from '../lib/actions/types';
 import { appToolHandlers } from '../lib/actions/defs/apps';
 import { handleBridgeCall } from '../lib/tools/bridge';
 import { toolFolderPath, toolIndexPath } from '../lib/tools/config';
@@ -133,6 +135,16 @@ function sharedContext(spaceId: string): store.Context {
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** A refusal we expect: its status and message, or what came back instead. */
+async function refusal(run: () => Promise<unknown>): Promise<{ status: number; message: string } | string> {
+  try {
+    return `no refusal — returned ${JSON.stringify(await run()).slice(0, 120)}`;
+  } catch (e) {
+    if (e instanceof ActionError) return { status: e.status, message: e.message };
+    return `threw ${e instanceof Error ? e.constructor.name : typeof e}: ${String(e)}`;
+  }
+}
 
 // ── what the Tool reports ─────────────────────────────────────────────────────
 
@@ -246,6 +258,7 @@ async function cleanup(spaceId: string, dropOrder: boolean): Promise<void> {
   await prisma.appToolInstall.deleteMany({ where: { key } });
   await prisma.appToolVersion.deleteMany({ where: { key } });
   await prisma.appToolIncident.deleteMany({ where: { key } });
+  await prisma.appToolCheckRun.deleteMany({ where: { spaceId, name: TOOL } });
   await prisma.contextGrant.deleteMany({ where: { spaceId, resourcePath: { startsWith: toolFolderPath(TOOL) } } });
 
   for (const path of OWN_NOTES) await store.deleteNote(context, path);
@@ -416,12 +429,32 @@ async function main(): Promise<void> {
     );
 
     // ── 2. publish, approve, install ─────────────────────────────────────────
-    step('2. publish → approve → install');
-    const version = await appToolHandlers.publishTool(ctx, {
-      space_id: SPACE,
-      name: TOOL,
+    step('2. the checks refuse it; published past them, approved, installed');
+    // The static stages block this Tool outright — the corpus suite proves
+    // they catch each of these moves. The frame is the control, not the scan,
+    // so this suite publishes past the checks on purpose: what runs next is a
+    // hostile Tool the scan missed, and the frame must hold by itself.
+    const refused = await refusal(() =>
+      appToolHandlers.publishTool(ctx, { space_id: SPACE, name: TOOL, note: 'verify-tools-escape' }),
+    );
+    check(
+      'an ordinary publish of the hostile Tool is refused by the checks',
+      typeof refused !== 'string' && refused.status === 422 && /Checks blocked this publish/.test(refused.message),
+      typeof refused === 'string' ? refused : `${refused.status}: ${refused.message.split('\n')[0]}`,
+    );
+    const principal = await principalOf(resolved);
+    const published = await publishToolPastChecks(principal, resolved, TOOL, {
       note: 'verify-tools-escape',
+      checks: async (input) => {
+        const report = await runStaticChecks(input);
+        return {
+          compatibility: { ...report.compatibility, status: 'passed', findings: [] },
+          security: { ...report.security, status: 'passed', findings: [] },
+        };
+      },
     });
+    if (!published.ok) throw new Error(`publish past the checks: ${published.error}`);
+    const version = { version_id: published.version.id, version: published.version.version, status: published.version.status };
     // An admin's publish is the space's approval; the Tool is installed here by
     // its version id, being listed nowhere else.
     await appToolHandlers.installTool(ctx, { space_id: SPACE, version_id: version.version_id });

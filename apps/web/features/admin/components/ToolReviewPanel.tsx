@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { Alert, Button, Chip, ConfirmDialog, Field, LoadingText, Textarea, ToastHost, useToasts } from '@visvine/ui';
 import { Trash2Icon } from '@/features/shared/icons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
+import CheckReport from '@/features/tools/components/CheckReport';
 import CodeDiff from '@/features/tools/components/CodeDiff';
 import ToolIcon from '@/features/tools/components/toolIcons';
 import { diffLines } from '@/features/tools/lib/diff';
@@ -385,6 +386,13 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                 </h3>
                 <PerimeterSummary perimeter={version.perimeter} diff={version.perimeterDiff} />
               </section>
+
+              {version.checks && (
+                <section>
+                  <h3 className="mb-2 text-sm font-semibold text-fg">Checks</h3>
+                  <CheckReport report={version.checks} />
+                </section>
+              )}
 
               {/* One line before three diffs: a reviewer should know whether
                   this is a typo fix or a new Tool before scrolling. */}

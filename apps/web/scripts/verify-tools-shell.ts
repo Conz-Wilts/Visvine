@@ -88,6 +88,7 @@ async function cleanup(spaceId: string, dropOrder: boolean): Promise<void> {
   await prisma.appToolInstall.deleteMany({ where: { key } });
   await prisma.appToolVersion.deleteMany({ where: { key } });
   await prisma.appToolIncident.deleteMany({ where: { key } });
+  await prisma.appToolCheckRun.deleteMany({ where: { spaceId, name: TOOL } });
   await prisma.contextGrant.deleteMany({ where: { spaceId, resourcePath: { startsWith: toolFolderPath(TOOL) } } });
   const context = sharedContext(spaceId);
   for (const path of OWN_NOTES) await store.deleteNote(context, path);
@@ -209,6 +210,17 @@ async function main(): Promise<void> {
     const asMember = await login(browser, member.id, member.email ?? '');
     shotPage = asMember.page;
     await asMember.page.goto(`${APP}/s/${encodeURIComponent(SPACE)}/directory/tool:${TOOL}`, { waitUntil: 'domcontentloaded' });
+    // The Tool tab runs the same checks a publish will, and shows the report.
+    const checkButton = asMember.page.getByRole('button', { name: 'Check', exact: true });
+    await checkButton.waitFor({ state: 'visible', timeout: 60_000 });
+    await checkButton.click();
+    const checksShown = await asMember.page
+      .getByText('Compatibility', { exact: true })
+      .waitFor({ state: 'visible', timeout: 30_000 })
+      .then(() => true)
+      .catch(() => false);
+    const recorded = await prisma.appToolCheckRun.count({ where: { spaceId: SPACE, name: TOOL, versionId: null, trigger: 'check' } });
+    check('Check on the Tool tab runs the checks and records the report', checksShown && recorded === 2, `${recorded} stage rows`);
     const publish = asMember.page.getByRole('button', { name: 'Publish', exact: true }).first();
     await publish.waitFor({ state: 'visible', timeout: 60_000 });
     await publish.click();
@@ -233,6 +245,12 @@ async function main(): Promise<void> {
     await page.goto(`${APP}/s/${encodeURIComponent(SPACE)}/admin?section=approvals`, { waitUntil: 'domcontentloaded' });
     const row = page.locator('section').filter({ hasText: TITLE }).filter({ has: page.getByRole('button', { name: 'Approve' }) }).first();
     await row.waitFor({ state: 'visible', timeout: 60_000 });
+    const versionRuns = await prisma.appToolCheckRun.count({ where: { versionId: pending.id, trigger: 'publish' } });
+    check(
+      'the version carries the checks it was published with, on Approvals',
+      versionRuns === 2 && (await row.getByText('Security', { exact: true }).count()) > 0,
+      `${versionRuns} stage rows on the version`,
+    );
     await row.getByRole('button', { name: 'Approve' }).click();
     const sheet = page.getByRole('dialog').filter({ hasText: `Install ${TITLE}` });
     const opened = await sheet.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true).catch(() => false);

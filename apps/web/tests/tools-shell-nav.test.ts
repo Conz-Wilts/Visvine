@@ -18,7 +18,8 @@ import {
   TOOL_NAV_TABS_MAX,
   type ToolConfig,
 } from '@/lib/tools/config'
-import { surfacesUnchanged } from '@/lib/tools/registry'
+import { diffManifest } from '@/lib/tools/manifestDiff'
+import { decodeToolConfig } from '@/lib/tools/registry'
 import { featureConfigWithRail, orderWithRail, requestedClaims } from '@/lib/tools/installs'
 import { isFrameMessage, isHostMessage, PROTOCOL_VERSION, type ToolInitMessage } from '@/lib/tools/protocol'
 import { createBridgeClient } from '@/features/tools/kit/client'
@@ -150,29 +151,26 @@ test('a bad nav fails the whole index note, naming the key', () => {
 // ── review: the band is new real estate ─────────────────────────────────────
 
 test('a changed section, band button or nav style is a surface change', () => {
-  const base: ToolConfig['surfaces'] = {
+  const surfaces: ToolConfig['surfaces'] = {
     rail: { label: 'Deals', icon: 'kanban' },
     types: [],
     nav: { style: 'tabs', sections: [{ id: 'board', label: 'Board' }] },
     actions: [{ id: 'new-deal', label: 'New deal' }],
   }
-  assert.equal(surfacesUnchanged(base, structuredClone(base)), true)
-  assert.equal(surfacesUnchanged(base, { ...base, nav: { ...base.nav!, style: 'side' } }), false)
-  assert.equal(
-    surfacesUnchanged(base, { ...base, nav: { style: 'tabs', sections: [{ id: 'board', label: 'Pipeline' }] } }),
-    false,
+  const base = { ...decodeToolConfig({ title: 'Deals' }, 'deals'), surfaces }
+  const change = (next: ToolConfig['surfaces']) => diffManifest(base, { ...base, surfaces: next })
+  assert.deepEqual(change(structuredClone(surfaces)), [])
+  assert.deepEqual(change({ ...surfaces, nav: { ...surfaces.nav!, style: 'side' } }), ['surfaces.nav'])
+  assert.deepEqual(change({ ...surfaces, nav: { style: 'tabs', sections: [{ id: 'board', label: 'Pipeline' }] } }), ['surfaces.nav'])
+  assert.deepEqual(
+    change({ ...surfaces, nav: { style: 'tabs', sections: [{ id: 'board', label: 'Board', admin: true }] } }),
+    ['surfaces.nav'],
   )
-  assert.equal(
-    surfacesUnchanged(base, {
-      ...base,
-      nav: { style: 'tabs', sections: [{ id: 'board', label: 'Board', admin: true }] },
-    }),
-    false,
-  )
-  assert.equal(surfacesUnchanged(base, { ...base, actions: [] }), false)
-  assert.equal(surfacesUnchanged(base, { ...base, nav: null }), false)
+  assert.deepEqual(change({ ...surfaces, actions: [] }), ['surfaces.actions'])
+  assert.deepEqual(change({ ...surfaces, nav: null }), ['surfaces.nav'])
   // A version written before sections and buttons reads the same as one declaring none.
-  assert.equal(surfacesUnchanged({ rail: null, types: [] }, { rail: null, types: [], nav: null, actions: [] }), true)
+  const bare = { ...base, surfaces: { rail: null, types: [] } }
+  assert.deepEqual(diffManifest(bare, { ...bare, surfaces: { rail: null, types: [], nav: null, actions: [] } }), [])
 })
 
 // ── placement ────────────────────────────────────────────────────────────────

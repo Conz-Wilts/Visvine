@@ -19,6 +19,7 @@ import { useState } from 'react';
 import { Chip, EmptyState, Skeleton, Textarea, Button } from '@visvine/ui';
 import { ClipboardListIcon } from '@/features/shared/icons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
+import CheckReport from '@/features/tools/components/CheckReport';
 import { fetchInstalls, reviewSpaceVersion } from '@/features/tools/lib/client';
 import InstallSheet from '@/features/tools/components/InstallSheet';
 import { timeAgo } from '@/lib/date';
@@ -153,6 +154,9 @@ function QueueRow({
           ? `Compared with v${item.previousVersion.version}, the last version this space approved.`
           : 'The first version of this tool — everything it declares is new here.'}
       </p>
+
+      {/* What the automated stages found — the same report its author read. */}
+      {item.checks && <CheckReport className="mt-4" report={item.checks} />}
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <Textarea

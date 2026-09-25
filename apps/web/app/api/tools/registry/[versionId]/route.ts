@@ -3,6 +3,7 @@ import { isSuperAdmin, requireSession } from '@/lib/session'
 import { isActiveMemberOf } from '@/lib/spaces/membership'
 import { getVersion, perimeterDiffForVersion, versionHistory } from '@/lib/tools/registry'
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
+import { versionReports } from '@/lib/tools/checks/runs'
 import type { VersionDetail, VersionHistoryEntry, VersionResponse } from '@/lib/tools/api'
 
 /**
@@ -41,9 +42,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
     return NextResponse.json({ error: 'No such tool version.' }, { status: 404 })
   }
 
-  const [diff, history] = await Promise.all([
+  const [diff, history, reports] = await Promise.all([
     perimeterDiffForVersion(versionId),
     versionHistory(version.key),
+    versionReports([versionId]),
   ])
 
   const { uiSource, dataSource, ...publicFields } = version
@@ -51,6 +53,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
     ...publicFields,
     perimeterDiff: diff?.diff ?? diffPerimeter(EMPTY_PERIMETER, version.perimeter),
     previousVersion: diff?.previous ? { id: diff.previous.id, version: diff.previous.version } : null,
+    checks: reports.get(versionId)?.report ?? null,
     history: history.map(
       (entry): VersionHistoryEntry => ({
         version: entry.version,

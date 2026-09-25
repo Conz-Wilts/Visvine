@@ -11,6 +11,7 @@ import {
   versionHistory,
 } from '@/lib/tools/registry'
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
+import { versionReports } from '@/lib/tools/checks/runs'
 import { revokeVersion, setListingState } from '@/lib/tools/verdicts'
 import type {
   ReviewDecisionResponse,
@@ -50,16 +51,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
   const version = await getVersion(versionId)
   if (!version) return NextResponse.json({ error: 'No such tool version.' }, { status: 404 })
 
-  const [diff, history, previous] = await Promise.all([
+  const [diff, history, previous, reports] = await Promise.all([
     perimeterDiffForVersion(versionId),
     versionHistory(version.key),
     previousApprovedVersion(version.key, version.version),
+    versionReports([versionId]),
   ])
 
   const detail: VersionDetail = {
     ...version,
     perimeterDiff: diff?.diff ?? diffPerimeter(EMPTY_PERIMETER, version.perimeter),
     previousVersion: diff?.previous ? { id: diff.previous.id, version: diff.previous.version } : null,
+    checks: reports.get(versionId)?.report ?? null,
     history: history.map(
       (entry): VersionHistoryEntry => ({
         version: entry.version,

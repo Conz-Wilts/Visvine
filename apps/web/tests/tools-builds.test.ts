@@ -283,6 +283,7 @@ test('writeErrorsToPlain lists the config error first, then errors, then warning
     config: null,
     iconSvg: null,
     updatedAt: '2026-08-18T00:00:00.000Z',
+    sourceHash: 'hash',
   })
   assert.deepEqual(plain.split('\n'), [
     'index.md tool frontmatter must include `type: tool`',
@@ -302,6 +303,7 @@ test('writeErrorsToPlain is empty for a clean build', () => {
       config: null,
       iconSvg: null,
       updatedAt: '2026-08-18T00:00:00.000Z',
+      sourceHash: 'hash',
     }),
     '',
   )
