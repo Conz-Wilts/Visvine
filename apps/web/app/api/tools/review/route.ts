@@ -3,6 +3,7 @@ import { isSuperAdmin, requireSession } from '@/lib/session'
 import { listReviewQueue, perimeterDiffForVersion } from '@/lib/tools/registry'
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
 import { versionReports } from '@/lib/tools/checks/runs'
+import prisma from '@/lib/prisma'
 import type { ReviewQueueItem, ReviewQueueResponse } from '@/lib/tools/api'
 
 /**
@@ -30,17 +31,39 @@ export async function GET(_req: NextRequest) {
   }
 
   const pending = await listReviewQueue()
-  const [diffs, reports] = await Promise.all([
+  const ids = pending.map((version) => version.id)
+  const [diffs, reports, runs, listings] = await Promise.all([
     Promise.all(pending.map((version) => perimeterDiffForVersion(version.id))),
-    versionReports(pending.map((version) => version.id)),
+    versionReports(ids),
+    prisma.appToolReviewRun.findMany({
+      where: { versionId: { in: ids } },
+      orderBy: { createdAt: 'desc' },
+      select: { versionId: true, status: true, runner: true, startedAt: true, finishedAt: true, error: true },
+    }),
+    prisma.appToolVersion.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, cosignedBy: true, listing: { select: { id: true, verified: true } } },
+    }),
   ])
   const queue: ReviewQueueItem[] = pending.map((version, at) => {
     const previous = diffs[at]?.previous
+    const run = runs.find((row) => row.versionId === version.id)
+    const listed = listings.find((row) => row.id === version.id)
     return {
       ...version,
       perimeterDiff: diffs[at]?.diff ?? diffPerimeter(EMPTY_PERIMETER, version.perimeter),
       previousVersion: previous ? { id: previous.id, version: previous.version } : null,
       checks: reports.get(version.id)?.report ?? null,
+      review: run
+        ? {
+            status: run.status,
+            runner: run.runner,
+            startedAt: run.startedAt?.toISOString() ?? null,
+            finishedAt: run.finishedAt?.toISOString() ?? null,
+            error: run.error,
+          }
+        : null,
+      listing: listed?.listing ? { id: listed.listing.id, verified: listed.listing.verified, cosignedBy: listed.cosignedBy } : null,
     }
   })
 

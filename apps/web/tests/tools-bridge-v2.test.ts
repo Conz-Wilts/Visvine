@@ -395,3 +395,71 @@ test('connectors: named actions bind the call, and a Tool from outside the space
   assert.equal(home.ok, true, 'a Tool its own space wrote may still send code to a connector it declared without actions')
   assert.deepEqual(ran, { code: 'return 1' })
 })
+
+// ── first use and review ─────────────────────────────────────────────────────
+
+const ACTING = reach({ write: ['deals/**'], read: ['deals/**'], ai: { complete: true, decide: false } })
+
+test('a Tool from outside the space asks before it first acts as the viewer, with the sentence to show', async () => {
+  const foreign = target(ACTING, { foreign: true, publisher: 'Acme Sales' })
+  const asked = refusal(
+    await handleBridgeCall(foreign, 'context.write', VALID['context.write'], deps({ consentFor: async () => null })),
+  )
+  assert.equal(asked.code, 'consent_required')
+  assert.equal(asked.message, 'Deals from Acme Sales will edit notes in deals/ and use the space’s AI as you.')
+  // A read never asks: it goes on to the viewer's own access (here, a trap).
+  const read = await handleBridgeCall(foreign, 'context.read', VALID['context.read'], deps({ consentFor: async () => assert.fail('a read never asks') }))
+  assert.notEqual(refusal(read).code, 'consent_required')
+})
+
+test('a consent that covers the acting reach lets the call through; a wider one asks again', async () => {
+  const foreign = target(ACTING, { foreign: true, publisher: 'Acme Sales' })
+  const given = { notes: ['deals/**'], records: [], connectors: [], agents: [], actions: [], ai: true }
+  // Past the gate, the write goes on to the viewer's own access (here, a trap).
+  const through = await handleBridgeCall(foreign, 'context.write', VALID['context.write'], deps({ consentFor: async () => given }))
+  assert.notEqual(refusal(through).code, 'consent_required')
+  const narrower = { ...given, ai: false }
+  const again = refusal(await handleBridgeCall(foreign, 'context.write', VALID['context.write'], deps({ consentFor: async () => narrower })))
+  assert.equal(again.code, 'consent_required')
+})
+
+test('the space’s own Tools, and read-only Tools from outside, never ask', async () => {
+  const own = target(ACTING)
+  let asked = false
+  const consentFor = async () => {
+    asked = true
+    return null
+  }
+  const answered = await handleBridgeCall(own, 'ai.complete', VALID['ai.complete'], deps({ consentFor, complete: async () => ({ ok: true, text: 'x' }) }))
+  assert.equal(answered.ok, true)
+  const reader = target(reach({ read: ['deals/**'] }), { foreign: true })
+  await handleBridgeCall(reader, 'context.read', VALID['context.read'], deps({ consentFor }))
+  assert.equal(asked, false)
+})
+
+test('under Visvine’s dynamic run every call is recorded and a door out is recorded, never opened', async () => {
+  const events: Array<{ kind: string; method: string | null; detail: Record<string, unknown> }> = []
+  const record: BridgeDeps['recordReviewEvent'] = async (_runId, kind, method, detail) => {
+    events.push({ kind, method, detail })
+  }
+  const review = target(
+    reach({ connectors: ['hubspot'], connectorActions: { hubspot: ['push'] }, ai: { complete: true, decide: false } }),
+    { review: { runId: 'run-1' }, foreign: true, installId: null },
+  )
+  const call = refusal(
+    await handleBridgeCall(review, 'connectors.call', { name: 'hubspot', action: 'push', args: { body: 'vvc-1' } }, deps({ recordReviewEvent: record })),
+  )
+  assert.equal(call.code, 'degraded')
+  const ai = refusal(await handleBridgeCall(review, 'ai.complete', { prompt: 'vvc-2' }, deps({ recordReviewEvent: record })))
+  assert.equal(ai.code, 'degraded')
+  assert.deepEqual(
+    events.map((e) => `${e.kind}:${e.method}`),
+    ['bridge:connectors.call', 'door:connectors.call', 'bridge:ai.complete', 'door:ai.complete'],
+  )
+  assert.match(JSON.stringify(events[1].detail), /vvc-1/)
+  // A call the Tool never declared is refused by its perimeter, not recorded as a door.
+  events.length = 0
+  const undeclared = refusal(await handleBridgeCall(review, 'agents.run', { name: 'digest' }, deps({ recordReviewEvent: record })))
+  assert.equal(undeclared.code, 'perimeter')
+  assert.deepEqual(events.map((e) => e.kind), ['bridge'])
+})

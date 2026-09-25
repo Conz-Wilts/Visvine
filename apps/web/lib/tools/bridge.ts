@@ -90,7 +90,7 @@ import {
   refuseResourceRead,
   usesAi,
 } from '@visvine/tool-protocol/reach'
-import { planToolAction } from './actionAllowlist'
+import { planToolAction, toolActionActs } from './actionAllowlist'
 import { tenantArgDenial } from './toolActions'
 import { resourceBlob, toToolResource } from './toolResources'
 import { toolComplete, toolDecide } from './toolAi'
@@ -101,6 +101,9 @@ import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
 import { configKindOfContent } from '@/lib/notes/shared/configKinds'
 import { briefFolderOf } from '@/lib/agents/shared/folder'
 import { declaresTool, toolFolderOfIndex } from './config'
+import { actingReachOf, actsAsViewer, consentCovers, consentSentence, isActingMethod, type ActingReach } from './shared/listing'
+import { consentFor } from './consents'
+import { recordReviewEvent } from './review/events'
 
 /**
  * Everything the handlers touch that isn't pure. Injectable as one object so a
@@ -139,6 +142,10 @@ export interface BridgeDeps {
   runAction: (caller: ActionCaller, name: string, input: unknown) => Promise<unknown>
   complete: typeof toolComplete
   decide: typeof toolDecide
+  /** What a member last consented to for an install (lib/tools/consents.ts). Absent: no first-use gate (tests). */
+  consentFor?: (installId: string, userId: string) => Promise<ActingReach | null>
+  /** Where a dynamic run's evidence goes (lib/tools/review/events.ts). Absent: nothing recorded (tests). */
+  recordReviewEvent?: typeof recordReviewEvent
 }
 
 /** The real ones, named in exactly one place. Not exported: a caller wanting
@@ -173,6 +180,8 @@ const REAL_DEPS: BridgeDeps = {
   runAction: async (caller, name, input) => (await (await import('@/lib/actions/run')).runAction(caller, name, input)).result,
   complete: toolComplete,
   decide: toolDecide,
+  consentFor,
+  recordReviewEvent,
 }
 
 // ── shapes ────────────────────────────────────────────────────────────────────
@@ -793,6 +802,8 @@ async function connectorsCall(t: ResolvedTarget, params: unknown, deps: BridgeDe
 
   const refusal = refuseConnector(t.perimeter, name) ?? refuseConnectorCall(reachOf(t), name, { code, action }, { foreign: t.foreign })
   if (refusal) return err('perimeter', refusal)
+  const held = await heldForReview(t, 'connectors.call', { name, action: action ?? null, code: code ?? null, args: args ?? null }, deps)
+  if (held) return held
   if (missingHere(t.degraded?.missing.connectors, name)) {
     return err('degraded', `This space has no "${name}" connector — the tool is running degraded.`)
   }
@@ -842,6 +853,8 @@ async function agentsRun(t: ResolvedTarget, params: unknown, deps: BridgeDeps): 
 
   const refusal = refuseAgent(t.perimeter, name)
   if (refusal) return err('perimeter', refusal)
+  const held = await heldForReview(t, 'agents.run', { name, params }, deps)
+  if (held) return held
   if (missingHere(t.degraded?.missing.agents, name)) {
     return err('degraded', `This space has no "${name}" agent — the tool is running degraded.`)
   }
@@ -1186,6 +1199,8 @@ async function actionsRun(t: ResolvedTarget, params: unknown, deps: BridgeDeps):
   if (declared) return err('perimeter', declared)
   const plan = planToolAction(name, parsed.value.input ?? {}, t.spaceId)
   if (!plan.ok) return err(plan.code, plan.message)
+  const held = await heldForReview(t, 'actions.run', { name, input: plan.input }, deps)
+  if (held) return held
   if (coAuthors(t).length > 0) return err('forbidden', `${DRAFT_REACH}; a draft runs no actions until it is approved.`)
   for (const arg of plan.tenantArgs) {
     const denial = await deps.tenantArgDenial(arg.thing, arg.value, t.spaceId, reach)
@@ -1229,6 +1244,8 @@ async function aiComplete(t: ResolvedTarget, params: unknown, deps: BridgeDeps):
   const refusal = refuseAi(reachOf(t), 'complete')
   if (refusal) return err('perimeter', refusal)
   const { prompt, system, messages, maxTokens } = parsed.value
+  const held = await heldForReview(t, 'ai.complete', { prompt: prompt ?? null, system: system ?? null, messages: messages ?? null }, deps)
+  if (held) return held
   const answer = await deps.complete({
     spaceId: t.spaceId,
     toolName: t.config.name,
@@ -1248,8 +1265,44 @@ async function aiDecide(t: ResolvedTarget, params: unknown, deps: BridgeDeps): P
   if (!parsed.ok) return parsed.response
   const refusal = refuseAi(reachOf(t), 'decide')
   if (refusal) return err('perimeter', refusal)
+  const held = await heldForReview(t, 'ai.decide', { items: parsed.value.items, questions: parsed.value.questions }, deps)
+  if (held) return held
   const answer = await deps.decide({ spaceId: t.spaceId, items: parsed.value.items, questions: parsed.value.questions })
   return answer.ok ? ok(answer.answers) : err(answer.code, answer.message)
+}
+
+// ── review and first use ──────────────────────────────────────────────────────
+
+/**
+ * Under Visvine's dynamic run a door out of the space is recorded and never
+ * opened: the honeypot has nothing behind its connectors and agents, and the
+ * run must not spend or send anything. The Tool is told the door is not
+ * available here — a refusal every Tool already handles.
+ */
+async function heldForReview(
+  t: ResolvedTarget,
+  method: BridgeMethod,
+  detail: Record<string, unknown>,
+  deps: BridgeDeps,
+): Promise<BridgeResponse | null> {
+  if (!t.review) return null
+  await deps.recordReviewEvent?.(t.review.runId, 'door', method, detail)
+  return err('degraded', 'Not available while Visvine reviews this tool.')
+}
+
+/**
+ * The first-use gate: a Tool from outside the space acts as a member only
+ * after they said yes to what it does as them, and again when an upgrade
+ * widened that. Refused with `consent_required` and the sentence the host
+ * shows (lib/tools/consents.ts).
+ */
+async function consentRefusal(t: ResolvedTarget, method: BridgeMethod, deps: BridgeDeps): Promise<BridgeResponse | null> {
+  if (!t.foreign || !t.installId || !deps.consentFor || !isActingMethod(method)) return null
+  const acting = actingReachOf(reachOf(t), toolActionActs)
+  if (!actsAsViewer(acting)) return null
+  const given = await deps.consentFor(t.installId, t.principal.userId)
+  if (given && consentCovers(given, acting)) return null
+  return err('consent_required', consentSentence({ title: t.config.title, publisher: t.publisher ?? null, acting }))
 }
 
 // ── the door ──────────────────────────────────────────────────────────────────
@@ -1265,6 +1318,9 @@ export async function handleBridgeCall(
   deps: BridgeDeps = REAL_DEPS,
 ): Promise<BridgeResponse> {
   try {
+    if (t.review) await deps.recordReviewEvent?.(t.review.runId, 'bridge', method, { params: params ?? null })
+    const unconsented = await consentRefusal(t, method, deps)
+    if (unconsented) return unconsented
     switch (method) {
       case 'context.list':
         return await contextList(t, params, deps)

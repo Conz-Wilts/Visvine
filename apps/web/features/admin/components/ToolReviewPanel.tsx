@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
-import { Alert, Button, Chip, ConfirmDialog, Field, LoadingText, Textarea, ToastHost, useToasts } from '@visvine/ui';
+import { Alert, Button, Chip, ConfirmDialog, Field, LoadingText, Textarea, ToastHost, Toggle, useToasts } from '@visvine/ui';
 import { Trash2Icon } from '@/features/shared/icons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import CheckReport from '@/features/tools/components/CheckReport';
@@ -146,6 +146,11 @@ function VersionRow({
   );
 }
 
+/** A listing Visvine has yet to decide. */
+function pendingDecisionFor(version: { marketplaceStatus: string | null }): boolean {
+  return version.marketplaceStatus === 'pending';
+}
+
 export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReviewDetailResponse | null>(null);
@@ -155,6 +160,8 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
   const [deciding, setDeciding] = useState<'approved' | 'rejected' | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [reload, setReload] = useState(0);
   const toasts = useToasts();
   const { push } = toasts;
   const showToast = useCallback((text: string, tone: 'success' | 'error') => push(tone, text), [push]);
@@ -190,7 +197,33 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
     return () => {
       live = false;
     };
-  }, [selectedId]);
+  }, [selectedId, reload]);
+
+  /** Visvine's own stages again, now: the AI read and the dynamic run. Under a minute. */
+  async function runReview() {
+    if (!detail) return;
+    setRunning(true);
+    try {
+      const result = await fetchJsonBody<{ ok: boolean; status: string }>(`/api/tools/review/${detail.version.id}`, 'POST', { rerun: true });
+      showToast(`Review ${result.status}.`, result.ok ? 'success' : 'error');
+      setReload((n) => n + 1);
+      queue.refresh();
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function setVerified(verified: boolean) {
+    if (!detail) return;
+    try {
+      await fetchJsonBody(`/api/tools/review/${detail.version.id}`, 'POST', { verified });
+      setDetail((prev) => (prev && prev.listing ? { ...prev, listing: { ...prev.listing, verified } } : prev));
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    }
+  }
 
   const summary = useMemo(() => (detail ? changeSummary(detail) : null), [detail]);
 
@@ -250,7 +283,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
   // The verdict this panel decides is the LISTING one. A version's own space
   // approved the code before it could be offered here at all; what is open is
   // whether every other space may install it.
-  const pendingDecision = version?.marketplaceStatus === 'pending';
+  const pendingDecision = !!version && pendingDecisionFor(version);
 
   return (
     <div className="w-full">
@@ -352,7 +385,25 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                   <dd>submitted {timeAgo(version.submittedAt)}</dd>
                   <dd>·</dd>
                   <dd>{formatBytes(version.sizeBytes)}</dd>
+                  {version.license && (
+                    <>
+                      <dd>·</dd>
+                      <dd>{version.license}</dd>
+                    </>
+                  )}
+                  {detail.listing?.cosigner && (
+                    <>
+                      <dd>·</dd>
+                      <dd>co-signed by {detail.listing.cosigner}</dd>
+                    </>
+                  )}
                 </dl>
+                {detail.listing && (
+                  <label className="mt-3 flex items-center gap-3 text-sm text-fg">
+                    <Toggle checked={detail.listing.verified} onChange={(on) => void setVerified(on)} aria-label="Verified publisher" />
+                    Verified publisher
+                  </label>
+                )}
               </header>
 
               {/* What the author says changed — read before the diff, because
@@ -387,12 +438,31 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                 <PerimeterSummary perimeter={version.perimeter} diff={version.perimeterDiff} />
               </section>
 
-              {version.checks && (
-                <section>
-                  <h3 className="mb-2 text-sm font-semibold text-fg">Checks</h3>
-                  <CheckReport report={version.checks} />
-                </section>
-              )}
+              <section>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-fg">
+                    Checks
+                    {detail.review && (
+                      <span className="ml-2 font-normal text-fg-muted">
+                        {[
+                          `review ${detail.review.status}`,
+                          detail.review.runner,
+                          detail.review.finishedAt ? timeAgo(detail.review.finishedAt, { style: 'short' }) : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    )}
+                  </h3>
+                  {pendingDecisionFor(version) && (
+                    <Button variant="ghost" size="sm" onClick={runReview} loading={running} loadingText="Running…">
+                      Run review
+                    </Button>
+                  )}
+                </div>
+                {version.checks && <CheckReport report={version.checks} />}
+                {detail.review?.error && <p className="mt-2 text-xs text-danger">{detail.review.error}</p>}
+              </section>
 
               {/* One line before three diffs: a reviewer should know whether
                   this is a typo fix or a new Tool before scrolling. */}

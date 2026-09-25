@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma'
 import { takeToken } from '@/lib/rateLimit'
 import { verifyFrameToken } from '@/lib/tools/frameToken'
 import { originOnly, recordIncident } from '@/lib/tools/incidents'
+import { recordReviewEvent } from '@/lib/tools/review/events'
 
 /**
  * Where a Tool frame's CSP violations are sent — by the BROWSER, not the
@@ -76,6 +77,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
   const violations = readViolations(body)
   if (violations.length === 0) return noContent()
+
+  // A frame under Visvine's dynamic run reports into its run's evidence, not
+  // the incident queue: the run exists to catch exactly this.
+  if (payload.kind === 'review') {
+    for (const violation of violations) {
+      await recordReviewEvent(payload.runId, 'csp', null, { directive: violation.directive, blocked: violation.blocked })
+    }
+    return noContent()
+  }
 
   const scope = payload.kind === 'install' ? payload.installId : `preview:${payload.spaceId}/${payload.name}`
   const limit = await takeToken(`tools:csp:${scope}:${payload.viewerId}`, { capacity: 10, refillPerSec: 0.05 })

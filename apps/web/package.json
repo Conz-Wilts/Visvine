@@ -72,6 +72,7 @@
     "verify:tools:shell": "tsx scripts/verify-tools-shell.ts",
     "verify:tools:builder": "tsx scripts/verify-tools-builder.ts",
     "verify:tools:bindings": "tsx scripts/verify-tools-bindings.ts",
+    "verify:tools:global": "tsx scripts/verify-tools-global.ts",
     "verify:records": "tsx scripts/verify-records.ts",
     "vm:redteam": "tsx scripts/vm-redteam.ts"
   },

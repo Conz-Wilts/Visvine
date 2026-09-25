@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import type { CheckFinding, CheckReport as Report, StageResult, StageStatus } from '@/lib/tools/checks/findings';
+import { reportStages, reportStatus, type CheckFinding, type CheckReport as Report, type StageResult, type StageStatus } from '@/lib/tools/checks/findings';
 
 const STATUS_WORD: Record<StageStatus, string> = { passed: 'Passed', flagged: 'Flagged', blocked: 'Blocked' };
 
@@ -18,7 +18,12 @@ const DOT_CLASS: Record<CheckFinding['severity'], string> = {
   info: 'bg-line',
 };
 
-const STAGE_LABEL: Record<StageResult['stage'], string> = { compatibility: 'Compatibility', security: 'Security' };
+const STAGE_LABEL: Record<StageResult['stage'], string> = {
+  compatibility: 'Compatibility',
+  security: 'Security',
+  ai: 'AI review',
+  dynamic: 'Dynamic run',
+};
 
 /** `2 flags · risk 45`, or nothing to add. */
 function stageFacts(stage: StageResult): string {
@@ -35,10 +40,14 @@ function stageFacts(stage: StageResult): string {
  * each naming its file and line.
  */
 export default function CheckReport({ report, className }: { report: Report; className?: string }) {
-  const findings = [...report.compatibility.findings, ...report.security.findings].filter((f) => f.severity !== 'info');
+  const stages = reportStages(report);
+  // A global stage that could not run says so as its one finding, and that is worth reading.
+  const findings = stages.flatMap((stage) =>
+    stage.findings.filter((f) => f.severity !== 'info' || ((stage.stage === 'ai' || stage.stage === 'dynamic') && /unavailable|unreadable/.test(f.rule))),
+  );
   return (
     <div className={clsx('flex flex-col gap-2 text-sm', className)}>
-      {[report.compatibility, report.security].map((stage) => (
+      {stages.map((stage) => (
         <div key={stage.stage} className="flex items-baseline justify-between gap-4">
           <span className="text-fg">{STAGE_LABEL[stage.stage]}</span>
           <span className={STATUS_CLASS[stage.status]}>{stageFacts(stage)}</span>
@@ -72,11 +81,6 @@ export default function CheckReport({ report, className }: { report: Report; cla
 /** The one word a list row shows for a report. */
 export function checkWord(report: Report | null | undefined): string | null {
   if (!report) return null;
-  const worst: StageStatus =
-    report.compatibility.status === 'blocked' || report.security.status === 'blocked'
-      ? 'blocked'
-      : report.compatibility.status === 'flagged' || report.security.status === 'flagged'
-        ? 'flagged'
-        : 'passed';
+  const worst = reportStatus(report);
   return worst === 'passed' ? null : STATUS_WORD[worst];
 }

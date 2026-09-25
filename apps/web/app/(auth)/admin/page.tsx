@@ -14,6 +14,7 @@ import { useConnectorRequestCount } from '@/features/connectors/hooks/useConnect
 import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
 import {
   InstalledToolsPanel,
+  ListingOffersPanel,
   ToolApprovalsPanel,
   useToolApprovalQueue,
 } from '@/features/tools/components/manage/ToolsConsole';
@@ -101,6 +102,7 @@ function AdminConsole({ space, onSaved }: {
                 <div className="space-y-8">
                   <SpaceToolsPanel key={space.id} space={space} onSaved={onSaved} />
                   <InstalledToolsPanel key={`${space.id}-installs`} />
+                  <ListingOffersPanel key={`${space.id}-offers`} />
                   {/* Not keyed on the space: the queue outlives whichever
                       space the console happens to be pointed at. */}
                   {isSuperAdmin && (

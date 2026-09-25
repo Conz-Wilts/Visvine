@@ -19,7 +19,8 @@
  *                       version installable — in that space itself and nowhere
  *                       else.
  *   marketplaceStatus   VISVINE's, and NULL until an admin explicitly calls
- *                       `submitToMarketplace`. Only `approved` there lists a
+ *                       for a listing (lib/tools/listings.ts#requestListing)
+ *                       and its author co-signs. Only `approved` there lists a
  *                       version on the global shelf or lets an unrelated space
  *                       install it (`reviewVersion`, super-admin).
  *
@@ -43,6 +44,7 @@
  * straight to the client.
  */
 import prisma from '@/lib/prisma'
+import { logger } from '@/lib/logger'
 import { isSuperAdmin } from '@/lib/session'
 import { logAudit } from '@/lib/notes/audit'
 import { readVisible, writeGated } from '@/lib/notes/contextService'
@@ -77,7 +79,8 @@ import {
   type PerimeterDiff,
   type ToolPerimeter,
 } from './perimeter'
-import { decodeListingState, ensureListing, type ListingState } from './verdicts'
+import { type ListingState } from './verdicts'
+import { listingRequestState, type ListingRequestState } from './shared/listing'
 import { runStaticChecks, type StaticCheckInput } from './checks/analyze'
 import { parseManifestFacts, type ToolManifestFacts } from '@visvine/tool-protocol/manifest'
 import { blockingFindings, findingLine, reportStatus, type CheckFinding, type CheckReport } from './checks/findings'
@@ -151,6 +154,13 @@ export interface ToolVersionSummary {
   /** Set when the version was withdrawn after approval (lib/tools/verdicts.ts). */
   revokedAt: string | null
   revokeReason: string | null
+  /** The global listing it was offered under, and where that offer stands (lib/tools/listings.ts). */
+  listingId: string | null
+  listingState: ListingRequestState
+  listingRequestedAt: string | null
+  cosignedAt: string | null
+  /** The license its author co-signed under. */
+  license: string | null
 }
 
 /** A version opened: the summary plus everything a reviewer or a diff reads. */
@@ -315,6 +325,10 @@ const SUMMARY_SELECT = {
   previewUrl: true,
   revokedAt: true,
   revokeReason: true,
+  listingId: true,
+  listingRequestedAt: true,
+  cosignedAt: true,
+  license: true,
   author: { select: { id: true, name: true } },
 } as const
 
@@ -352,6 +366,10 @@ type SummaryRow = {
   previewUrl: string | null
   revokedAt: Date | null
   revokeReason: string | null
+  listingId: string | null
+  listingRequestedAt: Date | null
+  cosignedAt: Date | null
+  license: string | null
   author: { id: string; name: string } | null
 }
 
@@ -405,6 +423,11 @@ function toSummary(row: SummaryRow): ToolVersionSummary {
     previewUrl: row.previewUrl,
     revokedAt: row.revokedAt ? row.revokedAt.toISOString() : null,
     revokeReason: row.revokeReason,
+    listingId: row.listingId,
+    listingState: listingRequestState(row),
+    listingRequestedAt: row.listingRequestedAt ? row.listingRequestedAt.toISOString() : null,
+    cosignedAt: row.cosignedAt ? row.cosignedAt.toISOString() : null,
+    license: row.license,
   }
 }
 
@@ -575,7 +598,8 @@ function bumpIndexVersion(markdown: string, version: number): string | null {
  *
  * Neither reaches the marketplace. Nothing here writes `marketplaceStatus`, so
  * a Tool written in a private space is published to the people who wrote it and
- * is invisible everywhere else until an admin calls `submitToMarketplace`.
+ * is invisible everywhere else until an admin asks Visvine to list it
+ * (lib/tools/listings.ts).
  *
  * Refuses unless the working copy compiles: the registry stores bundles, and a
  * broken snapshot would be a Tool that installs and then renders an error card.
@@ -749,6 +773,11 @@ export async function publishTool(
     return row
   })
   await recordReport({ spaceId, name, versionId: created.id, sourceHash: buildRow.sourceHash, trigger: 'publish', report })
+  // Each file's digest and the package's (lib/tools/package), taken once, now.
+  // A failure costs only the stored digests, which an export takes itself.
+  await import('./package')
+    .then((pkg) => pkg.storeVersionDigests(created.id))
+    .catch((err) => logger.warn('tools.publish.digests_failed', { err, versionId: created.id }))
   void logAudit(spaceId, {
     userId: p.userId,
     name: p.name,
@@ -845,157 +874,6 @@ export async function reviewSpaceVersion(
       ? await flagStaleInstalls(row.key, versionId, row.version, { withinSpace: row.sourceSpaceId })
       : 0
   return { ok: true, version: toSummary(updated), upgraded }
-}
-
-/**
- * A space admin asking Visvine to list one of their approved versions publicly
- * — the ONLY thing that puts a Tool in front of other spaces.
- *
- * Only an approved version can be offered: the space has to have said yes to
- * its own code before asking the world to run it. The trusted-publisher fast
- * path is decided here rather than at publish, because it is a question about a
- * LISTING — does this ask for anything the last listed version didn't.
- */
-export async function submitToMarketplace(
-  versionId: string,
-  actor: { userId: string; email: string; spaceId: string; isAdmin: boolean },
-  opts: { note?: string } = {},
-): Promise<VersionResult> {
-  const row = await prisma.appToolVersion.findUnique({
-    where: { id: versionId },
-    select: {
-      id: true,
-      key: true,
-      name: true,
-      version: true,
-      status: true,
-      config: true,
-      sourceSpaceId: true,
-      marketplaceStatus: true,
-      revokedAt: true,
-    },
-  })
-  if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
-  if (row.sourceSpaceId !== actor.spaceId) {
-    return { ok: false, status: 403, error: 'Only the space that wrote a tool can list it.' }
-  }
-  if (row.revokedAt) return { ok: false, status: 409, error: 'This version was withdrawn — it cannot be listed.' }
-  const listing = await prisma.appToolListing.findUnique({ where: { key: row.key }, select: { state: true } })
-  if (listing && decodeListingState(listing.state) === 'revoked') {
-    return { ok: false, status: 409, error: 'Visvine removed this tool’s listing for good.' }
-  }
-  if (!actor.isAdmin) {
-    return { ok: false, status: 403, error: 'Only space admins can submit a tool to the marketplace.' }
-  }
-  if (row.status !== 'approved') {
-    return {
-      ok: false,
-      status: 409,
-      error: 'Approve this version in your own space before offering it to anyone else.',
-    }
-  }
-  if (row.marketplaceStatus === 'pending') {
-    return { ok: false, status: 409, error: 'This version is already awaiting review.' }
-  }
-  if (row.marketplaceStatus === 'approved') {
-    return { ok: false, status: 409, error: 'This version is already listed.' }
-  }
-  const queued = await prisma.appToolVersion.count({
-    where: { key: row.key, marketplaceStatus: 'pending' },
-  })
-  if (queued > 0) {
-    return {
-      ok: false,
-      status: 409,
-      error: 'Another version of this tool is already in the review queue — withdraw it first.',
-    }
-  }
-
-  await ensureListing(row.key, row.sourceSpaceId)
-  const submitted = await prisma.appToolVersion.update({
-    where: { id: versionId },
-    data: {
-      marketplaceStatus: 'pending',
-      marketplaceSubmittedAt: new Date(),
-      marketplaceReviewNote: opts.note?.trim() ? opts.note.trim() : null,
-    },
-    select: SUMMARY_SELECT,
-  })
-  void logAudit(row.sourceSpaceId, {
-    userId: actor.userId,
-    name: actor.email,
-    action: 'tool',
-    path: toolIndexPath(row.name),
-    detail: `submitted v${row.version} to the marketplace`,
-  })
-
-  // The trusted-publisher fast path (see shouldAutoApprove): this manifest
-  // against the last LISTED one, and the scan this version was published with.
-  const [previous, reports] = await Promise.all([
-    previousApprovedVersion(row.key, row.version, 'marketplace'),
-    versionReports([versionId]),
-  ])
-  if (
-    shouldAutoApprove({
-      trustedPublishers: trustedPublishers(),
-      sourceSpaceId: row.sourceSpaceId,
-      previous: previous?.config ?? null,
-      next: decodeToolConfig(row.config, row.name),
-      securityFindings: reports.get(versionId)?.report.security.findings ?? null,
-    })
-  ) {
-    const approved = await prisma.appToolVersion.update({
-      where: { id: versionId },
-      data: {
-        marketplaceStatus: 'approved',
-        marketplaceReviewedBy: AUTO_REVIEWER,
-        marketplaceReviewedAt: new Date(),
-        marketplaceReviewNote: AUTO_APPROVE_NOTE,
-      },
-      select: SUMMARY_SELECT,
-    })
-    void logAudit(row.sourceSpaceId, {
-      userId: actor.userId,
-      name: actor.email,
-      action: 'tool',
-      path: toolIndexPath(row.name),
-      detail: `listed v${row.version} by ${AUTO_REVIEWER} — ${AUTO_APPROVE_NOTE}`,
-    })
-    await flagStaleInstalls(row.key, versionId, row.version)
-    return { ok: true, version: toSummary(approved) }
-  }
-  return { ok: true, version: toSummary(submitted) }
-}
-
-/** An admin taking a listing request back out of Visvine's queue. */
-export async function withdrawFromMarketplace(
-  versionId: string,
-  actor: { userId: string; email: string; spaceId: string; isAdmin: boolean },
-): Promise<VersionResult> {
-  const row = await prisma.appToolVersion.findUnique({
-    where: { id: versionId },
-    select: { id: true, name: true, version: true, sourceSpaceId: true, marketplaceStatus: true },
-  })
-  if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
-  if (row.sourceSpaceId !== actor.spaceId || !actor.isAdmin) {
-    return { ok: false, status: 403, error: 'Only an admin of the space that wrote it can withdraw a listing.' }
-  }
-  if (row.marketplaceStatus !== 'pending') {
-    return { ok: false, status: 409, error: 'This version is not awaiting review.' }
-  }
-  const updated = await prisma.appToolVersion.update({
-    where: { id: versionId },
-    data: { marketplaceStatus: 'withdrawn', marketplaceReviewedAt: new Date() },
-    select: SUMMARY_SELECT,
-  })
-  void logAudit(row.sourceSpaceId, {
-    userId: actor.userId,
-    name: actor.email,
-    action: 'tool',
-    path: toolIndexPath(row.name),
-    detail: `withdrew v${row.version} from the marketplace queue`,
-  })
-  return { ok: true, version: toSummary(updated) }
 }
 
 /** An author taking back a version nobody has reviewed yet. */
@@ -1130,7 +1008,7 @@ export async function reviewVersion(
   }
   const row = await prisma.appToolVersion.findUnique({
     where: { id: versionId },
-    select: { id: true, key: true, name: true, title: true, version: true, marketplaceStatus: true, sourceSpaceId: true, authorUserId: true },
+    select: { id: true, key: true, name: true, title: true, version: true, marketplaceStatus: true, sourceSpaceId: true, authorUserId: true, listingId: true },
   })
   if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
   if (row.marketplaceStatus !== 'pending') {
@@ -1142,25 +1020,69 @@ export async function reviewVersion(
         : 'This version was never submitted to the marketplace.',
     }
   }
+  if (decision === 'approved') {
+    const held = await globalStagesHold(versionId)
+    if (held) return { ok: false, status: 409, error: held }
+  }
+  return decideListing(versionId, row, decision, reviewer.userId, reviewer.email, note)
+}
 
+/**
+ * Why a version may not be listed yet: its global stages (the AI review and
+ * the dynamic run, lib/tools/review) have not finished, or one blocked it.
+ */
+async function globalStagesHold(versionId: string): Promise<string | null> {
+  const run = await prisma.appToolReviewRun.findFirst({
+    where: { versionId },
+    orderBy: { createdAt: 'desc' },
+    select: { status: true },
+  })
+  if (!run) return 'Its review has not run — run it first.'
+  if (run.status === 'queued' || run.status === 'running') return 'Its dynamic run has not finished.'
+  const reports = await versionReports([versionId])
+  const report = reports.get(versionId)?.report
+  const blocking = report
+    ? [report.ai, report.dynamic].flatMap((stage) => stage?.findings ?? []).filter((f) => f.severity === 'high')
+    : []
+  return blocking.length ? `Its dynamic run blocked it: ${findingLine(blocking[0])}` : null
+}
+
+/**
+ * The verdict, written. Shared by a reviewer's decision and the trusted
+ * publisher's fast path, which lists without a person once the automated
+ * stages have passed (lib/tools/review/run.ts).
+ */
+export async function decideListing(
+  versionId: string,
+  row: { key: string; name: string; version: number; sourceSpaceId: string; listingId: string | null },
+  decision: 'approved' | 'rejected',
+  reviewerId: string,
+  reviewerName: string,
+  note?: string,
+): Promise<ReviewResult> {
   const updated = await prisma.appToolVersion.update({
     where: { id: versionId },
     data: {
       marketplaceStatus: decision,
-      marketplaceReviewedBy: reviewer.userId,
+      marketplaceReviewedBy: reviewerId,
       marketplaceReviewedAt: new Date(),
       marketplaceReviewNote: note?.trim() ? note.trim() : null,
     },
     select: SUMMARY_SELECT,
   })
   void logAudit(row.sourceSpaceId, {
-    userId: reviewer.userId,
-    name: reviewer.email,
+    userId: reviewerId,
+    name: reviewerName,
     action: 'tool',
     path: toolIndexPath(row.name),
-    detail: `${decision} the marketplace listing of v${row.version} by ${reviewer.email}${note?.trim() ? ` — ${note.trim()}` : ''}`,
+    detail: `${decision} the marketplace listing of v${row.version} by ${reviewerName}${note?.trim() ? ` — ${note.trim()}` : ''}`,
   })
-  const upgraded = decision === 'approved' ? await flagStaleInstalls(row.key, versionId, row.version) : 0
+  let upgraded = 0
+  if (decision === 'approved') {
+    const { markListed } = await import('./listings')
+    await markListed(versionId)
+    upgraded = await flagStaleInstalls(row.key, versionId, row.version, { listingId: row.listingId })
+  }
   return { ok: true, version: toSummary(updated), upgraded }
 }
 
@@ -1180,8 +1102,26 @@ async function flagStaleInstalls(
   key: string,
   versionId: string,
   version: number,
-  opts: { withinSpace?: string } = {},
+  opts: { withinSpace?: string; listingId?: string | null } = {},
 ): Promise<number> {
+  // A listing's upgrades follow the LISTING, across a transfer — so an
+  // install of the first publisher's version is offered the second's. Newer
+  // is by when it was published, since two keys number their versions apart.
+  if (!opts.withinSpace && opts.listingId) {
+    const next = await prisma.appToolVersion.findUnique({ where: { id: versionId }, select: { createdAt: true } })
+    if (!next) return 0
+    const installs = await prisma.appToolInstall.findMany({
+      where: { OR: [{ listingId: opts.listingId }, { key }] },
+      select: { id: true, versionId: true, version: { select: { createdAt: true } } },
+    })
+    const stale = installs.filter((install) => install.versionId !== versionId && install.version.createdAt < next.createdAt).map((i) => i.id)
+    if (stale.length === 0) return 0
+    const result = await prisma.appToolInstall.updateMany({
+      where: { id: { in: stale } },
+      data: { pendingVersionId: versionId, listingId: opts.listingId },
+    })
+    return result.count
+  }
   const installs = await prisma.appToolInstall.findMany({
     where: { key, ...(opts.withinSpace ? { spaceId: opts.withinSpace } : {}) },
     select: { id: true, version: { select: { version: true } } },
@@ -1298,6 +1238,12 @@ export async function browseVersions(
     items: page.map((row) => ({ ...toSummary(row), installs: byKey.get(row.key) ?? 0 })),
     nextCursor,
   }
+}
+
+/** One version's summary — no sources, no bundles. */
+export async function getVersionSummary(id: string): Promise<ToolVersionSummary | null> {
+  const row = await prisma.appToolVersion.findUnique({ where: { id }, select: SUMMARY_SELECT })
+  return row ? toSummary(row) : null
 }
 
 /** One version, opened: config, perimeter and all three sources. */

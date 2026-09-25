@@ -1310,20 +1310,22 @@ iframe on a cookie-less origin. `docs/tools.md` is the guide. The invariants:
   NOWHERE else. `AppToolVersion` carries two independent verdicts, both asked in
   order (`registry.ts#installability`, pure): `status` is the source space's
   admin (`approved` = installable there; its rooms get it only through `share:`),
-  and `marketplaceStatus` is Visvine's — **null until an admin explicitly
-  submits it**, and only `approved` lists it or lets an unrelated space install
-  it. Never widen a query over versions without deciding which verdict it asks
-  about. **Approval is not forever**: a version withdrawn by its space
+  and `marketplaceStatus` is Visvine's — **null until an admin asks Visvine
+  to list it and its author co-signs** (`lib/tools/listings.ts`), and only
+  `approved` lists it or lets an unrelated space install it. Never widen a
+  query over versions without deciding which verdict it asks about. **Approval is not forever**: a version withdrawn by its space
   (`revokedAt`) or a listing Visvine suspends (`app_tool_listings.state`) stops
   at its next bridge call, and the host removes the frame
   (`lib/tools/verdicts.ts`) — read wherever a version is chosen or run.
 - **Publishing is a member act; approving is the admin's.** An admin's publish
   lands approved; a member's lands pending and notifies the space's admins —
   that queue is `/admin?section=approvals`. There is no `/tools` destination:
-  the console owns tools (Tools = rail placement + installed versions,
-  Approvals = the queue; a working copy is published from its own Tool tab),
-  and cross-space install is the `install_tool` action; `update_install` is
-  the admin's other four decisions (on/off, type claims, upgrade, uninstall).
+  the console owns a space's tools (Tools = rail placement + installed
+  versions + listings offered to it, Approvals = the queue; a working copy is
+  published, listed and exported from its own Tool tab), and **listed tools
+  are browsed in Discover → Tools** (`lib/tools/directory.ts`), installed
+  from its sheet or by `install_tool`; `update_install` is the admin's other
+  four decisions (on/off, type claims, upgrade, uninstall).
   An admin installs without MCP through the install sheet (`InstallSheet`:
   Rail or More, Page · Tab · None per declared type), opened from Approvals and
   from the Tool tab. A re-publish supersedes the author's earlier pending
@@ -1337,6 +1339,27 @@ iframe on a cookie-less origin. `docs/tools.md` is the guide. The invariants:
   read as written. The trusted-publisher fast path needs an empty
   `manifestDiff.ts#diffManifest` and a clean scan; a new manifest field must
   be classified there before it lands (`tests/tools-diff-coverage.test.ts`).
+- **Going global is four people's acts and Visvine's two stages.** A space
+  admin asks (`submit_tool`), the author co-signs under a license
+  (`cosign_tool`, automatic when they are the admin), Visvine's AI review and
+  **dynamic run** read it (`lib/tools/review/`: a throwaway honeypot seeded
+  with canaries, the version run through the `review` bridge target by a system
+  runner in a real browser, every door out recorded and never opened), and a
+  reviewer decides — never before the stages ran, never over a block. The AI
+  only flags; the dynamic run blocks on egress, CSP, navigation, an admins-only
+  canary written wider or sent out, or a vault token anywhere. A listing is its
+  own row with an id that survives a **transfer**; versions and installs carry
+  it, so upgrades follow the listing across publishers. New and unverified
+  listings are **staged** (25 spaces, 14 days, half the bridge rate). A Tool
+  from outside the space shows a **provenance line** and asks each member once
+  before it first acts as them (`consent_required` →
+  `app_tool_consents`, re-asked when an upgrade widens it).
+- **A Tool travels as a `.vvtool`** (`lib/tools/package/`): sources and the
+  manifest, CHECKSUMS, and — for a LISTED version only — an Ed25519 signature
+  under the deployment's key ring (`lib/crypto/signing.ts`). An import is a new
+  working copy that meets every check; a signature only names the publisher.
+  A Tool's name is its node id across the deployment, so an import whose name
+  is taken becomes `name-2`.
 - **A Tool is its folder, filed anywhere.** `tools/<name>/` is where one
   lands; a folder of the space's own whose index declares `type: tool` is the
   same Tool. The folder name is its name (build, installs, versions and node

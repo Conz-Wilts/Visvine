@@ -63,6 +63,7 @@ import {
   type RegistryError,
 } from './registry'
 import { decodeListingState, listingHoldFor, runDenial, type ListingHold } from './verdicts'
+import { stagedInstallRefusal } from './listings'
 import {
   boundRequirements,
   isDegraded,
@@ -109,6 +110,8 @@ export interface InstallSummary {
   /** The settings the version declares, and the values set here (unset = the default). */
   settingSpecs: Record<string, SettingSpec>
   settings: Record<string, unknown>
+  /** For a Tool from outside the space: who published it, and whether Visvine reviewed it. */
+  provenance?: { publisher: string | null; reviewed: boolean; verified: boolean } | null
 }
 
 /**
@@ -146,6 +149,8 @@ export interface InstalledToolDto {
   /** The Tool's own sections and band buttons, drawn by the host on its page. */
   nav: ToolNav | null
   actions: ToolBandAction[]
+  /** For a Tool from outside the space: who published it, and whether Visvine reviewed it. */
+  provenance?: { publisher: string | null; reviewed: boolean; verified: boolean } | null
 }
 
 export type InstallResult =
@@ -445,6 +450,7 @@ const INSTALL_SELECT = {
   settings: true,
   pendingVersionId: true,
   sharedFromSpaceId: true,
+  listingId: true,
   sharedFromSpace: { select: { id: true, name: true } },
   version: {
     select: {
@@ -459,6 +465,7 @@ const INSTALL_SELECT = {
       sourceSpaceId: true,
       revokedAt: true,
       revokeReason: true,
+      marketplaceStatus: true,
     },
   },
 } as const
@@ -475,6 +482,7 @@ interface InstallRow {
   settings: unknown
   pendingVersionId: string | null
   sharedFromSpaceId: string | null
+  listingId: string | null
   sharedFromSpace: { id: string; name: string } | null
   version: {
     id: string
@@ -488,27 +496,66 @@ interface InstallRow {
     sourceSpaceId: string
     revokedAt: Date | null
     revokeReason: string | null
+    marketplaceStatus: string | null
   }
 }
 
-/** Visvine's holds over the listings a batch of installs runs, keyed by Tool key. */
+/**
+ * The listings a batch of installs from outside their spaces follow — by
+ * listing id (which a transfer keeps), else by key — with Visvine's hold over
+ * each and who publishes it now.
+ */
 type HoldLookup = ReadonlyMap<string, ListingHold>
 
+function holdKey(row: Pick<InstallRow, 'listingId' | 'key'>): string {
+  return row.listingId ?? row.key
+}
+
+function isForeign(row: InstallRow): boolean {
+  return row.spaceId !== row.version.sourceSpaceId && !row.sharedFromSpaceId
+}
+
 async function holdsFor(rows: readonly InstallRow[]): Promise<HoldLookup> {
-  const keys = [...new Set(rows.filter((row) => row.spaceId !== row.version.sourceSpaceId).map((row) => row.key))]
-  if (keys.length === 0) return new Map()
-  const held = await prisma.appToolListing.findMany({
-    where: { key: { in: keys }, state: { not: 'active' } },
-    select: { key: true, state: true, stateReason: true },
+  const foreign = rows.filter((row) => row.spaceId !== row.version.sourceSpaceId)
+  if (foreign.length === 0) return new Map()
+  const ids = [...new Set(foreign.map((row) => row.listingId).filter((id): id is string => !!id))]
+  const keys = [...new Set(foreign.filter((row) => !row.listingId).map((row) => row.key))]
+  const listings = await prisma.appToolListing.findMany({
+    where: { OR: [...(ids.length ? [{ id: { in: ids } }] : []), ...(keys.length ? [{ key: { in: keys } }] : [])] },
+    select: { id: true, key: true, state: true, stateReason: true, stagedUntil: true, publisherSpaceId: true, verified: true },
   })
-  return new Map(held.map((row) => [row.key, { state: decodeListingState(row.state), stateReason: row.stateReason }]))
+  const spaces = await prisma.space.findMany({
+    where: { id: { in: [...new Set(listings.map((l) => l.publisherSpaceId))] } },
+    select: { id: true, name: true },
+  })
+  const names = new Map(spaces.map((space) => [space.id, space.name]))
+  const out = new Map<string, ListingHold>()
+  for (const listing of listings) {
+    const hold: ListingHold = {
+      state: decodeListingState(listing.state),
+      stateReason: listing.stateReason,
+      stagedUntil: listing.stagedUntil,
+      publisher: names.get(listing.publisherSpaceId) ?? null,
+      verified: listing.verified,
+    }
+    out.set(listing.id, hold)
+    out.set(listing.key, hold)
+  }
+  return out
+}
+
+/** Where a Tool from outside the space came from — the muted line in its band. Null for the space's own. */
+function provenanceOf(row: InstallRow, holds: HoldLookup): InstalledToolDto['provenance'] {
+  if (!isForeign(row)) return null
+  const hold = holds.get(holdKey(row))
+  return { publisher: hold?.publisher ?? null, reviewed: row.version.marketplaceStatus === 'approved', verified: hold?.verified ?? false }
 }
 
 /** Why this install is not running, when it was pulled back; null when it runs. */
 function stoppedOf(row: InstallRow, holds: HoldLookup): string | null {
   const denial = runDenial({
     version: row.version,
-    listing: holds.get(row.key) ?? null,
+    listing: holds.get(holdKey(row)) ?? null,
     sourceSpaceId: row.version.sourceSpaceId,
     installSpaceId: row.spaceId,
     sharedFromSpaceId: row.sharedFromSpaceId,
@@ -538,6 +585,7 @@ function toSummary(row: InstallRow, pending: PendingLookup, holds: HoldLookup): 
     types: config.surfaces.types,
     sharedFrom: row.sharedFromSpace,
     stopped: stoppedOf(row, holds),
+    provenance: provenanceOf(row, holds),
     slots: manifest.bindings,
     bindings: values,
     settingSpecs: manifest.settings,
@@ -618,6 +666,7 @@ function toClientDto(row: InstallRow, holds: HoldLookup): InstalledToolDto {
     version: row.version.version,
     nav: config.surfaces.nav ?? null,
     actions: config.surfaces.actions ?? [],
+    provenance: provenanceOf(row, holds),
   }
 }
 
@@ -717,10 +766,12 @@ export async function installVersion(
       config: true,
       perimeter: true,
       revokedAt: true,
+      listingId: true,
     },
   })
   if (!version) return { ok: false, status: 404, error: 'No such tool version.' }
-  const listing = version.sourceSpaceId === spaceId ? null : await listingHoldFor(version.key)
+  const listing =
+    version.sourceSpaceId === spaceId ? null : await listingHoldFor({ listingId: version.listingId, key: version.key })
   // The two verdicts, applied. A space's own approval reaches that space;
   // outside it, only a marketplace listing will do — which is what keeps a Tool
   // written in a private space out of everyone else's reach.
@@ -733,6 +784,11 @@ export async function installVersion(
     listingState: listing?.state ?? null,
   })
   if (!allowed.ok) return { ok: false, status: 403, error: allowed.error }
+  // A new listing reaches a bounded number of spaces while it is staged.
+  if (version.sourceSpaceId !== spaceId && version.listingId) {
+    const staged = await stagedInstallRefusal(version.listingId, spaceId)
+    if (staged) return { ok: false, status: 403, error: staged }
+  }
 
   const facts = await spaceFactsForActor(spaceId, actor.userId)
   if (!facts) return { ok: false, status: 403, error: 'You are not a member of this space.' }
@@ -768,9 +824,9 @@ export async function installVersion(
     await updateSpaceConfig(spaceId, async (stored, tx) => {
       const siblings = await tx.appToolInstall.findMany({
         where: { spaceId },
-        select: { key: true, slug: true, typeClaims: true },
+        select: { key: true, slug: true, typeClaims: true, listingId: true },
       })
-      if (siblings.some((row) => row.key === version.key)) {
+      if (siblings.some((row) => row.key === version.key || (version.listingId && row.listingId === version.listingId))) {
         throw new InstallRefusal(409, 'This tool is already installed in this space.')
       }
       const slug = uniqueSlug(requestedSlug, new Set(siblings.map((row) => row.slug)))
@@ -790,6 +846,7 @@ export async function installVersion(
           typeClaims: resolution.claims as unknown as object,
           bindings: bindingValues as unknown as object,
           settings: settings.value as unknown as object,
+          listingId: version.listingId,
         },
         select: INSTALL_SELECT,
       })
@@ -1160,14 +1217,19 @@ export async function applyUpgrade(
       config: true,
       perimeter: true,
       revokedAt: true,
+      listingId: true,
     },
   })
-  const nextListing = next && next.sourceSpaceId !== spaceId ? await listingHoldFor(next.key) : null
+  const nextListing =
+    next && next.sourceSpaceId !== spaceId ? await listingHoldFor({ listingId: next.listingId, key: next.key }) : null
   // Re-asked rather than trusted: the offer was written when the version was
   // approved, and a listing can be rejected or a space verdict reversed in
   // between. The same rule as a fresh install, because that is what this is.
+  // It is this Tool's upgrade when it has the same key, or — after the listing
+  // moved to another publisher — the same listing.
+  const sameTool = !!next && (next.key === install.key || (!!next.listingId && next.listingId === install.listingId))
   const offered =
-    next && next.key === install.key
+    next && sameTool
       ? installability({
           status: decodeVersionStatus(next.status),
           marketplaceStatus: next.marketplaceStatus ? decodeVersionStatus(next.marketplaceStatus) : null,
@@ -1212,6 +1274,9 @@ export async function applyUpgrade(
         where: { id: installId },
         data: {
           versionId: next.id,
+          // The listing's new publisher names the Tool by its own key.
+          key: next.key,
+          listingId: next.listingId ?? install.listingId,
           requirements: requirements as unknown as object,
           typeClaims: resolution.claims as unknown as object,
           bindings: bindingValues as unknown as object,

@@ -6,6 +6,7 @@ import { bridgeRateKey, takeBridgeCallShared } from '@/lib/tools/limits'
 import { resolveBridgeTarget, targetKey } from '@/lib/tools/target'
 import { appOrigin } from '@/lib/tools/origin'
 import { BRIDGE_LIMITS, isBridgeMethod, type BridgeResponse } from '@/lib/tools/protocol'
+import { stagedRate } from '@/lib/tools/shared/listing'
 
 /**
  * The bridge endpoint — every Tool's only way to Visvine data.
@@ -104,8 +105,12 @@ export async function POST(req: NextRequest) {
 
   // Rate limited AFTER resolution, so the budget is per resolved TARGET rather
   // than per unauthenticated guess, and a viewer's two Tools — two installs, or
-  // two drafts being previewed — cannot starve each other.
-  const decision = await takeBridgeCallShared(bridgeRateKey(session.userId, targetKey(resolved)))
+  // two drafts being previewed — cannot starve each other. A listing still in
+  // its stage runs at half the rate.
+  const decision = await takeBridgeCallShared(
+    bridgeRateKey(session.userId, targetKey(resolved)),
+    stagedRate(BRIDGE_LIMITS.callsPerMinute, resolved.staged === true),
+  )
   if (!decision.ok) {
     return json({
       ok: false,

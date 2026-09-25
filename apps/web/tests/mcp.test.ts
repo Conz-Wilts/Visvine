@@ -48,7 +48,7 @@ process.env.NEXT_PUBLIC_APP_URL ??= 'http://localhost:3000'
 
 const IDENTITY = { userId: 'user_1', name: 'Test User', email: 'test@local.dev' }
 
-test('the catalogue is the two context scopes plus the nine capability scopes', () => {
+test('the catalogue is the two context scopes plus the ten capability scopes', () => {
   assert.deepEqual(
     [...MCP_SCOPES],
     [
@@ -61,6 +61,7 @@ test('the catalogue is the two context scopes plus the nine capability scopes', 
       'agents:admin',
       'tools:author',
       'tools:install',
+      'tools:list',
       'secrets:write',
       'vm:run',
     ],

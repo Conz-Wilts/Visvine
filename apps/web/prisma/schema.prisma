@@ -972,14 +972,34 @@ model AppToolVersion {
   revokedAt              DateTime?        @map("revoked_at")
   revokedBy              String?          @map("revoked_by")
   revokeReason           String?          @map("revoke_reason")
+  /// The global listing this version belongs to once it was offered for one —
+  /// kept across a transfer, so a version written by another publisher still
+  /// upgrades the installs that follow the listing.
+  listingId              String?          @map("listing_id")
+  /// A space admin asking Visvine to list this version, and the author's
+  /// consent to it. Visvine's queue (`marketplaceStatus: pending`) starts only
+  /// once both are set; an admin who is the author co-signs as they ask.
+  listingRequestedBy     String?          @map("listing_requested_by")
+  listingRequestedAt     DateTime?        @map("listing_requested_at")
+  cosignedBy             String?          @map("cosigned_by")
+  cosignedAt             DateTime?        @map("cosigned_at")
+  /// The license the author co-signed under: an SPDX id or `proprietary`.
+  license                String?
+  /// SHA-256 of each package file (`src/ui.tsx`, `visvine-tool.json`, …) and of
+  /// the whole (lib/tools/package) — what an export's CHECKSUMS carries.
+  digests                Json             @default("{}")
+  packageDigest          String?          @map("package_digest")
   createdAt              DateTime         @default(now()) @map("created_at")
   author                 User?            @relation("AppToolVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  listing                AppToolListing?  @relation(fields: [listingId], references: [id], onDelete: SetNull)
   installs               AppToolInstall[]
   checkRuns              AppToolCheckRun[]
+  reviewRuns             AppToolReviewRun[]
 
   @@unique([key, version], name: "app_tool_version_identity")
   @@index([status, submittedAt])
   @@index([marketplaceStatus, marketplaceSubmittedAt], map: "app_tool_versions_marketplace_status_idx")
+  @@index([listingId])
   @@map("app_tool_versions")
 }
 
@@ -1010,17 +1030,40 @@ model AppToolInstall {
   /// Set when this install is the HOUSE's Tool shared down into this room
   /// (lib/tools/share.ts): the room runs it, the house owns it.
   sharedFromSpaceId String?        @map("shared_from_space_id")
+  /// The listing this install follows when it came from one: upgrades are
+  /// offered by listing, so they keep coming after the listing is transferred.
+  listingId         String?        @map("listing_id")
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
   space             Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   sharedFromSpace   Space?         @relation("SharedToolInstalls", fields: [sharedFromSpaceId], references: [id], onDelete: Cascade)
   version           AppToolVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
   state             AppToolState[]
+  consents          AppToolConsent[]
 
   @@unique([spaceId, key], name: "app_tool_install_identity")
   @@unique([spaceId, slug], name: "app_tool_install_slug")
   @@index([sharedFromSpaceId])
+  @@index([listingId])
   @@map("app_tool_installs")
+}
+
+/// A member's answer to a listed Tool's first-use notice: "this Tool from
+/// outside the space will act as you". Remembered per install and person, with
+/// the acting reach it was given for (lib/tools/shared/listing.ts#ActingReach)
+/// — an upgrade that widens what the Tool does as them asks again.
+model AppToolConsent {
+  id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  installId   String         @map("install_id")
+  userId      String         @map("user_id")
+  acting      Json           @default("{}")
+  consentedAt DateTime       @default(now()) @map("consented_at")
+  install     AppToolInstall @relation(fields: [installId], references: [id], onDelete: Cascade)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([installId, userId], name: "app_tool_consent_identity")
+  @@index([userId])
+  @@map("app_tool_consents")
 }
 
 /// Per-install key/value state written through the Tool bridge's `visvine.state`
@@ -1046,24 +1089,87 @@ model AppToolState {
 /// to. Its `state` is Visvine's hold over the listing as a whole — `suspended`
 /// (reversible) or `revoked` (permanent) stops every install OUTSIDE the
 /// publisher's own space at its next bridge call, whatever version it pins.
+///
+/// The id is the listing's identity and outlives its key: a listing
+/// TRANSFERRED to another publisher names that space's Tool from then on, and
+/// the installs that follow it (`app_tool_installs.listing_id`) keep being
+/// offered its upgrades.
 model AppToolListing {
-  id               String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  key              String    @unique // the Tool key the listing currently names
-  publisherSpaceId String    @map("publisher_space_id") // no FK — a listing outlives its space's rows
-  state            String    @default("active") // active | suspended | revoked
-  stateReason      String?   @map("state_reason")
-  stateBy          String?   @map("state_by")
-  stateAt          DateTime? @map("state_at")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  id               String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  key              String           @unique // the Tool key the listing currently names
+  publisherSpaceId String           @map("publisher_space_id") // no FK — a listing outlives its space's rows
+  state            String           @default("active") // active | suspended | revoked
+  stateReason      String?          @map("state_reason")
+  stateBy          String?          @map("state_by")
+  stateAt          DateTime?        @map("state_at")
+  /// The author who co-signed the listing, and the license they chose.
+  authorUserId     String?          @map("author_user_id")
+  license          String?
+  /// Visvine's word that the publisher is who they say they are.
+  verified         Boolean          @default(false)
+  /// When Visvine first listed a version of it.
+  listedAt         DateTime?        @map("listed_at")
+  /// Staged reach: until this moment at most `stagedCap` spaces outside the
+  /// publisher's family may install it, and its per-viewer bridge rate is
+  /// halved. Set at the first listing of an unverified publisher.
+  stagedUntil      DateTime?        @map("staged_until")
+  stagedCap        Int?             @map("staged_cap")
+  /// A transfer offered to another publisher space, waiting on its admins.
+  transferTo       String?          @map("transfer_to")
+  transferBy       String?          @map("transfer_by")
+  transferAt       DateTime?        @map("transfer_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  versions         AppToolVersion[]
 
   @@map("app_tool_listings")
 }
 
-/// Something a running Tool did that a person should look at: a frame that
-/// navigated itself, a CSP violation, a report. Counts and facts only, never
-/// the viewer's content. `viewerId` is redacted when that person deletes their
-/// account; the incident stays.
+/// The global stages Visvine runs on a version offered for listing — the AI
+/// review and the dynamic run against a throwaway honeypot space — as one
+/// queued job the minute tick drains (lib/tools/review). The findings land in
+/// `app_tool_check_runs` as stages `ai` and `dynamic`; this row keeps the run
+/// itself: where it ran, the canaries it planted and what came of it.
+model AppToolReviewRun {
+  id              String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  versionId       String               @map("version_id")
+  status          String               @default("queued") // queued | running | passed | flagged | blocked | unavailable | error
+  /// Which browser ran it: local | machine | none.
+  runner          String?
+  /// The honeypot space made for this run; deleted when the run ends.
+  honeypotSpaceId String?              @map("honeypot_space_id")
+  runnerUserId    String?              @map("runner_user_id")
+  /// token → { path, restricted } — what was planted, never what was read.
+  canaries        Json                 @default("{}")
+  attempts        Int                  @default(0)
+  error           String?
+  startedAt       DateTime?            @map("started_at")
+  finishedAt      DateTime?            @map("finished_at")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  version         AppToolVersion       @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  events          AppToolReviewEvent[]
+
+  @@index([status, createdAt])
+  @@index([versionId, createdAt])
+  @@map("app_tool_review_runs")
+}
+
+/// What a Tool did during its dynamic run: every bridge call it made, every
+/// write, every call to a door out of the space (recorded, never performed),
+/// and every CSP report, navigation and egress attempt the browser saw.
+model AppToolReviewEvent {
+  id     String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  runId  String           @map("run_id")
+  kind   String // bridge | door | csp | navigation | egress | console
+  method String?
+  detail Json             @default("{}")
+  at     DateTime         @default(now())
+  run    AppToolReviewRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, at])
+  @@map("app_tool_review_events")
+}
+
 /// A Tool's structured facts — its surfaces and its manifest's reach,
 /// bindings, settings, platforms, kit range, dependencies and collections —
 /// one row per Tool per space. The index note keeps the prose (title,
@@ -1101,7 +1207,8 @@ model AppToolConfigChange {
   @@map("app_tool_config_changes")
 }
 
-/// One stage of the automated checks over a Tool — compatibility or security —
+/// One stage of the automated checks over a Tool — compatibility or security,
+/// and for a version offered for listing the global stages, ai and dynamic —
 /// as it ran on a working copy (`versionId` null) or on the version a publish
 /// wrote (lib/tools/checks/). The author, the space's admins and a Visvine
 /// reviewer all read this row: nothing is re-run for a person. A version's
@@ -1112,9 +1219,9 @@ model AppToolCheckRun {
   name       String
   versionId  String?         @map("version_id")
   sourceHash String          @map("source_hash")
-  stage      String // compatibility | security
+  stage      String // compatibility | security | ai | dynamic
   status     String // passed | flagged | blocked
-  trigger    String // check | publish | rescan
+  trigger    String // check | publish | rescan | review
   findings   Json            @default("[]")
   /// The permission risk score, security stage only: { score, level, factors }.
   risk       Json?
@@ -1130,6 +1237,10 @@ model AppToolCheckRun {
   @@map("app_tool_check_runs")
 }
 
+/// Something a running Tool did that a person should look at: a frame that
+/// navigated itself, a CSP violation, a report. Counts and facts only, never
+/// the viewer's content. `viewerId` is redacted when that person deletes their
+/// account; the incident stays.
 model AppToolIncident {
   id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   kind      String // navigation | csp | report | canary | anomaly
@@ -1626,6 +1737,7 @@ model User {
   resourceAccesses        ResourceAccess[]     @relation("ResourceAccessor")
 
   appToolVersionsAuthored AppToolVersion[] @relation("AppToolVersionAuthor")
+  appToolConsents         AppToolConsent[]
 
   // Deleting a person must take their ACCESS and their CREDENTIALS with it. Each
   // of these was a bare scalar that only lib/account/deleteAccount.ts knew to

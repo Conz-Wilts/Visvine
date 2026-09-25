@@ -27,6 +27,11 @@ import type {
   InstallsResponse,
   PublishResponse,
   VersionResponse,
+  DirectoryResponse,
+  ListingAboutResponse,
+  ListingResponse,
+  ListingSourceResponse,
+  SpaceListingsResponse,
 } from '@/lib/tools/api'
 import type { TypeClaims } from '@/lib/tools/installs'
 import type { BindableSpace } from '@visvine/tool-protocol/bindings'
@@ -272,4 +277,59 @@ export function reviewSpaceVersion(
 function versionsUrl(spaceId: string, versionId?: string): string {
   const base = `/api/spaces/${encodeURIComponent(spaceId)}/tools/versions`
   return versionId ? `${base}/${encodeURIComponent(versionId)}` : base
+}
+
+// ── going global ─────────────────────────────────────────────────────────────
+
+/**
+ * A listing act on one of this space's versions (lib/tools/listings.ts):
+ * `list` asks Visvine (co-signed at once by its author), `cosign` is the
+ * author's consent, `unlist` takes a request back.
+ */
+export function listingAction(
+  spaceId: string,
+  versionId: string,
+  input: { action: 'list'; license?: string; note?: string } | { action: 'cosign'; license: string } | { action: 'unlist' },
+): Promise<ListingResponse> {
+  return fetchJsonBody<ListingResponse>(versionsUrl(spaceId, versionId), 'POST', input)
+}
+
+/** The listings this space publishes, and those offered to it. */
+export function fetchSpaceListings(spaceId: string, signal?: AbortSignal): Promise<SpaceListingsResponse> {
+  return fetchJson<SpaceListingsResponse>(`/api/spaces/${encodeURIComponent(spaceId)}/tools/listings`, { signal })
+}
+
+/** Offer a listing to another space, take an offer back, or answer one. */
+export function moveListing(
+  spaceId: string,
+  input:
+    | { action: 'offer'; listingId: string; toSpaceId: string | null }
+    | { action: 'accept'; listingId: string; name?: string }
+    | { action: 'decline'; listingId: string },
+): Promise<{ listingId: string; key: string; transferTo: string | null }> {
+  return fetchJsonBody(`/api/spaces/${encodeURIComponent(spaceId)}/tools/listings`, 'POST', input)
+}
+
+/** Where a working copy downloads as a `.vvtool`. */
+export function workingCopyExportUrl(spaceId: string, name: string): string {
+  return `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/export`
+}
+
+// ── the directory (Discover → Tools) ─────────────────────────────────────────
+
+/** One page of listed Tools; 404 when the directory is not open to this viewer. */
+export function fetchDirectory(q: string, cursor?: string | null, signal?: AbortSignal): Promise<DirectoryResponse> {
+  const params = new URLSearchParams()
+  if (q.trim()) params.set('q', q.trim())
+  if (cursor) params.set('cursor', cursor)
+  const query = params.toString()
+  return fetchJson<DirectoryResponse>(`/api/tools/directory${query ? `?${query}` : ''}`, { signal })
+}
+
+export function fetchListingAbout(listingId: string, signal?: AbortSignal): Promise<ListingAboutResponse> {
+  return fetchJson<ListingAboutResponse>(`/api/tools/directory/${encodeURIComponent(listingId)}`, { signal })
+}
+
+export function fetchListingSource(listingId: string, signal?: AbortSignal): Promise<ListingSourceResponse> {
+  return fetchJson<ListingSourceResponse>(`/api/tools/directory/${encodeURIComponent(listingId)}/source`, { signal })
 }

@@ -45,6 +45,11 @@ export interface VersionHold {
 export interface ListingHold {
   state: ListingState
   stateReason: string | null
+  /** Staged reach runs until then (lib/tools/shared/listing.ts). */
+  stagedUntil?: Date | null
+  /** The publishing space's name — what a Tool from outside is introduced as. */
+  publisher?: string | null
+  verified?: boolean
 }
 
 function withReason(sentence: string, reason: string | null | undefined): string {
@@ -76,13 +81,26 @@ export function runDenial(input: {
   return null
 }
 
-/** The listing hold for a Tool key, or null when it was never listed. */
-export async function listingHoldFor(key: string): Promise<ListingHold | null> {
-  const row = await prisma.appToolListing.findUnique({
-    where: { key },
-    select: { state: true, stateReason: true },
+/**
+ * The listing an install follows — by its listing id, which a transfer keeps,
+ * or, for one from before listings had ids, its key — or null when it was
+ * never listed.
+ */
+export async function listingHoldFor(ref: string | { listingId?: string | null; key: string }): Promise<ListingHold | null> {
+  const { listingId, key } = typeof ref === 'string' ? { listingId: null, key: ref } : ref
+  const row = await prisma.appToolListing.findFirst({
+    where: listingId ? { id: listingId } : { key },
+    select: { state: true, stateReason: true, stagedUntil: true, publisherSpaceId: true, verified: true },
   })
-  return row ? { state: decodeListingState(row.state), stateReason: row.stateReason } : null
+  if (!row) return null
+  const space = await prisma.space.findUnique({ where: { id: row.publisherSpaceId }, select: { name: true } })
+  return {
+    state: decodeListingState(row.state),
+    stateReason: row.stateReason,
+    stagedUntil: row.stagedUntil,
+    publisher: space?.name ?? null,
+    verified: row.verified,
+  }
 }
 
 // ── telling running frames ────────────────────────────────────────────────────
@@ -204,11 +222,3 @@ export async function setListingState(
   return { ok: true }
 }
 
-/** The listing row for a key, made when a version is first submitted for one. */
-export async function ensureListing(key: string, publisherSpaceId: string): Promise<void> {
-  await prisma.appToolListing.upsert({
-    where: { key },
-    create: { key, publisherSpaceId },
-    update: {},
-  })
-}

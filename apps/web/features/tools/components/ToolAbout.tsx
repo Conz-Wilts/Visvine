@@ -52,10 +52,14 @@ export default function ToolAbout({
               {[
                 `v${about.version}`,
                 about.publisher.here ? 'made in this space' : about.publisher.name ? `from ${about.publisher.name}` : null,
+                about.verified ? 'verified' : null,
                 about.author ? `by ${about.author}` : null,
                 timeAgo(new Date(about.publishedAt).getTime(), { style: 'short' }),
-                about.listed ? 'reviewed by Visvine' : null,
+                about.listed
+                  ? `reviewed by Visvine${about.reviewedAt ? ` ${timeAgo(new Date(about.reviewedAt).getTime(), { style: 'short' })}` : ''}`
+                  : null,
                 `${about.installs} ${about.installs === 1 ? 'space' : 'spaces'}`,
+                about.license,
               ]
                 .filter(Boolean)
                 .join(' · ')}

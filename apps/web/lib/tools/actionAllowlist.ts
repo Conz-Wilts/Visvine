@@ -25,14 +25,21 @@ export type TenantThing = 'event' | 'resource' | 'channel'
 interface ToolActionSpec {
   /** Takes `space_id`, which the bridge sets to the install's space. */
   spaced: boolean
+  /** Changes something as the viewer — what a Tool from outside the space asks a member about first. */
+  acts: boolean
   /** The arguments that name a thing in a tenant, and what each names. */
   tenantArgs: Readonly<Record<string, TenantThing>>
 }
 
 export const TOOL_ACTIONS: Readonly<Record<string, ToolActionSpec>> = {
-  list_events: { spaced: true, tenantArgs: {} },
-  update_event: { spaced: true, tenantArgs: { event_id: 'event', cover_resource_id: 'resource' } },
-  share_resource: { spaced: false, tenantArgs: { resource_id: 'resource', channel_id: 'channel' } },
+  list_events: { spaced: true, acts: false, tenantArgs: {} },
+  update_event: { spaced: true, acts: true, tenantArgs: { event_id: 'event', cover_resource_id: 'resource' } },
+  share_resource: { spaced: false, acts: true, tenantArgs: { resource_id: 'resource', channel_id: 'channel' } },
+}
+
+/** Whether running this action changes something — an unknown one is assumed to. */
+export function toolActionActs(name: string): boolean {
+  return Object.hasOwn(TOOL_ACTIONS, name) ? TOOL_ACTIONS[name].acts : true
 }
 
 export type ToolActionPlan =

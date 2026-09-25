@@ -41,6 +41,9 @@ function parseTarget(value: unknown): BridgeTarget | null {
   ) {
     return { kind: 'preview', spaceId: value.spaceId, name: value.name }
   }
+  if (value.kind === 'review' && typeof value.runId === 'string' && value.runId) {
+    return { kind: 'review', runId: value.runId }
+  }
   return null
 }
 
@@ -71,9 +74,11 @@ export async function POST(req: NextRequest) {
   if ('code' in resolved) return fail(statusOf(resolved), resolved.message, resolved.code)
 
   const token = await mintFrameToken(
-    resolved.installId !== null
-      ? { kind: 'install', viewerId: session.userId, spaceId: resolved.spaceId, installId: resolved.installId }
-      : { kind: 'preview', viewerId: session.userId, spaceId: resolved.spaceId, name: resolved.config.name },
+    resolved.review
+      ? { kind: 'review', viewerId: session.userId, spaceId: resolved.spaceId, runId: resolved.review.runId }
+      : resolved.installId !== null
+        ? { kind: 'install', viewerId: session.userId, spaceId: resolved.spaceId, installId: resolved.installId }
+        : { kind: 'preview', viewerId: session.userId, spaceId: resolved.spaceId, name: resolved.config.name },
   )
   const response: FrameTokenResponse = {
     token,

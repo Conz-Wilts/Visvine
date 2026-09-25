@@ -9,8 +9,11 @@
  * reviewer reads is the one the author already saw (`app_tool_check_runs`).
  */
 
+/** The stages every publish runs. */
 export const CHECK_STAGES = ['compatibility', 'security'] as const
-type CheckStage = (typeof CHECK_STAGES)[number]
+/** The stages Visvine runs on a version offered for listing (lib/tools/review). */
+export const GLOBAL_STAGES = ['ai', 'dynamic'] as const
+type CheckStage = (typeof CHECK_STAGES)[number] | (typeof GLOBAL_STAGES)[number]
 
 const FINDING_SEVERITIES = ['high', 'medium', 'low', 'info'] as const
 export type FindingSeverity = (typeof FINDING_SEVERITIES)[number]
@@ -18,8 +21,8 @@ export type FindingSeverity = (typeof FINDING_SEVERITIES)[number]
 export const STAGE_STATUSES = ['passed', 'flagged', 'blocked'] as const
 export type StageStatus = (typeof STAGE_STATUSES)[number]
 
-/** Why a check stage ran: a check asked for, a publish, or a rules change re-reading a version. */
-export type CheckTrigger = 'check' | 'publish' | 'rescan'
+/** Why a check stage ran: a check asked for, a publish, a rules change re-reading a version, or a listing's review. */
+export type CheckTrigger = 'check' | 'publish' | 'rescan' | 'review'
 
 /** The files a finding can point into, by their author-facing names. */
 export type CheckFile = 'index.md' | 'ui.tsx' | 'data.js' | `src/${string}`
@@ -55,10 +58,17 @@ export interface StageResult {
   risk?: RiskScore
 }
 
-/** Both stages, as publish and `check_tool` run them. */
+/** Both stages, as publish and `check_tool` run them — and, once a version is offered for listing, the global two. */
 export interface CheckReport {
   compatibility: StageResult
   security: StageResult
+  ai?: StageResult
+  dynamic?: StageResult
+}
+
+/** A report's stages that ran, in the order they read. */
+export function reportStages(report: CheckReport): StageResult[] {
+  return [report.compatibility, report.security, report.ai, report.dynamic].filter((stage): stage is StageResult => !!stage)
 }
 
 const RANK: Record<FindingSeverity, number> = { high: 0, medium: 1, low: 2, info: 3 }
@@ -102,12 +112,12 @@ function worstStatus(a: StageStatus, b: StageStatus): StageStatus {
 
 /** A report's overall verdict: the worst of its stages. */
 export function reportStatus(report: CheckReport): StageStatus {
-  return worstStatus(report.compatibility.status, report.security.status)
+  return reportStages(report).reduce<StageStatus>((worst, stage) => worstStatus(worst, stage.status), 'passed')
 }
 
-/** The findings that stop a publish, worst first. */
+/** The findings that stop a publish (or a listing), worst first. */
 export function blockingFindings(report: CheckReport): CheckFinding[] {
-  return sortFindings([...report.compatibility.findings, ...report.security.findings].filter((f) => f.severity === 'high'))
+  return sortFindings(reportStages(report).flatMap((stage) => stage.findings).filter((f) => f.severity === 'high'))
 }
 
 /** `ui.tsx:12 — message`, the one line a refusal or a list row shows. */
@@ -129,7 +139,9 @@ export function decodeFindings(raw: unknown): CheckFinding[] {
       rule: f.rule,
       severity: f.severity as FindingSeverity,
       message: f.message,
-      ...(f.file === 'index.md' || f.file === 'ui.tsx' || f.file === 'data.js' ? { file: f.file } : {}),
+      ...(f.file === 'index.md' || f.file === 'ui.tsx' || f.file === 'data.js' || (typeof f.file === 'string' && /^src\/[\w.-]+$/.test(f.file))
+        ? { file: f.file as CheckFile }
+        : {}),
       ...(typeof f.line === 'number' ? { line: f.line } : {}),
       ...(typeof f.column === 'number' ? { column: f.column } : {}),
     })

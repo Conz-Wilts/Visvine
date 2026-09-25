@@ -123,8 +123,15 @@ function InstalledTool({ install, spaceId, isAdmin }: { install: InstalledToolDt
     />
   ) : null;
 
+  // A Tool from outside the space says where it came from; the space's own does not.
+  const provenance = install.provenance
+    ? [install.provenance.publisher ? `From ${install.provenance.publisher}` : null, install.provenance.reviewed ? 'reviewed by Visvine' : null]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
   const trail = (
     <div className="flex items-center gap-1 pr-2">
+      {provenance && <span className="hidden truncate px-2 text-xs text-fg-muted lg:inline">{provenance}</span>}
       {install.actions.map((action) => (
         <button
           key={action.id}

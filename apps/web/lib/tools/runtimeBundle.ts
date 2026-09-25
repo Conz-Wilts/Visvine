@@ -136,8 +136,28 @@ async function resolvePreview(
   return { ok: true, id: `b_${build.id}`, kind: 'build', recordId: build.id, immutable: false, kit: kitOf(build.config, payload.name) }
 }
 
+/** A version under Visvine's dynamic run — only while its run runs, only in its honeypot. */
+async function resolveReview(payload: Extract<FrameTokenPayload, { kind: 'review' }>): Promise<RuntimeBundleResult> {
+  const run = await prisma.appToolReviewRun.findUnique({
+    where: { id: payload.runId },
+    select: { status: true, honeypotSpaceId: true, versionId: true, version: { select: { name: true, config: true } } },
+  })
+  if (!run || run.status !== 'running' || run.honeypotSpaceId !== payload.spaceId) {
+    return { ok: false, status: 404, title: 'This review is over', message: 'Nothing is running here.' }
+  }
+  return {
+    ok: true,
+    id: `v_${run.versionId}`,
+    kind: 'version',
+    recordId: run.versionId,
+    immutable: true,
+    kit: kitOf(run.version.config, run.version.name),
+  }
+}
+
 /** The one place a frame token turns into a bundle id. */
 export function resolveRuntimeBundle(payload: FrameTokenPayload): Promise<RuntimeBundleResult> {
+  if (payload.kind === 'review') return resolveReview(payload)
   return payload.kind === 'install' ? resolveInstall(payload) : resolvePreview(payload)
 }
 

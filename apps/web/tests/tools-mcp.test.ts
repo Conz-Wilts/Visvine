@@ -182,6 +182,11 @@ function version(over: Partial<ToolVersionSummary> = {}): ToolVersionSummary {
     previewUrl: null,
     revokedAt: null,
     revokeReason: null,
+    listingId: null,
+    listingState: 'none',
+    listingRequestedAt: null,
+    cosignedAt: null,
+    license: null,
     ...over,
   }
 }

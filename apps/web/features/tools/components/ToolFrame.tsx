@@ -168,6 +168,39 @@ export default function ToolFrame({
 
   const targetKey = useMemo(() => JSON.stringify(target), [target]);
 
+  // The first-use notice: a Tool from outside the space about to act as the
+  // viewer. One question however many calls asked it; Continue is recorded on
+  // the server, then every waiting call is sent again.
+  const [consent, setConsent] = useState<{ sentence: string; answer: (yes: boolean) => void } | null>(null);
+  const consentRef = useRef<Promise<boolean> | null>(null);
+  const askConsent = useCallback(
+    (sentence: string) => {
+      if (consentRef.current) return consentRef.current;
+      const pending = new Promise<boolean>((resolve) => {
+        let answered = false;
+        setConsent({
+          sentence,
+          answer: (yes) => {
+            if (answered) return;
+            answered = true;
+            setConsent(null);
+            const done = yes
+              ? fetchJsonBody('/api/tools/consent', 'POST', { target }).then(() => true, () => false)
+              : Promise.resolve(false);
+            void done.then((given) => {
+              consentRef.current = null;
+              resolve(given);
+            });
+          },
+        });
+      });
+      consentRef.current = pending;
+      return pending;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [targetKey],
+  );
+
   // ── the token ──
 
   useEffect(() => {
@@ -255,12 +288,16 @@ export default function ToolFrame({
       navigate: (path) => router.push(path),
       onRevoked: setStopped,
       onSection: (next) => onSectionRef.current?.(next),
+      onConsent: askConsent,
       onHostCall: (method, params) =>
         hostServiceCall(method, params, {
           mayDownload: mint.ui?.download === true,
           toast: push,
-          confirm: ask,
+          // Under Visvine's dynamic run nobody is there to answer: every
+          // question is a yes, so the Tool shows what it does next.
+          confirm: target.kind === 'review' ? () => Promise.resolve(true) : ask,
           save: ({ filename, content, mimeType }) => {
+            if (target.kind === 'review') return;
             const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
             const a = document.createElement('a');
             a.href = url;
@@ -456,6 +493,14 @@ export default function ToolFrame({
         destructive={question?.destructive}
         onConfirm={() => question?.answer(true)}
         onClose={() => question?.answer(false)}
+      />
+      <ConfirmDialog
+        open={consent !== null}
+        title={title}
+        body={consent?.sentence}
+        confirmLabel="Continue"
+        onConfirm={() => consent?.answer(true)}
+        onClose={() => consent?.answer(false)}
       />
     </div>
   );

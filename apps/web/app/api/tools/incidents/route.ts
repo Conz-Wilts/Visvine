@@ -3,6 +3,7 @@ import { requireToolSession } from '@/lib/tools/route'
 import { takeToken } from '@/lib/rateLimit'
 import { resolveBridgeTarget } from '@/lib/tools/target'
 import { incidentSubject, recordIncident } from '@/lib/tools/incidents'
+import { recordReviewEvent } from '@/lib/tools/review/events'
 
 /**
  * `POST /api/tools/incidents { target, kind, note? }` — what a person or the
@@ -27,6 +28,12 @@ export async function POST(req: NextRequest) {
 
   const resolved = await resolveBridgeTarget(session, body?.target, undefined, client)
   if ('code' in resolved) return NextResponse.json({ error: resolved.message }, { status: 403 })
+
+  // Under Visvine's dynamic run what the host saw is the run's evidence.
+  if (resolved.review) {
+    if (kind === 'navigation') await recordReviewEvent(resolved.review.runId, 'navigation', null, { frame: 'tool', seenBy: 'host' })
+    return NextResponse.json({ ok: true })
+  }
 
   const limit = await takeToken(`tools:incident:${session.userId}`, { capacity: 10, refillPerSec: 0.1 })
   if (!limit.ok) return NextResponse.json({ error: 'Too many reports.' }, { status: 429 })

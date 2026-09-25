@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger'
 import { drainJobs } from '@/lib/resources/jobs'
 import { reapAbandonedUploads } from '@/lib/resources/upload'
 import { purgeTrash } from '@/lib/resources/service'
+import { drainToolReviews } from '@/lib/tools/review/run'
 
 // The tick awaits the dispatches it fans out (each its own request to the run
 // endpoint), so it can last as long as the longest claimed run.
@@ -62,6 +63,14 @@ export async function POST(req: NextRequest) {
       return null
     })
 
+  // Visvine's review of Tools offered for listing (lib/tools/review): the AI
+  // review and the dynamic run, each a browser session under a minute. Never
+  // allowed to fail the tick.
+  const toolReviews = await drainToolReviews({ budgetMs: 60_000 }).catch((err) => {
+    logger.error('tools.review.tick_failed', { err })
+    return null
+  })
+
   // VM leases ride this tick for the same reason the projection drain does: it
   // is the heartbeat the deployment already has, and a lease nobody has touched
   // in a fortnight is not urgent enough to justify a second scheduler job. Never
@@ -86,6 +95,7 @@ export async function POST(req: NextRequest) {
     projections,
     cleans,
     resourceJobs,
+    toolReviews,
     vmLeasesReaped: vmLeases,
     machines,
     reclaimed: report.reclaimed,

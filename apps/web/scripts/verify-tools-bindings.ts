@@ -46,7 +46,12 @@ import { toolFolderPath, toolIndexPath } from '../lib/tools/config';
 import { mintFrameToken } from '../lib/tools/frameToken';
 import { listInstalls } from '../lib/tools/installs';
 import type { BridgeMethod, BridgeResponse } from '../lib/tools/protocol';
-import { reviewVersion, submitToMarketplace, toolKey } from '../lib/tools/registry';
+import { reviewVersion, toolKey } from '../lib/tools/registry';
+import { requestListing } from '../lib/tools/listings';
+import { runReviewNow } from '../lib/tools/review/run';
+import { giveConsent } from '../lib/tools/consents';
+import { actingReachOf } from '../lib/tools/shared/listing';
+import { toolActionActs } from '../lib/tools/actionAllowlist';
 import { resolveBridgeTarget, type ResolvedTarget } from '../lib/tools/target';
 import { readSpaceConfig, updateSpaceConfig } from '../lib/spaces/spaceConfig';
 import { reprojectTypes } from '../lib/records/projection';
@@ -285,7 +290,9 @@ async function main(): Promise<void> {
     // a Visvine reviewer gives.
     const reviewer = (process.env.SUPER_ADMIN_EMAILS ?? '').split(',').map((e) => e.trim()).find(Boolean);
     if (!reviewer) throw new Error('SUPER_ADMIN_EMAILS is empty — no reviewer to list the Tool');
-    const submitted = await submitToMarketplace(published.version_id, { userId: admin.id, email: admin.email ?? '', spaceId: HOUSE, isAdmin: true });
+    const submitted = await requestListing(published.version_id, { userId: admin.id, email: admin.email ?? '', spaceId: HOUSE, isAdmin: true }, { license: 'MIT' });
+    // Visvine's own stages (verify-tools-global.ts covers them); this one only needs the listing.
+    await runReviewNow(published.version_id, { runner: { unavailable: 'not part of this check' } });
     const reviewed = await reviewVersion(published.version_id, 'approved', { userId: admin.id, email: reviewer });
     check('listed for other spaces, through submission and review', submitted.ok && reviewed.ok, `${submitted.ok ? 'submitted' : submitted.error} · ${reviewed.ok ? 'approved' : reviewed.error}`);
 
@@ -343,6 +350,11 @@ async function main(): Promise<void> {
     check('context.list sees the bound folder and nothing else', listed.ok && paths.length > 0 && paths.every((p) => p.startsWith(`${ROOM_FOLDER}/`)), paths.join(', '));
     const houseFolder = await call('context.read', { path: `${HOUSE_FOLDER}/northwind.md` });
     check('the house\'s folder is out of reach', !houseFolder.ok && houseFolder.error.code === 'perimeter', describe(houseFolder));
+    // A listed Tool from outside the room asks before it first acts as someone;
+    // the admin says yes, as they would in its first-use notice.
+    const asked = await call('records.update', { path: `${ROOM_FOLDER}/acme.md`, fields: { stage: 'Won' } });
+    check('it asks before it first edits as the admin', !asked.ok && asked.error.code === 'consent_required', describe(asked));
+    await giveConsent(roomInstall.id, admin.id, actingReachOf(target.reach!, toolActionActs));
     const updated = await call('records.update', { path: `${ROOM_FOLDER}/acme.md`, fields: { stage: 'Won' } });
     const acme = await store.readNoteOrNull(shared(ROOM), `${ROOM_FOLDER}/acme.md`);
     check('records.update writes the declared field into the room\'s note', updated.ok && !!acme && /stage: Won/.test(acme), describe(updated));

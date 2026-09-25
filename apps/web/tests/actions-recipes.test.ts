@@ -40,6 +40,7 @@ const ALL_SCOPES = [
   'agents:run',
   'tools:author',
   'tools:install',
+  'tools:list',
   'secrets:write',
 ]
 

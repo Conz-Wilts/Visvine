@@ -143,6 +143,13 @@ export interface HostBridgeOptions {
   /** The Tool asked to switch its own section. The page decides whether it is one. */
   onSection?: (section: string) => void
   /**
+   * The bridge answered `consent_required`: a Tool from outside the space is
+   * about to act as the viewer for the first time. The host asks them with the
+   * sentence given; yes (after it is recorded) sends the call again, no answers
+   * the Tool with a refusal. Absent, the Tool is refused.
+   */
+  onConsent?: (sentence: string) => Promise<boolean>
+  /**
    * A host service the Tool called (`ui.*`) — a toast, a confirm, a download,
    * opening a record or a file. Answered by the page, never the server; absent,
    * every one is refused.
@@ -245,6 +252,7 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
     navigate,
     onRevoked,
     onSection,
+    onConsent,
     onHostCall,
     send = postBridge,
   } = options
@@ -282,6 +290,13 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
           : { ok: false, error: { code: 'invalid', message: `${method} is not available here.` } }
       } else {
         response = readResponse(await send({ target, method, params }))
+        // Asked once, and the call sent again once: a second refusal is the answer.
+        if (!response.ok && response.error.code === 'consent_required') {
+          const yes = onConsent ? await onConsent(response.error.message) : false
+          response = yes
+            ? readResponse(await send({ target, method, params }))
+            : { ok: false, error: { code: 'forbidden', message: 'The viewer did not let this tool act as them.' } }
+        }
       }
     } catch (cause) {
       response = { ok: false, error: relayError(cause) }

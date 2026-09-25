@@ -4,8 +4,10 @@ User-built mini-apps that run inside a Visvine space: a member (or a vibe-coding
 agent working on their behalf) authors a Tool as a note, it renders in the main
 content area over the space's own context, and publishing it makes it
 installable **in that space**. A Tool goes no further than the space that wrote
-it unless one of its admins deliberately submits it to the marketplace, where a
-Visvine super-admin reviews it before any other space can install it. This page is the author, operator and admin guide;
+it unless one of its admins deliberately asks Visvine to list it and its
+author co-signs; Visvine's review — an AI read and a dynamic run in a honeypot
+— then a super-admin decides before any other space can install it, from
+Discover → Tools. This page is the author, operator and admin guide;
 the design decisions it records were made in the Tools planning map (2026-08-18).
 
 **The quotable security property.** A Tool's UI runs in a sandboxed iframe on a
@@ -400,31 +402,43 @@ act with a second reviewer. That split is carried by two independent columns on
    or reject with a note the author reads. Approving flags every install **in
    this space** pinned to an older version with an offered upgrade; it never
    changes what is running anywhere. Rooms follow the house through `share:`.
-3. **List** (`submitToMarketplace`, `action: 'list'`; no console button since
-   the Build section was removed — API only) is the only thing that offers a Tool to other spaces, and it
-   is a space admin acting on a version their space has **already approved**.
-   It sets `marketplaceStatus: 'pending'`. `withdrawFromMarketplace`
-   (`action: 'unlist'`) takes it back out of the queue.
+3. **List** (`lib/tools/listings.ts#requestListing` — `submit_tool`, or
+   `action: 'list'` on `…/tools/versions/<id>`, or **List** on the Tool tab's
+   version row) is the only thing that offers a Tool to other spaces: a space
+   admin acting on a version their space has **already approved**. The author
+   must consent — **co-sign** under a license (`cosign_tool`, `action:
+   'cosign'`, **Co-sign** on the row they see) — which is automatic when the
+   admin asking wrote the version (the license then comes from the request or
+   the manifest's `license:`, and one is required). Only a co-signed request
+   sets `marketplaceStatus: 'pending'` and queues Visvine's **global stages**
+   ([Going global](#going-global)). `withdraw_tool` / `action: 'unlist'` takes a
+   request back — the admin or the author — and, for the author, a version
+   still waiting on their own space's admins.
 4. **Review** is a **Visvine super-admin** act (`isSuperAdmin`, env-driven —
    the one queue in the app that is not space-scoped), over `marketplaceStatus`
-   only. They see the declared perimeter, the release notes, and a code diff
+   only. They see the declared perimeter, the release notes, the code diff
    against the last **listed** version (`perimeterDiffForVersion(id,
-   'marketplace')`). Approving flags every install of an older version anywhere.
+   'marketplace')`), the co-signer and license, and every stage — the static
+   two and Visvine's two. **A version cannot be listed until its global stages
+   have run, nor when one blocked it** (`registry.ts#reviewVersion`). Approving
+   flags every install that follows the listing and runs an older version —
+   across a transfer, by the time it was published.
 
    **The one exception — trusted publishers.** `TOOLS_TRUSTED_PUBLISHERS` (env,
    comma-separated space ids) names spaces whose *re*-listings may skip the
-   queue: `submitToMarketplace` runs the pure `shouldAutoApprove` right after the
-   submission lands and, when the space is trusted **and** an earlier listed
-   version exists **and** the manifest diff against it is empty **and** the
-   version's security findings hold nothing medium or high, marks the listing
-   `approved` with `marketplaceReviewedBy: 'auto'`. The diff is
+   person: when the global stages finish (`lib/tools/review/run.ts`) the pure
+   `shouldAutoApprove` runs and, when the space is trusted **and** an earlier
+   listed version exists **and** the manifest diff against it is empty **and**
+   no stage — the security scan, the AI review, the dynamic run — found
+   anything medium or high, **and** the dynamic run actually ran, it lists the
+   version with `marketplaceReviewedBy: 'auto'`. The diff is
    `lib/tools/manifestDiff.ts#diffManifest` over `REVIEWED_FIELDS` — the five
    perimeter lists and every surface (rail, type claims, nav, band actions),
    order that means nothing aside. Whatever it cannot see a trusted publisher
    could widen unread, so `tests/tools-diff-coverage.test.ts` walks every key a
    parsed manifest carries and fails until each is reviewed or named
    descriptive, then widens each reviewed field alone and proves the fast path
-   refuses it. A first listing, any reviewed change, a flag from the scan, or
+   refuses it. A first listing, any reviewed change, a flag from any stage, or
    an untrusted space stays super-admin.
 5. **Install** (`install_tool` / `lib/tools/installs.ts#installVersion`, space
    admin only) pins the version, picks a free slug (`deals` → `deals-2` on a
@@ -444,6 +458,125 @@ act with a second reviewer. That split is carried by two independent columns on
    `installability`** rather than trusting the offer — a listing can be rejected
    between the flag and the click. This is the *only* way a space's Tool code
    ever changes — publishing a new version never touches an install by itself.
+
+### Going global
+
+A Tool its space approved is offered to every space in four acts, each
+someone's own (`lib/tools/listings.ts`; the rules are pure in
+`lib/tools/shared/listing.ts`):
+
+| Act | Who | Door |
+|---|---|---|
+| Ask Visvine to list a version | an admin of the space that wrote it | `submit_tool`, the version row's **List** |
+| Co-sign it, under a license | its author (automatic when the admin is the author) | `cosign_tool`, **Co-sign** |
+| Take a request back | that admin, or the author | `withdraw_tool`, **Cancel listing** |
+| Decide | a Visvine reviewer, after the global stages | Console → Tools → Tool review |
+
+`tools:list` is the scope for the first three over MCP: publishing a Tool to
+every space is a different act from editing one.
+
+**The listing is its own row** (`app_tool_listings`): an id that stays, the
+key it names now, the publisher space, the co-signing author, the license,
+Visvine's `verified` word on the publisher, when it was first listed and its
+stage. Every version offered under it and every install of one carries the
+id, so a listing can move.
+
+**Visvine's global stages** run once per co-signed request, queued in
+`app_tool_review_runs` and drained by the minute tick (a reviewer's **Run
+review** runs one now). Both land in `app_tool_check_runs` beside the static
+stages, as `ai` and `dynamic`:
+
+- **AI review** (`lib/tools/review/shared/aiReview.ts`): the deployment's chat
+  model reads the code against its description and its declared reach and
+  lists what they do not account for. It can only **add** a finding and never
+  block: whatever it says is at most `medium`. It fails open, and a dev server
+  spends no key on it unless `TOOLS_AI_REVIEW=on`.
+- **Dynamic run** (`lib/tools/review/`): a honeypot space made for the run,
+  seeded with **canaries** (`shared/canaries.ts#planHoneypot`) — in every folder
+  the Tool may read, one note every member can read and one only admins can,
+  records of the types it reads, and a **vault** outside everything it
+  declares. The version runs there through the bridge target `{ kind:
+  'review', runId }`, which resolves for the run's own system **runner**
+  account alone (a version waiting on Visvine can be installed nowhere), in a
+  browser: Playwright here (`runners.ts#localRunner`), a Visvine machine in
+  production — never a machine from a laptop, whose edge is production's.
+  The browser signs in with a two-minute review ticket
+  (`/api/tools/review-run/enter`). Every bridge call is recorded; a door out
+  of the space — a connector, an agent, an action, the AI — is **recorded and
+  never opened**; the CSP report sink and the host's navigation report feed
+  the same log. The scan (`scanEvidence`) **blocks** on any egress attempt,
+  CSP violation or navigation, an admins-only canary written where an
+  ordinary member can read it or kept in state every viewer shares, an
+  admins-only canary sent through a door, and a vault token anywhere; it
+  **flags** member-visible content sent through a declared door (what a sync
+  tool does). Then the honeypot is deleted. A runner that could not run says
+  so — `unavailable` is never reported clean, and it keeps the trusted fast
+  path shut.
+
+**Staged reach.** A publisher's first listing, and every listing from a
+publisher Visvine has not verified, may be installed in at most 25 spaces
+outside its family for its first 14 days, at half the bridge's per-viewer
+rate (`stagedUntil` / `stagedCap` on the row, read at install and on every
+bridge call). **Verified publisher** on the review panel lifts it.
+
+**Discover → Tools** (`lib/tools/directory.ts`, `/api/tools/directory`) is
+the directory: one card per listing, its About (facts, reach in words,
+egress, changes), its **Source** for anyone who administers a space, and the
+**global install sheet** — publisher · verified · reviewed · spaces ·
+license, the space to install into, what it can do with each binding's
+picker in its sentence (`lib/tools/shared/reachWords.ts`), settings and
+placement. Pressing Install is the consent. The directory answers Visvine's
+reviewers until `TOOLS_DIRECTORY=open` — monitoring (M8) has to be able to
+pull a listing back before every space browses it.
+
+**A Tool from outside the space** says so and asks:
+
+- a **provenance line** in its band — *From Acme Sales · reviewed by
+  Visvine*; the space's own Tools say nothing;
+- a **first-use notice** (`lib/tools/consents.ts`): before a listed Tool
+  first acts as a member — writes notes or records, calls a connector, runs an
+  agent or an action, uses the AI — the bridge answers `consent_required` with
+  one sentence (*Tally from Acme Sales will edit notes in deals/ as you.*), the
+  host asks, and **Continue** is kept in `app_tool_consents` with the acting
+  reach it covered. An upgrade that narrows is still covered; one that widens
+  asks again. A read-only Tool never asks.
+
+**Transfer.** The publisher's admins offer a listing to another space (the
+Tool tab's **Transfer**, `transfer_tool`); that space's admins accept it on
+Console → Tools → **Offered**, naming the Tool there that carries it on —
+usually an import of the listed version. The listing keeps its id, names the
+new key, and the next version the new publisher lists is offered to every
+install that follows it; `applyUpgrade` moves an install onto another key
+within its listing.
+
+### Packages
+
+A Tool travels as a `.vvtool` zip (`lib/tools/package/`):
+`visvine-tool.json` (the manifest: prose, surfaces, every fact), `README.md`
+(the docs), `CHANGELOG.md`, `LICENSE`, `icon.svg`, `src/ui.tsx`, further
+modules in `src/`, `src/data.js`, and `.visvine/CHECKSUMS` — SHA-256 per file.
+The same bytes always make the same zip.
+
+- **Export** — `export_tool`, the Tool tab's **Export**, `GET
+  …/tools/authoring/<name>/export` (a working copy, as the reader may see it)
+  and `GET /api/tools/registry/<id>/export` (a version, wherever its registry
+  detail is readable). Only a **listed** version's export is **signed**:
+  `.visvine/SIGNATURE`, Ed25519 over CHECKSUMS and the manifest, under the
+  deployment's key ring (`lib/crypto/signing.ts` — `TOOLS_SIGNING_KEY` and
+  `TOOLS_SIGNING_KEY_PREVIOUS`, or derived from `SECRETS_KEY` when unset), and
+  its manifest names the publisher and the registry number. Every other export
+  names no space. `GET /api/public/tool-signing-keys` publishes the public
+  keys. Each version stores its files' digests and the package digest.
+- **Import** — `import_tool`, `POST …/tools/import`: a new working copy the
+  importer authored, which meets every check when it is published. Refused:
+  a file changed, added or removed after CHECKSUMS was written, code outside
+  `src/` or minified, a `publisher` without a signature, a package over 2 MB
+  or 512 KB of source. Ignored: `fixtures/`, `node_modules/`, dotfiles, the
+  starter repo's own files. A signature that checks out only says who
+  published it; one that does not is imported as unsigned. A Tool's name is
+  unique across Visvine (it is its node's id), so a package whose name is
+  taken — by the space it came from, usually — is imported as the next free
+  one (`tally-2`) and says so. Versions, installs and state stay behind.
 
 ### Building in the app
 
@@ -968,9 +1101,15 @@ resolved against the installing space by `lib/tools/installs.ts#resolveTypeClaim
 | Approve a member's version (Console → Approvals) | Space admins (`isAdmin`) of the space that wrote it |
 | Withdraw an approved version | Space admins of the space that wrote it, or a Visvine reviewer |
 | Suspend / reinstate / remove a listing | Visvine **super-admins** |
-| Submit to / withdraw from the marketplace | Space admins (`isAdmin`) of the space that wrote it, on a version that space already approved |
+| Ask Visvine to list a version (`submit_tool`) | Space admins (`isAdmin`) of the space that wrote it, on a version that space already approved |
+| Co-sign a listing (`cosign_tool`) | The version's author — automatic when the admin asking is the author |
+| Withdraw a listing request (`withdraw_tool`) | That admin, or the author |
+| Transfer a listing (`transfer_tool`) | Offered by the publishing space's admins, accepted by the receiving space's |
+| Verify a publisher, run a review again | Visvine **super-admins** |
+| Export a Tool (`export_tool`) | Anyone who can read it — a working copy under their own visibility, a version wherever its registry detail is readable |
+| Import a package (`import_tool`) | Any member who could create a Tool there |
 | Install / upgrade / enable / uninstall / type claims | Space admins (`isAdmin`) |
-| Review a marketplace listing | Visvine **super-admins** only (`isSuperAdmin`, env-driven `SUPER_ADMIN_EMAILS`) — the one queue in the app that is not space-scoped. Exception: an unchanged-perimeter re-listing from a `TOOLS_TRUSTED_PUBLISHERS` space is auto-approved (`shouldAutoApprove`) |
+| Review a listing | Visvine **super-admins** only (`isSuperAdmin`, env-driven `SUPER_ADMIN_EMAILS`) — the one queue in the app that is not space-scoped — once its global stages have run and none blocked it. Exception: an unchanged-manifest re-listing from a `TOOLS_TRUSTED_PUBLISHERS` space whose every stage came back clean is auto-approved (`shouldAutoApprove`) |
 | Run a draft (preview) | Anyone who can read its index note, with the reach they and its authors share; non-authors press Run |
 
 This mirrors agents: member-writable brief, admin-gated activation.
@@ -1043,7 +1182,7 @@ show `frame-src 'self' https://tools.visvine.com`, not `frame-src 'self'`
 alone — the latter means the serving revision does not have the env var, which
 a redeploy fixes.
 
-### `TOOLS_SCREENSHOT` and `TOOLS_TRUSTED_PUBLISHERS`
+### `TOOLS_SCREENSHOT`, `TOOLS_TRUSTED_PUBLISHERS` and the global stages
 
 Both documented in `apps/web/.env.example`. `TOOLS_SCREENSHOT=on` lets a
 production deployment answer `preview_tool { screenshot }` / `check_tool
@@ -1053,6 +1192,15 @@ today, so the flag alone is not enough there); unset, production is link-only
 and dev is always on. `TOOLS_TRUSTED_PUBLISHERS=space_a,space_b` names the
 spaces whose unchanged-manifest, clean-scan re-listings are auto-approved (see
 the review step above); unset means every version is read by a person.
+
+The global stages ([Going global](#going-global)):
+
+| Env | Default | What |
+|---|---|---|
+| `TOOLS_AI_REVIEW` | on in production when `OPENROUTER_API_KEY` is set, off elsewhere | the AI review reads a version offered for listing |
+| `TOOLS_DYNAMIC_RUNNER` | production: a machine when the edge is configured, else Playwright; elsewhere Playwright | `local`, `machine` or `off` |
+| `TOOLS_DIRECTORY` | reviewers only | `open` lets every signed-in person browse Discover → Tools |
+| `TOOLS_SIGNING_KEY` / `TOOLS_SIGNING_KEY_PREVIOUS` | derived from `SECRETS_KEY` / `SECRETS_KEY_PREVIOUS` | the Ed25519 seed a listed version's export is signed under, and the retiring one that still verifies |
 
 ### Local dev
 
@@ -1128,6 +1276,11 @@ pnpm --filter @visvine/web verify:tools:desktop   # the hostile Tool in the real
 pnpm --filter @visvine/web verify:tools:bindings  # manifest 2: a Tool bound into a room that files deals in another folder under
                                                   # another type — install, bind_tool, the bridge v2 families, kit 2 in the
                                                   # browser beside a kit-1 Tool, share-down binding what the room has
+pnpm --filter @visvine/web verify:tools:global    # going global: a canary write-out blocks a listing in its dynamic run; a signed
+                                                  # export imported into another space, bound and run; a member installs from
+                                                  # Discover, sees the provenance line, answers the first-use notice; staged
+                                                  # reach at its cap; a transferred listing keeps offering upgrades. Needs the
+                                                  # dev server started with TOOLS_DIRECTORY=open; the AI review is scripted
 ```
 
 `verify:tools:escape`'s first step asks the running app for its
@@ -1163,12 +1316,18 @@ leaving the shared dev DB as they found it. The demo seed ships no Tools.
 dataRun,limits,state,requirements,registry,installs,origin,csp,frameToken,
 frameDocument,vendorBundle,sdkDocs,screenshot,changes,verdicts,draftAuthors,
 configReach,incidents,indexFacts,toolFacts,bindable,actionAllowlist,toolActions,
-toolResources,toolAi,catalog}.ts`, the pure contract in `packages/tool-protocol`
+toolResources,toolAi,catalog,listings,consents,directory,about}.ts`, the going-global
+rules `lib/tools/shared/{listing,reachWords}.ts`, packages `lib/tools/package/`
+(the pure layout in `shared/layout.ts`), the signing ring `lib/crypto/signing.ts`,
+Visvine's global stages `lib/tools/review/` (the pure halves in `shared/`), the pure contract in `packages/tool-protocol`
 (`protocol`, `perimeter`, `manifest`, `bindings`, `reach`, `dependencies`), the change bus `lib/notes/changes.ts`, runtime
 routes under `app/api/tools/runtime/*` (the report sink included) and
-`app/api/tools/{bridge,frame-token,changes,status,incidents}/route.ts`, REST
-routes under `app/api/tools/{registry,review}/*` and
-`app/api/spaces/[spaceId]/tools/*`, actions in `lib/actions/defs/apps.ts`
+`app/api/tools/{bridge,frame-token,changes,status,incidents,consent}/route.ts`,
+the review run's sign-in `app/api/tools/review-run/enter` and page
+`app/(auth)/tools/review/[runId]`, REST routes under
+`app/api/tools/{registry,review,directory}/*` and
+`app/api/spaces/[spaceId]/tools/*`, actions in `lib/actions/defs/apps.ts` and
+`lib/actions/defs/toolListings.ts`
 (their scopes declared there and read through `scopeForAction`), entity sync (`lib/notes/entities.ts`,
 `context/entityNodes.ts`), the `directory` gate + per-install rail keys
 (`lib/featureAccess.ts`), UI in `features/tools/*` (host `ToolFrame`, the

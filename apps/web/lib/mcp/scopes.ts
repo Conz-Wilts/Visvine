@@ -30,6 +30,7 @@ export const MCP_SCOPES = [
   'agents:admin',
   'tools:author',
   'tools:install',
+  'tools:list',
   'secrets:write',
   'vm:run',
 ] as const
@@ -56,6 +57,8 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
     'Build tools in your spaces — write their code, compile it, and publish it into the space for its admins to approve',
   'tools:install':
     'Install an approved tool into a space you administer, and manage the tools it runs',
+  'tools:list':
+    'Offer tools your spaces made to every space — ask Visvine to list one, co-sign the listing of one you wrote, withdraw a request, or move a listing to another space',
   'secrets:write':
     'Store and rotate connector credentials in spaces you administer — values are write-only and can never be read back, by this client or any other',
   'vm:run':

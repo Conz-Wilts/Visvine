@@ -27,7 +27,6 @@ import {
   publishTool,
   reviewSpaceVersion,
   reviewVersion,
-  submitToMarketplace,
   toolKey,
   versionHistory,
   previousApprovedVersion,
@@ -35,7 +34,6 @@ import {
   trustedPublishers,
   AUTO_APPROVE_NOTE,
   AUTO_REVIEWER,
-  withdrawFromMarketplace,
   withdrawVersion,
   type BrowseEntry,
   type BrowsePage,
@@ -369,8 +367,6 @@ test('the registry library exposes the marketplace lifecycle', () => {
     withdrawVersion,
     listSpaceApprovalQueue,
     reviewSpaceVersion,
-    submitToMarketplace,
-    withdrawFromMarketplace,
     listReviewQueue,
     reviewVersion,
     browseVersions,
@@ -426,6 +422,11 @@ test('the published shapes are what the routes and the space DTO carry', () => {
     previewUrl: null,
     revokedAt: null,
     revokeReason: null,
+    listingId: null,
+    listingState: 'none',
+    listingRequestedAt: null,
+    cosignedAt: null,
+    license: null,
   }
   const detail: ToolVersionDetail = { ...summary, config: decodeToolConfig({}, 'deal-pipeline'), indexSource: '', uiSource: '', dataSource: '', modules: {} }
   const entry: BrowseEntry = { ...summary, installs: 2 }

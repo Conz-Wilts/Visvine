@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -15,22 +15,26 @@ import { useJoinFlow } from '../hooks/useJoinFlow';
 import EventsBoard from './EventsBoard';
 import JoinRoleDialog from './JoinRoleDialog';
 import SpacesView from './SpacesView';
+import ToolsView, { directoryKey } from './ToolsView';
 import { SPACE_COLOR } from './SpaceTile';
+import { swrFetch } from '@/features/shared/lib/requestCache';
+import { fetchDirectory } from '@/features/tools/lib/client';
 
-export type DiscoverView = 'spaces' | 'events';
+export type DiscoverView = 'spaces' | 'events' | 'tools';
 
-const TABS: PaneTabItem[] = [
+const BASE_TABS: PaneTabItem[] = [
   { id: 'spaces', label: 'Spaces' },
   { id: 'events', label: 'Events' },
 ];
 
 function isDiscoverView(v: string | null): v is DiscoverView {
-  return v === 'spaces' || v === 'events';
+  return v === 'spaces' || v === 'events' || v === 'tools';
 }
 
 const PLACEHOLDER: Record<DiscoverView, string> = {
   spaces: 'Search open spaces…',
   events: 'Search events…',
+  tools: 'Search tools…',
 };
 
 const WHEN: Array<{ value: EventWhen; label: string }> = [
@@ -45,17 +49,30 @@ const FORMAT: Array<{ value: EventFormat; label: string }> = [
 ];
 
 /**
- * Discover: what is open to you beyond the spaces you are in. Two views on
- * the pane's tab bar and the URL (`?view=`), the way the Directory keeps its
- * tabs — Spaces, a grid of tiles narrowed by where and by sector; Events,
- * every public upcoming event as posters on one board. The Directory's own toolbar rides under the tabs:
- * the search, then the filters as words.
+ * Discover: what is open to you beyond the spaces you are in. Views on the
+ * pane's tab bar and the URL (`?view=`), the way the Directory keeps its tabs
+ * — Spaces, a grid of tiles narrowed by where and by sector; Events, every
+ * public upcoming event as posters on one board; Tools, every Tool Visvine
+ * lists, once the directory is open to this viewer. The Directory's own
+ * toolbar rides under the tabs: the search, then the filters as words.
  */
 export default function DiscoverPage() {
   const router = useSpaceRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const view: DiscoverView = isDiscoverView(params.get('view')) ? (params.get('view') as DiscoverView) : 'spaces';
+  // Tools stand here once the directory is open to this viewer: its first
+  // page is the probe, and the view reads the same cached answer.
+  const [toolsOpen, setToolsOpen] = useState(false);
+  useEffect(() => {
+    let live = true;
+    swrFetch(directoryKey(''), () => fetchDirectory(''), () => live && setToolsOpen(true)).catch(() => live && setToolsOpen(false));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const TABS = useMemo<PaneTabItem[]>(() => (toolsOpen ? [...BASE_TABS, { id: 'tools', label: 'Tools' }] : BASE_TABS), [toolsOpen]);
+  const requested = params.get('view');
+  const view: DiscoverView = isDiscoverView(requested) && (requested !== 'tools' || toolsOpen) ? requested : 'spaces';
 
   const setView = useCallback(
     (id: string) => {
@@ -100,10 +117,13 @@ export default function DiscoverPage() {
     next.delete(value);
     return next;
   };
-  const activeCount = countries.size + (view === 'spaces' ? sectors.size : 0) + (view === 'events' ? (when !== 'all' ? 1 : 0) + (format !== 'all' ? 1 : 0) : 0);
+  const activeCount =
+    view === 'tools'
+      ? 0
+      : countries.size + (view === 'spaces' ? sectors.size : 0) + (view === 'events' ? (when !== 'all' ? 1 : 0) + (format !== 'all' ? 1 : 0) : 0);
   const clearAll = () => { setCountries(new Set()); setSectors(new Set()); setWhen('all'); setFormat('all'); };
 
-  const ready = view === 'events' ? !eventsLoading : !spacesLoading;
+  const ready = view === 'events' ? !eventsLoading : view === 'tools' ? true : !spacesLoading;
 
   return (
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 112px)' }}>
@@ -120,7 +140,7 @@ export default function DiscoverPage() {
 
           <div className="hidden h-6 w-px shrink-0 bg-line-subtle sm:block" />
 
-          {countryOpts.length > 0 && (
+          {view !== 'tools' && countryOpts.length > 0 && (
             <FilterDropdown label="Where" options={countryOpts} selected={countries} onChange={setCountries} />
           )}
 
@@ -191,6 +211,7 @@ export default function DiscoverPage() {
               onJoin={join}
             />
           )}
+          {view === 'tools' && <ToolsView search={search} />}
           {view === 'events' && (
             <EventsBoard
               events={events}

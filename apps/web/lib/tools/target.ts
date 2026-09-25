@@ -57,6 +57,8 @@ import { parseManifestFacts, sdkMajorOf, settingValue, type ToolManifestFacts } 
 import { resolveReach, sourceBindings, type ToolReach } from '@visvine/tool-protocol/bindings'
 import { readToolFacts } from './toolFacts'
 import { unboundLabels } from './requirements'
+import { honeypotBindings } from './review/shared/canaries'
+import { isStaged } from './shared/listing'
 
 /** The stored shape `resolveBridgeTarget` needs off an install row. */
 interface InstallRow {
@@ -68,6 +70,7 @@ interface InstallRow {
   enabled: boolean
   requirements: unknown
   sharedFromSpaceId?: string | null
+  listingId?: string | null
   bindings?: unknown
   settings?: unknown
   version: {
@@ -104,13 +107,25 @@ export interface TargetDeps {
   /** Where the Tool's folder is — `tools/<name>` unless filed elsewhere. Absent: `tools/<name>`. */
   toolFolder?: (spaceId: string, name: string) => Promise<string>
   /** Visvine's hold over a listing. Absent: never held. */
-  listingHold?: (key: string) => Promise<ListingHold | null>
+  listingHold?: (ref: { listingId?: string | null; key: string }) => Promise<ListingHold | null>
   /** Who wrote a draft since its last approval. Absent: nobody but the viewer. */
   draftAuthorship?: (spaceId: string, name: string, folder: string) => Promise<DraftAuthorship>
   /** An author's principal in the space, or null when they are gone. */
   principalForUser?: (spaceId: string, userId: string) => Promise<ContextPrincipal | null>
   /** A working copy's facts row (toolFacts.ts). Absent: the index note alone. */
   readFacts?: (spaceId: string, name: string) => Promise<Record<string, unknown> | null>
+  /** A dynamic run and the version it runs (lib/tools/review). Absent: no review resolves. */
+  findReviewRun?: (runId: string) => Promise<ReviewRunRow | null>
+}
+
+/** The stored shape a review target needs off its run row. */
+interface ReviewRunRow {
+  id: string
+  status: string
+  honeypotSpaceId: string | null
+  runnerUserId: string | null
+  versionId: string
+  version: { name: string; title: string; key: string; config: unknown; perimeter: unknown; dataBundle: string }
 }
 
 const REAL_DEPS: TargetDeps = {
@@ -130,6 +145,18 @@ const REAL_DEPS: TargetDeps = {
   draftAuthorship,
   principalForUser,
   readFacts: readToolFacts,
+  findReviewRun: (runId) =>
+    prisma.appToolReviewRun.findUnique({
+      where: { id: runId },
+      select: {
+        id: true,
+        status: true,
+        honeypotSpaceId: true,
+        runnerUserId: true,
+        versionId: true,
+        version: { select: { name: true, title: true, key: true, config: true, perimeter: true, dataBundle: true } },
+      },
+    }),
 }
 
 /**
@@ -165,6 +192,15 @@ export interface ResolvedTarget {
    * wrote. Such a Tool calls a connector's named actions only, never code.
    */
   foreign?: boolean
+  /**
+   * Set under Visvine's dynamic run: every call is recorded against the run,
+   * and a door out of the space is recorded and never opened (bridge.ts).
+   */
+  review?: { runId: string }
+  /** The install's listing is still staged: its per-viewer bridge rate is halved. */
+  staged?: boolean
+  /** Who published it, for a Tool from outside the space — what its first-use notice names. */
+  publisher?: string | null
   config: ToolConfig
   /** Compiled `data.js`, or '' when the Tool has none (or has not compiled). */
   dataBundle: string
@@ -310,6 +346,7 @@ function degradedOfRequirements(raw: unknown): ToolDegraded | null {
  * so two previews in one space cannot read each other's state.
  */
 export function targetKey(t: ResolvedTarget): string {
+  if (t.review) return `review:${t.review.runId}`
   return t.installId ?? `preview:${t.spaceId}/${t.config.name}`
 }
 
@@ -333,6 +370,7 @@ export async function resolveBridgeTarget(
   const kind = (target as { kind?: unknown }).kind
   if (kind === 'install') return resolveInstall(session, target as Extract<BridgeTarget, { kind: 'install' }>, deps)
   if (kind === 'preview') return resolvePreview(session, target as Extract<BridgeTarget, { kind: 'preview' }>, deps)
+  if (kind === 'review') return resolveReview(session, target as Extract<BridgeTarget, { kind: 'review' }>, deps)
   return fail('invalid', 'Unknown tool target.')
 }
 
@@ -378,7 +416,9 @@ async function resolveInstall(
   // Visvine. Read on every call, so a pulled version stops at its next one.
   const sourceSpaceId = install.version.sourceSpaceId ?? install.spaceId
   const listing =
-    sourceSpaceId !== install.spaceId && deps.listingHold ? await deps.listingHold(install.key) : null
+    sourceSpaceId !== install.spaceId && deps.listingHold
+      ? await deps.listingHold({ listingId: install.listingId ?? null, key: install.key })
+      : null
   const denial = runDenial({
     version: { revokedAt: install.version.revokedAt ?? null, revokeReason: install.version.revokeReason ?? null },
     listing,
@@ -406,6 +446,8 @@ async function resolveInstall(
     reach: bound.reach,
     settings,
     foreign: sourceSpaceId !== install.spaceId && !install.sharedFromSpaceId,
+    staged: !install.sharedFromSpaceId && isStaged(listing ? { stagedUntil: listing.stagedUntil ?? null } : null, new Date()),
+    publisher: listing?.publisher ?? null,
     config,
     dataBundle: install.version.dataBundle,
     installId: install.id,
@@ -494,6 +536,51 @@ async function resolvePreview(
     // sees the real failures instead of a banner.
     degraded: null,
     install: { preview: true, name, settings, bindings, sdk: sdkMajorOf(facts.sdk) },
+    isAdmin: resolved.isAdmin,
+    subject: null,
+  }
+}
+
+/**
+ * A version under Visvine's dynamic run (lib/tools/review). Resolves for the
+ * review runner alone, in the run's own honeypot, while the run runs — a
+ * version waiting on Visvine can be installed nowhere, so this is the one
+ * door it runs through. It runs as it would for any space that installed it:
+ * from outside, bound to its suggestions, with the settings' defaults.
+ */
+async function resolveReview(
+  session: SessionPayload,
+  target: { runId?: unknown },
+  deps: TargetDeps,
+): Promise<ResolvedTarget | BridgeError> {
+  if (typeof target.runId !== 'string' || !target.runId) return fail('invalid', 'No review named in this request.')
+  const run = deps.findReviewRun ? await deps.findReviewRun(target.runId) : null
+  if (!run || run.status !== 'running' || !run.honeypotSpaceId || run.runnerUserId !== session.userId) {
+    return fail('not_found', 'Nothing is running here.')
+  }
+  const resolved = await deps.resolveContext(session, run.honeypotSpaceId)
+  if (resolved instanceof Response) return fromResponse(resolved)
+  const parsed = parseToolPerimeter(run.version.perimeter)
+  const config = configOfJson(run.version.config, run.version.name, parsed.ok ? parsed.perimeter : EMPTY_PERIMETER)
+  const facts = manifestOf(config)
+  const bindings = honeypotBindings(facts)
+  const bound = resolveReach(facts, bindings)
+  const settings = settingsWithDefaults(facts, {})
+  return {
+    spaceId: run.honeypotSpaceId,
+    principal: await deps.principalOf(resolved),
+    context: { spaceId: run.honeypotSpaceId, ownerKey: SHARED_OWNER_KEY },
+    perimeter: perimeterOfReach(bound.reach),
+    reach: bound.reach,
+    settings,
+    foreign: true,
+    review: { runId: run.id },
+    config,
+    dataBundle: run.version.dataBundle,
+    installId: null,
+    versionId: run.versionId,
+    degraded: null,
+    install: { slug: 'review', title: config.title, key: run.version.key, settings, bindings, sdk: sdkMajorOf(facts.sdk) },
     isAdmin: resolved.isAdmin,
     subject: null,
   }

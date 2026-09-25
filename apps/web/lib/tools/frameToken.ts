@@ -30,12 +30,14 @@ interface FrameTokenBase {
 }
 
 /**
- * What the frame is allowed to load: an installed Tool's pinned version, or an
- * author's working copy while they are building it.
+ * What the frame is allowed to load: an installed Tool's pinned version, an
+ * author's working copy while they are building it, or a version under
+ * Visvine's dynamic run in its honeypot (lib/tools/review).
  */
 export type FrameTokenPayload =
   | (FrameTokenBase & { kind: 'install'; installId: string })
   | (FrameTokenBase & { kind: 'preview'; name: string })
+  | (FrameTokenBase & { kind: 'review'; runId: string })
 
 function getSecret(): Uint8Array {
   // Mirrors lib/session.ts#getSecret — same key, same minimum entropy. Kept
@@ -84,13 +86,16 @@ export async function verifyFrameToken(
       audience: FRAME_TOKEN_AUDIENCE,
       ...(opts.toleranceSec ? { clockTolerance: opts.toleranceSec } : {}),
     })
-    const { kind, viewerId, spaceId, installId, name } = payload as Record<string, unknown>
+    const { kind, viewerId, spaceId, installId, name, runId } = payload as Record<string, unknown>
     if (!isNonEmptyString(viewerId) || !isNonEmptyString(spaceId)) return null
     if (kind === 'install' && isNonEmptyString(installId)) {
       return { kind: 'install', viewerId, spaceId, installId }
     }
     if (kind === 'preview' && isNonEmptyString(name)) {
       return { kind: 'preview', viewerId, spaceId, name }
+    }
+    if (kind === 'review' && isNonEmptyString(runId)) {
+      return { kind: 'review', viewerId, spaceId, runId }
     }
     return null
   } catch {

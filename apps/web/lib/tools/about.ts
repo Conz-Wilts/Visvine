@@ -34,6 +34,12 @@ export interface ToolAbout {
   status: ToolVersionStatus
   listed: boolean
   listing: ListingState | null
+  /** The license it was listed under, when it was. */
+  license: string | null
+  /** Visvine's word that its publisher is who they say they are. */
+  verified: boolean
+  /** When Visvine reviewed the version it runs. */
+  reviewedAt: string | null
   /** Why it no longer runs, when it was pulled back. */
   stopped: string | null
 }
@@ -46,6 +52,7 @@ export async function aboutInstall(spaceId: string, installId: string): Promise<
       key: true,
       spaceId: true,
       sharedFromSpaceId: true,
+      listingId: true,
       version: {
         select: {
           name: true,
@@ -61,6 +68,8 @@ export async function aboutInstall(spaceId: string, installId: string): Promise<
           perimeter: true,
           revokedAt: true,
           revokeReason: true,
+          license: true,
+          marketplaceReviewedAt: true,
           author: { select: { name: true } },
         },
       },
@@ -72,8 +81,11 @@ export async function aboutInstall(spaceId: string, installId: string): Promise<
   const config = decodeToolConfig(v.config, v.name)
   const here = v.sourceSpaceId === spaceId
   const [installs, listing, source] = await Promise.all([
-    prisma.appToolInstall.count({ where: { key: install.key } }),
-    prisma.appToolListing.findUnique({ where: { key: install.key }, select: { state: true, stateReason: true } }),
+    prisma.appToolInstall.count({ where: install.listingId ? { listingId: install.listingId } : { key: install.key } }),
+    prisma.appToolListing.findFirst({
+      where: install.listingId ? { id: install.listingId } : { key: install.key },
+      select: { state: true, stateReason: true, verified: true, license: true },
+    }),
     // A publisher outside this space is named only when its Tool is listed —
     // listing is the publisher's own choice to be seen.
     here || v.marketplaceStatus === 'approved'
@@ -96,6 +108,9 @@ export async function aboutInstall(spaceId: string, installId: string): Promise<
     status: decodeVersionStatus(v.status),
     listed: v.marketplaceStatus === 'approved',
     listing: hold?.state ?? null,
+    license: v.license ?? listing?.license ?? null,
+    verified: listing?.verified ?? false,
+    reviewedAt: v.marketplaceStatus === 'approved' ? (v.marketplaceReviewedAt?.toISOString() ?? null) : null,
     stopped:
       runDenial({
         version: { revokedAt: v.revokedAt, revokeReason: v.revokeReason },

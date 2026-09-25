@@ -9,7 +9,7 @@ import type { BindingSlot, SettingSpec } from '@visvine/tool-protocol/manifest';
  * the value it holds now and — for a folder — the Tool's suggestion, since a
  * Tool's first write may be what makes the folder.
  */
-function optionsFor(slot: BindingSlot, space: BindableSpace | null, current: string | undefined): string[] {
+function slotOptions(slot: BindingSlot, space: BindableSpace | null, current: string | undefined): string[] {
   const choices = space ? bindingChoices(slot, space) : [];
   const extra = [current, slot.kind === 'folder' ? slot.suggest : undefined]
     .filter((v): v is string => !!v?.trim())
@@ -66,6 +66,43 @@ function settingInput(
   );
 }
 
+/** One slot's picker: what this space has of its kind, or none for an optional slot. */
+export function SlotSelect({
+  name,
+  slot,
+  value,
+  space,
+  onChange,
+  disabled,
+  className = 'w-48',
+}: {
+  name: string;
+  slot: BindingSlot;
+  value: string | undefined;
+  space: BindableSpace | null;
+  onChange: (next: string | undefined) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const options = slotOptions(slot, space, value);
+  return (
+    <Select
+      className={className}
+      aria-label={slot.label || name}
+      value={value ?? ''}
+      disabled={disabled || !space}
+      onChange={(e) => onChange(e.target.value || undefined)}
+    >
+      {(slot.optional || !value) && <option value="">—</option>}
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {slot.kind === 'folder' ? `${option}/` : option}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
 /**
  * A Tool's binding slots as pickers and its settings as fields — on the
  * install sheet and on an installed Tool. Rows name; the pickers say the rest.
@@ -102,29 +139,22 @@ export default function BindingFields({
     <div className="flex flex-col gap-3">
       {slotRows.length > 0 && heading('Bindings')}
       {slotRows.map(([name, slot]) => {
-        const current = bindings[name];
-        const options = optionsFor(slot, space, current);
         return (
           <label key={`slot:${name}`} className="flex items-center justify-between gap-4">
             <span className="text-fg">{slot.label}</span>
-            <Select
-              className="w-48"
-              value={current ?? ''}
-              disabled={disabled || !space}
-              onChange={(e) => {
+            <SlotSelect
+              name={name}
+              slot={slot}
+              value={bindings[name]}
+              space={space}
+              disabled={disabled}
+              onChange={(value) => {
                 const next = { ...bindings };
-                if (e.target.value) next[name] = e.target.value;
+                if (value) next[name] = value;
                 else delete next[name];
                 onBindings(next);
               }}
-            >
-              {(slot.optional || !current) && <option value="">—</option>}
-              {options.map((option) => (
-                <option key={option} value={option}>
-                  {slot.kind === 'folder' ? `${option}/` : option}
-                </option>
-              ))}
-            </Select>
+            />
           </label>
         );
       })}

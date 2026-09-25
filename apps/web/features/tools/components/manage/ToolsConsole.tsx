@@ -16,10 +16,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ToastHost, useToasts, type ToastTone } from '@visvine/ui';
+import { Button, Input, ToastHost, useToasts, type ToastTone } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { fetchApprovalQueue, fetchInstalls } from '@/features/tools/lib/client';
-import type { ApprovalQueueItem, InstallSummary } from '@/lib/tools/api';
+import { fetchApprovalQueue, fetchInstalls, fetchSpaceListings, moveListing } from '@/features/tools/lib/client';
+import type { ApprovalQueueItem, InstallSummary, SpaceListingsResponse } from '@/lib/tools/api';
 import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import ApprovalsTab from './ApprovalsTab';
 import InstalledTab from './InstalledTab';
@@ -189,5 +189,78 @@ export function ToolApprovalsPanel({
       />
       <ToastHost toasts={toasts} onDismiss={dismiss} />
     </>
+  );
+}
+
+/**
+ * Listings another space offered to this one. Accepting names the Tool here
+ * that carries the listing on — import the listed version first — and from
+ * then on this space publishes it; every install keeps its upgrades.
+ * Nothing offered is nothing drawn.
+ */
+export function ListingOffersPanel() {
+  const { currentSpace } = useSpace();
+  const spaceId = currentSpace?.id ?? null;
+  const { toasts, toast, dismiss } = usePanelToasts();
+  const [offers, setOffers] = useState<SpaceListingsResponse['offers']>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+
+  useEffect(() => {
+    if (!spaceId) return;
+    const ctl = new AbortController();
+    fetchSpaceListings(spaceId, ctl.signal)
+      .then((res) => setOffers(res.offers))
+      .catch(() => setOffers([]));
+    return () => ctl.abort();
+  }, [spaceId, nonce]);
+
+  if (!spaceId || offers.length === 0) return <ToastHost toasts={toasts} onDismiss={dismiss} />;
+
+  const answer = async (listingId: string, accept: boolean, fallback: string) => {
+    setBusy(listingId);
+    try {
+      await moveListing(spaceId, accept ? { action: 'accept', listingId, name: names[listingId]?.trim() || fallback } : { action: 'decline', listingId });
+      toast('success', accept ? 'This space publishes it now' : 'Declined');
+      setNonce((n) => n + 1);
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : 'Could not answer');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="border-t border-line-subtle py-5">
+      <h2 className="pb-3 text-sm font-semibold text-fg">Offered</h2>
+      <ul className="flex flex-col divide-y divide-line-subtle">
+        {offers.map((offer) => {
+          const fallback = offer.key.slice(offer.key.indexOf('/') + 1);
+          return (
+            <li key={offer.listingId} className="flex flex-wrap items-center gap-3 py-3">
+              <span className="min-w-0 flex-1 truncate text-sm text-fg">
+                {offer.title}
+                <span className="text-fg-muted"> · from {offer.from.name ?? offer.from.id}</span>
+              </span>
+              <Input
+                className="w-40"
+                aria-label="Tool here"
+                placeholder={fallback}
+                value={names[offer.listingId] ?? ''}
+                onChange={(e) => setNames((all) => ({ ...all, [offer.listingId]: e.target.value }))}
+              />
+              <Button size="sm" variant="ghost" disabled={busy === offer.listingId} onClick={() => void answer(offer.listingId, false, fallback)}>
+                Decline
+              </Button>
+              <Button size="sm" variant="brand" loading={busy === offer.listingId} onClick={() => void answer(offer.listingId, true, fallback)}>
+                Accept
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
+      <ToastHost toasts={toasts} onDismiss={dismiss} />
+    </section>
   );
 }

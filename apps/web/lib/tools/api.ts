@@ -22,6 +22,7 @@ import type { CheckReport } from './checks/findings'
 import type { BuilderReadiness } from './builder'
 import type { ChatMessageDto } from '@/lib/agents/shared/chat'
 import type { StoredReport } from './checks/runs'
+import type { ListingAbout, ListingCard } from './directory'
 
 export type { InstallSummary } from './installs'
 export type { ToolVersionSummary } from './registry'
@@ -116,12 +117,24 @@ export interface ListingResponse {
 
 // ── review (super-admin) ─────────────────────────────────────────────────────
 
+/** Visvine's review of a version offered for listing: the AI read and the dynamic run (lib/tools/review). */
+interface ReviewRunSummary {
+  status: string
+  runner: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  error: string | null
+}
+
 /** A queue row: the submission, and what it wants that the last one didn't. */
 export interface ReviewQueueItem extends ToolVersionSummary {
   perimeterDiff: PerimeterDiff
   previousVersion: { id: string; version: number } | null
-  /** The checks it was published with; null for a version published before there were any. */
+  /** The checks it was published with — and Visvine's two, once they ran. */
   checks: CheckReport | null
+  review: ReviewRunSummary | null
+  /** The listing it goes out under: who co-signed, and whether its publisher is verified. */
+  listing: { id: string; verified: boolean; cosignedBy: string | null } | null
 }
 
 export interface ReviewQueueResponse {
@@ -141,6 +154,10 @@ export interface ReviewDetailResponse {
   version: VersionDetail
   /** Null for a first submission — the diff is then against nothing. */
   previous: VersionSources | null
+  /** Visvine's review of it, when one ran or waits. */
+  review: ReviewRunSummary | null
+  /** The listing it goes out under, and who co-signed it. */
+  listing: { id: string; verified: boolean; cosigner: string | null } | null
 }
 
 export interface ReviewDecisionResponse {
@@ -246,4 +263,56 @@ export interface BuilderResponse {
 /** What running the checks on a working copy answers with. */
 export interface CheckResponse {
   checks: StoredReport & { stale: boolean }
+}
+
+// ── the directory (Discover → Tools) ─────────────────────────────────────────
+
+export interface DirectoryResponse {
+  items: ListingCard[]
+  nextCursor: string | null
+}
+
+/** A space the viewer could install a listing into, and why not when they cannot. */
+export interface InstallTargetSpace {
+  id: string
+  name: string
+  installed: boolean
+  refusal: string | null
+}
+
+export interface ListingAboutResponse {
+  about: ListingAbout
+  spaces: InstallTargetSpace[]
+}
+
+export interface ListingSourceResponse {
+  versionId: string
+  files: Record<string, string>
+}
+
+/** A listing this space publishes, or one offered to it. */
+export interface SpaceListing {
+  listingId: string
+  key: string
+  title: string
+  verified: boolean
+  installs: number
+  /** Offered to another space and waiting on it. */
+  transferTo: { id: string; name: string | null } | null
+}
+
+export interface SpaceListingsResponse {
+  listings: SpaceListing[]
+  /** Listings another space offered to this one. */
+  offers: Array<{ listingId: string; key: string; title: string; from: { id: string; name: string | null } }>
+}
+
+export interface ImportResponse {
+  name: string
+  renamedFrom: string | null
+  provenance: { publisher: string; release: string | null; version: number | null } | null
+  unverifiedSignature: boolean
+  ignored: string[]
+  buildOk: boolean
+  problems: string[]
 }

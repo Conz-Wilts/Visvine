@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
 import { z } from 'zod'
 import { parseBody } from '@/lib/api/route'
 import { isSuperAdmin, requireSession, type SessionPayload } from '@/lib/session'
@@ -13,6 +14,8 @@ import {
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
 import { versionReports } from '@/lib/tools/checks/runs'
 import { revokeVersion, setListingState } from '@/lib/tools/verdicts'
+import { setListingVerified } from '@/lib/tools/listings'
+import { runReviewNow } from '@/lib/tools/review/run'
 import type {
   ReviewDecisionResponse,
   ReviewDetailResponse,
@@ -51,12 +54,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
   const version = await getVersion(versionId)
   if (!version) return NextResponse.json({ error: 'No such tool version.' }, { status: 404 })
 
-  const [diff, history, previous, reports] = await Promise.all([
+  const [diff, history, previous, reports, run, listed] = await Promise.all([
     perimeterDiffForVersion(versionId),
     versionHistory(version.key),
     previousApprovedVersion(version.key, version.version),
     versionReports([versionId]),
+    prisma.appToolReviewRun.findFirst({
+      where: { versionId },
+      orderBy: { createdAt: 'desc' },
+      select: { status: true, runner: true, startedAt: true, finishedAt: true, error: true },
+    }),
+    prisma.appToolVersion.findUnique({
+      where: { id: versionId },
+      select: { cosignedBy: true, listing: { select: { id: true, verified: true } } },
+    }),
   ])
+  const cosigner = listed?.cosignedBy
+    ? await prisma.user.findUnique({ where: { id: listed.cosignedBy }, select: { name: true } })
+    : null
 
   const detail: VersionDetail = {
     ...version,
@@ -82,7 +97,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
       }
     : null
 
-  const body: ReviewDetailResponse = { version: detail, previous: before }
+  const body: ReviewDetailResponse = {
+    version: detail,
+    previous: before,
+    review: run
+      ? {
+          status: run.status,
+          runner: run.runner,
+          startedAt: run.startedAt?.toISOString() ?? null,
+          finishedAt: run.finishedAt?.toISOString() ?? null,
+          error: run.error,
+        }
+      : null,
+    listing: listed?.listing ? { id: listed.listing.id, verified: listed.listing.verified, cosigner: cosigner?.name ?? null } : null,
+  }
   return NextResponse.json(body)
 }
 
@@ -95,6 +123,9 @@ const decisionSchema = z.union([
   // suspended, reinstated or removed for good, or one version withdrawn.
   z.object({ hold: z.enum(['suspended', 'active', 'revoked']), reason: z.string().max(500).optional() }),
   z.object({ revoke: z.literal(true), reason: z.string().max(500).optional() }),
+  // Visvine's own stages, run again now; and its word on the publisher.
+  z.object({ rerun: z.literal(true) }),
+  z.object({ verified: z.boolean() }),
 ])
 
 /**
@@ -113,6 +144,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ver
   if (body instanceof NextResponse) return body
 
   const reviewer = { userId: session.userId, email: session.email }
+  if ('rerun' in body) {
+    const status = await runReviewNow(versionId)
+    return NextResponse.json({ ok: status !== 'error', status })
+  }
+  if ('verified' in body) {
+    const version = await getVersion(versionId)
+    if (!version?.listingId) return NextResponse.json({ error: 'This version has no listing.' }, { status: 404 })
+    const set = await setListingVerified(version.listingId, reviewer, body.verified)
+    if (!set.ok) return NextResponse.json({ error: set.error }, { status: set.status })
+    return NextResponse.json({ ok: true })
+  }
   if ('revoke' in body) {
     const pulled = await revokeVersion(versionId, reviewer, body.reason ?? null)
     if (!pulled.ok) return NextResponse.json({ error: pulled.error }, { status: pulled.status })

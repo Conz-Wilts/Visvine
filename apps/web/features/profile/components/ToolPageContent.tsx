@@ -31,7 +31,8 @@ import { useSpaceHref } from '@/features/shared/contexts/SpaceContext';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from '@/features/shared/components/SpaceLink';
-import { CheckIcon, CopyIcon, ExternalLinkIcon, TriangleAlertIcon, UploadIcon } from '@/features/shared/icons';
+import { CheckIcon, CopyIcon, DownloadIcon, ExternalLinkIcon, TriangleAlertIcon, UploadIcon } from '@/features/shared/icons';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { ConfirmDialog, Skeleton } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import ShareWithRooms, { type ShareValue } from '@/features/shared/components/ShareWithRooms';
@@ -51,7 +52,9 @@ import BuildDiagnostics from '@/features/tools/components/BuildDiagnostics';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import InstallSheet from '@/features/tools/components/InstallSheet';
 import { TONE_CHIP, TONE_CLASSES, type Tone } from '@/features/shared/lib/statusTone';
-import { fetchAuthoredTool, revokeToolVersion, runToolChecks } from '@/features/tools/lib/client';
+import { fetchAuthoredTool, listingAction, revokeToolVersion, runToolChecks, workingCopyExportUrl } from '@/features/tools/lib/client';
+import ListingDialog from '@/features/tools/components/ListingDialog';
+import TransferDialog from '@/features/tools/components/TransferDialog';
 import CheckReport, { checkWord } from '@/features/tools/components/CheckReport';
 import PublishDialog from '@/features/tools/components/PublishDialog';
 import type { CheckReport as CheckReportData } from '@/lib/tools/checks/findings';
@@ -138,6 +141,16 @@ const VERSION_TONES: Record<ToolVersionSummary['status'], Tone> = {
   withdrawn: 'warn',
 };
 
+/** Where a version's global listing stands, as its chip — nothing when it was never offered. */
+const LISTING_CHIP: Partial<Record<ToolVersionSummary['listingState'], { word: string; tone: Tone }>> = {
+  awaiting_cosign: { word: 'co-sign', tone: 'warn' },
+  in_review: { word: 'with Visvine', tone: 'warn' },
+  listed: { word: 'listed', tone: 'ok' },
+  rejected: { word: 'not listed', tone: 'bad' },
+};
+
+const TRAIL_BUTTON = 'shrink-0 text-fg-muted transition-colors hover:text-fg';
+
 /**
  * The publication trail: every version ever snapshotted off this working copy,
  * newest first. A rejection keeps its reviewer note — that note is the whole
@@ -147,12 +160,21 @@ function VersionTrail({
   versions,
   checks,
   onWithdraw,
+  listing,
 }: {
   versions: ToolVersionSummary[];
   /** The checks each version was published with. */
   checks: Record<string, CheckReportData>;
   /** An admin of this space may pull an approved version back. */
   onWithdraw?: (version: ToolVersionSummary) => void;
+  /** Going global: who may list, co-sign or take a request back, and what pressing does. */
+  listing: {
+    viewerId: string | null;
+    isAdmin: boolean;
+    onList: (version: ToolVersionSummary) => void;
+    onCosign: (version: ToolVersionSummary) => void;
+    onUnlist: (version: ToolVersionSummary) => void;
+  };
 }) {
   return (
     <ul className="flex flex-col divide-y divide-line-subtle">
@@ -167,7 +189,31 @@ function VersionTrail({
               {version.author.name ?? 'someone'} · {timeAgo(new Date(version.submittedAt).getTime(), { style: 'short' })}
               {checkWord(checks[version.id]) ? ` · ${checkWord(checks[version.id])}` : ''}
             </span>
+            {LISTING_CHIP[version.listingState] && (
+              <span className={`${TONE_CHIP} ${TONE_CLASSES[LISTING_CHIP[version.listingState]!.tone]}`}>
+                {LISTING_CHIP[version.listingState]!.word}
+              </span>
+            )}
             <span className="ml-auto shrink-0 font-mono text-fg-muted">{fmtBytes(version.sizeBytes)}</span>
+            {listing.isAdmin &&
+              version.status === 'approved' &&
+              !version.revokedAt &&
+              ['none', 'withdrawn', 'rejected'].includes(version.listingState) && (
+                <button type="button" onClick={() => listing.onList(version)} className={TRAIL_BUTTON}>
+                  List
+                </button>
+              )}
+            {version.listingState === 'awaiting_cosign' && version.author.userId === listing.viewerId && (
+              <button type="button" onClick={() => listing.onCosign(version)} className={TRAIL_BUTTON}>
+                Co-sign
+              </button>
+            )}
+            {(version.listingState === 'awaiting_cosign' || version.listingState === 'in_review') &&
+              (listing.isAdmin || version.author.userId === listing.viewerId) && (
+                <button type="button" onClick={() => listing.onUnlist(version)} className={TRAIL_BUTTON}>
+                  Cancel listing
+                </button>
+              )}
             {onWithdraw && version.status === 'approved' && !version.revokedAt && (
               <button
                 type="button"
@@ -271,6 +317,9 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const [withdrawing, setWithdrawing] = useState<ToolVersionSummary | null>(null);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
+  const [listing, setListing] = useState<{ version: ToolVersionSummary; mode: 'list' | 'cosign' } | null>(null);
+  const [transferring, setTransferring] = useState<string | null>(null);
+  const { user } = useAuth();
   const [copied, copy] = useCopied(2000);
   const spaceHref = useSpaceHref();
 
@@ -358,6 +407,8 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   // The newest version this space approved and still stands behind: what an
   // admin installs when the Tool is not yet running here.
   const installable = versions.find((version) => version.status === 'approved' && !version.revokedAt) ?? null;
+  // The newest version Visvine lists — what a transfer moves.
+  const listedVersion = versions.find((version) => version.listingState === 'listed') ?? null;
 
   return (
     <div className="profile-content-fade flex flex-col">
@@ -375,6 +426,12 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
             <ExternalLinkIcon className="h-3.5 w-3.5" />
             {view.canEdit ? 'Edit' : 'Preview'}
           </Link>
+          {spaceId && (
+            <a href={workingCopyExportUrl(spaceId, tool.name)} download className={HEADER_BUTTON}>
+              <DownloadIcon className="h-3.5 w-3.5" />
+              Export
+            </a>
+          )}
           <button type="button" onClick={copyMcpHint} className={HEADER_BUTTON}>
             {copied ? <CheckIcon className="h-3.5 w-3.5 text-accent-strong" /> : <CopyIcon className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy MCP hint'}
@@ -596,9 +653,58 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
         <Section
           title="Versions"
           meta={pending ? `v${pending.version} waiting` : `${versions.length} version${versions.length === 1 ? '' : 's'}`}
+          action={
+            isAdmin && listedVersion?.listingId ? (
+              <button type="button" onClick={() => setTransferring(listedVersion.listingId)} className={HEADER_BUTTON}>
+                Transfer
+              </button>
+            ) : undefined
+          }
         >
-          <VersionTrail versions={versions} checks={view.versionChecks} onWithdraw={isAdmin ? setWithdrawing : undefined} />
+          <VersionTrail
+            versions={versions}
+            checks={view.versionChecks}
+            onWithdraw={isAdmin ? setWithdrawing : undefined}
+            listing={{
+              viewerId: user?.id ?? null,
+              isAdmin,
+              onList: (version) => setListing({ version, mode: 'list' }),
+              onCosign: (version) => setListing({ version, mode: 'cosign' }),
+              onUnlist: async (version) => {
+                if (!spaceId) return;
+                try {
+                  await listingAction(spaceId, version.id, { action: 'unlist' });
+                  setNotice(`v${version.version} is no longer offered for listing`);
+                  void reload();
+                } catch (e) {
+                  setNotice(e instanceof Error ? e.message : 'Could not withdraw it');
+                }
+              },
+            }}
+          />
         </Section>
+      )}
+
+      {listing && spaceId && (
+        <ListingDialog
+          spaceId={spaceId}
+          version={listing.version}
+          mode={listing.mode}
+          selfSigned={listing.version.author.userId === user?.id}
+          onClose={() => setListing(null)}
+          onDone={(message) => {
+            setListing(null);
+            setNotice(message);
+            void reload();
+          }}
+        />
+      )}
+
+      {transferring && spaceId && (
+        <TransferDialog spaceId={spaceId} listingId={transferring} onClose={() => setTransferring(null)} onDone={(message) => {
+          setTransferring(null);
+          setNotice(message);
+        }} />
       )}
 
       {installing && spaceId && (

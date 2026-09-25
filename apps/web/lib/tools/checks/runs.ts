@@ -8,6 +8,7 @@ import prisma from '@/lib/prisma'
 import {
   CHECK_STAGES,
   decodeFindings,
+  GLOBAL_STAGES,
   STAGE_STATUSES,
   type CheckReport,
   type CheckTrigger,
@@ -58,6 +59,33 @@ export async function recordReport(input: {
   }
 }
 
+/**
+ * One of Visvine's global stages (`ai`, `dynamic`) over a version offered for
+ * listing. Read beside the version's own report; a later run replaces it.
+ */
+export async function recordGlobalStage(input: {
+  spaceId: string | null
+  name: string
+  versionId: string
+  sourceHash: string
+  result: StageResult
+}): Promise<void> {
+  await prisma.appToolCheckRun.create({
+    data: {
+      spaceId: input.spaceId,
+      name: input.name,
+      versionId: input.versionId,
+      sourceHash: input.sourceHash,
+      stage: input.result.stage,
+      status: input.result.status,
+      trigger: 'review',
+      findings: input.result.findings as unknown as Prisma.InputJsonValue,
+      analyzer: input.result.analyzer,
+      durationMs: input.result.durationMs,
+    },
+  })
+}
+
 type Row = {
   stage: string
   status: string
@@ -94,7 +122,7 @@ function decodeRisk(raw: Prisma.JsonValue | null): RiskScore | undefined {
 }
 
 function toStage(row: Row): StageResult | null {
-  if (!(CHECK_STAGES as readonly string[]).includes(row.stage)) return null
+  if (![...CHECK_STAGES, ...GLOBAL_STAGES].includes(row.stage as StageResult['stage'])) return null
   if (!(STAGE_STATUSES as readonly string[]).includes(row.status)) return null
   const risk = decodeRisk(row.risk)
   return {
@@ -116,8 +144,15 @@ function newestReport(rows: readonly Row[]): StoredReport | null {
   const security = toStage(securityRow)
   if (!compatibility || !security) return null
   const newest = compatRow.createdAt > securityRow.createdAt ? compatRow : securityRow
+  // A version offered for listing carries Visvine's two stages beside its own.
+  const global: Partial<Pick<CheckReport, 'ai' | 'dynamic'>> = {}
+  for (const stage of GLOBAL_STAGES) {
+    const row = rows.find((candidate) => candidate.stage === stage)
+    const result = row ? toStage(row) : null
+    if (result) global[stage] = result
+  }
   return {
-    report: { compatibility, security },
+    report: { compatibility, security, ...global },
     sourceHash: newest.sourceHash,
     ranAt: newest.createdAt.toISOString(),
     trigger: newest.trigger as CheckTrigger,
