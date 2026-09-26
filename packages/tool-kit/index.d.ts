@@ -663,7 +663,8 @@ export function Stat(props: { label: ReactNode; value: ReactNode; delta?: number
 export function StatRow(props: { children: ReactNode; className?: string }): JSX.Element
 export function Progress(props: { value: number; max?: number; hue?: Hue; label?: ReactNode; className?: string }): JSX.Element
 export function ListDetail<T>(props: { items: T[]; itemKey: (item: T) => string; selected: string | null; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode; detail: ReactNode; listHeader?: ReactNode; empty?: ReactNode; placeholder?: ReactNode }): JSX.Element
-export interface CalendarItem { id: string; /** YYYY-MM-DD */ date: string; title: ReactNode; hue?: Hue }
+/** late: past due and not done — drawn red. done: finished — drawn quietly. */
+export interface CalendarItem { id: string; /** YYYY-MM-DD */ date: string; title: ReactNode; hue?: Hue; late?: boolean; done?: boolean }
 /** rolling: show that many weeks from the week before `month`'s day (late and next in one view) instead of the calendar month. */
 export function MonthCalendar(props: { month: string; onMonth: (month: string) => void; items: CalendarItem[]; onOpen?: (id: string) => void; onDay?: (date: string) => void; weekStart?: 0 | 1; rolling?: number }): JSX.Element
 /** Today as YYYY-MM-DD. */
@@ -711,7 +712,7 @@ export function hueOf(name: string): Hue
 /** A hue as a CSS colour — chart slices in the same colours as the chips of their options. */
 export function hueColor(hue: Hue): string
 /** people: names a person field offers as it is typed. example: a filled record, shown as "e.g." placeholders. */
-export function FieldInput(props: { field: FieldDef; value: unknown; onChange: (value: unknown) => void; id?: string; autoFocus?: boolean; people?: string[]; example?: RecordData }): JSX.Element
+export function FieldInput(props: { field: FieldDef; value: unknown; onChange: (value: unknown) => void; id?: string; autoFocus?: boolean; people?: string[]; example?: RecordData; rows?: number }): JSX.Element
 export function RecordForm(props: { fields: FieldDef[]; value: RecordData; onChange: (next: RecordData) => void; errors?: string[]; people?: string[]; example?: RecordData }): JSX.Element
 /** people: the team a person field offers (the viewer is always added) — usually peopleOf(fields, rows). example: a sample row, shown as "e.g." placeholders on a new record. */
 export function RecordDialog(props: { open: boolean; title: ReactNode; fields: FieldDef[]; initial: RecordData; onClose: () => void; onSave: (value: RecordData) => Promise<void> | void; onDelete?: () => Promise<void> | void; saveLabel?: string; people?: string[]; example?: RecordData }): JSX.Element

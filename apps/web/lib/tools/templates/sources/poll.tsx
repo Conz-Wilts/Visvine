@@ -58,9 +58,9 @@ function PollCard({ poll, votes, onVote, onClose, featured = false }: { poll: Po
           </p>
         </div>
         {!closed && onClose && total > 0 && (
-          <button type="button" onClick={onClose} className="shrink-0 rounded-md px-2 py-1 text-xs text-fg-muted hover:bg-surface-subtle hover:text-fg">
+          <Button size="sm" variant="ghost" onClick={onClose} className="shrink-0">
             End poll
-          </button>
+          </Button>
         )}
       </div>
       <div className="flex flex-col gap-2" role="radiogroup" aria-label={poll.data.question}>
@@ -90,7 +90,9 @@ function PollCard({ poll, votes, onVote, onClose, featured = false }: { poll: Po
                 {chosen && <span className="size-1.5 rounded-full bg-surface" />}
               </span>
               <span className={`relative min-w-0 flex-1 truncate ${winning || chosen ? 'font-medium text-fg' : 'text-fg-secondary'}`}>{option}</span>
-              {winning && total > 0 && <span className="relative rounded bg-accent-strong px-1.5 py-0.5 text-[11px] font-semibold text-fg-inverse">{leaders > 1 ? 'Tied' : closed ? 'Won' : 'Leading'}</span>}
+              {chosen && <span className="relative rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-fg-secondary">Your vote</span>}
+              {winning && total > 0 && <span className="relative rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-semibold text-accent-strong">{leaders > 1 ? 'Tied' : closed ? 'Won' : 'Leading'}</span>}
+              {!chosen && !closed && <span className="relative hidden text-xs font-medium text-fg-muted group-hover:inline">Vote</span>}
               <span className={`relative w-16 text-right tabular-nums ${winning ? 'font-semibold text-fg' : 'text-fg-muted'}`}>
                 {Math.round(share * 100)}%<span className="font-normal text-fg-muted"> · {counts[i]}</span>
               </span>
@@ -110,7 +112,7 @@ export default function App() {
   const [creating, setCreating] = useState(false)
   const [showClosed, setShowClosed] = useState(false)
   const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState(['', ''])
+  const [options, setOptions] = useState(['', '', ''])
   const [busy, setBusy] = useState(false)
   useBandAction('new', () => setCreating(true))
 
@@ -145,7 +147,7 @@ export default function App() {
       await visvine.collections.insert('polls', { question: question.trim(), options: list.slice(0, 8) })
       setCreating(false)
       setQuestion('')
-      setOptions(['', ''])
+      setOptions(['', '', ''])
       void visvine.ui.toast(`${title(SPEC.noun)} created`, 'success')
     } finally {
       setBusy(false)
@@ -173,7 +175,7 @@ export default function App() {
       ) : (
         <>
           {/* The newest poll leads at full width; the rest sit two across under it. */}
-          <div className="max-w-3xl">
+          <div>
             <PollCard featured poll={open[0]} votes={votesFor(open[0].id)} onVote={(p, c, cur) => void vote(p, c, cur)} onClose={() => endPoll(open[0])} />
           </div>
           {open.length > 1 && (
@@ -207,19 +209,37 @@ export default function App() {
         }
       >
         <Field label="Question" htmlFor="q">
-          <Input id="q" value={question} onChange={(e) => setQuestion(e.currentTarget.value)} placeholder={SPEC.sample[0]?.question ?? 'What should we decide?'} />
+          <Input id="q" value={question} onChange={(e) => setQuestion(e.currentTarget.value)} placeholder={SPEC.sample[0] ? `e.g. ${SPEC.sample[0].question}` : 'What should we decide?'} />
         </Field>
-        <div className="flex flex-col gap-3">
-          {options.map((option, i) => (
-            <Field key={i} label={`Answer ${i + 1}`} htmlFor={`answer-${i}`}>
-              <div className="flex items-center gap-2">
-                <Input id={`answer-${i}`} value={option} placeholder={SPEC.sample[0]?.options[i] ?? `Answer ${i + 1}`} onChange={(e) => setOptions(options.map((value, index) => index === i ? e.currentTarget.value : value))} />
-                {options.length > 2 && <Button size="sm" variant="ghost" onClick={() => setOptions(options.filter((_, index) => index !== i))} aria-label={`Remove answer ${i + 1}`}>Remove</Button>}
+        <Field label="Answers" htmlFor="answer-0">
+          <div className="flex flex-col gap-2">
+            {options.map((option, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  id={`answer-${i}`}
+                  aria-label={`Answer ${i + 1}`}
+                  value={option}
+                  placeholder={SPEC.sample[0]?.options[i] ? `e.g. ${SPEC.sample[0].options[i]}` : `Answer ${i + 1}`}
+                  onChange={(e) => setOptions(options.map((value, index) => (index === i ? e.currentTarget.value : value)))}
+                />
+                <button
+                  type="button"
+                  aria-label={`Remove answer ${i + 1}`}
+                  disabled={options.length <= 2}
+                  onClick={() => setOptions(options.filter((_, index) => index !== i))}
+                  className="flex size-8 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-subtle hover:text-fg disabled:invisible"
+                >
+                  ×
+                </button>
               </div>
-            </Field>
-          ))}
-          {options.length < 8 && <Button size="sm" variant="ghost" className="self-start" onClick={() => setOptions([...options, ''])}>+ Add answer</Button>}
-        </div>
+            ))}
+            {options.length < 8 && (
+              <button type="button" className="self-start rounded-md px-1 py-1 text-sm font-medium text-accent-strong hover:underline" onClick={() => setOptions([...options, ''])}>
+                + Add answer
+              </button>
+            )}
+          </div>
+        </Field>
       </Modal>
     </Page>
   )

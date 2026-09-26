@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react'
 import {
   Button,
   Field,
+  HueChip,
+  hueColor,
+  HUES,
   formatDate,
   Modal,
   Page,
@@ -18,6 +21,7 @@ import {
   SampleData,
   useSection,
   useVisvine,
+  type Hue,
   type RecordData,
 } from '@visvine/tool-kit'
 
@@ -66,6 +70,8 @@ const daysAgoIso = (n: number) => {
   d.setDate(d.getDate() - n)
   return iso(d)
 }
+/** A reason keeps one hue wherever it is drawn — its chip, its bar. */
+const reasonHue = (reason: string): Hue => HUES[Math.max(0, (SPEC.reasons ?? []).indexOf(reason)) % HUES.length]
 const unitFor = (n: number) => (n === 1 ? (SPEC.unitOne ?? SPEC.unit) : SPEC.unit)
 const PERIODS = [
   { value: 'week', label: 'Week' },
@@ -75,7 +81,7 @@ const PERIODS = [
 
 export default function App() {
   const visvine = useVisvine()
-  const [section] = useSection()
+  const [section, goTo] = useSection()
   const samples = useMemo(
     () =>
       SPEC.sample.map(({ daysAgo, ...rest }, i) => {
@@ -160,16 +166,40 @@ export default function App() {
       <Field label="To" htmlFor="to">
         <Select id="to" value={form.person} placeholder="Choose someone" options={people.map((p) => ({ value: p, label: p }))} onValueChange={(person) => setForm({ ...form, person })} />
       </Field>
-      <Field label={SPEC.unit.charAt(0).toUpperCase() + SPEC.unit.slice(1)} htmlFor="amount">
-        <Segmented label="Amount" options={SPEC.amounts.map((a) => ({ value: String(a), label: String(a) }))} value={String(form.amount)} onChange={(v) => setForm({ ...form, amount: Number(v) })} />
+      <Field label="Amount" htmlFor="amount">
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${SPEC.amounts.length}, minmax(0, 1fr))` }}>
+          {SPEC.amounts.map((a) => (
+            <button
+              key={a}
+              type="button"
+              aria-pressed={form.amount === a}
+              onClick={() => setForm({ ...form, amount: a })}
+              className={`rounded-lg border py-2 text-sm font-semibold tabular-nums transition-colors ${form.amount === a ? 'border-accent bg-accent-soft text-accent-strong' : 'border-line-subtle text-fg hover:bg-surface-subtle'}`}
+            >
+              +{a} <span className="font-normal text-fg-muted">{unitFor(a)}</span>
+            </button>
+          ))}
+        </div>
       </Field>
       {SPEC.reasons && SPEC.reasons.length > 0 && (
         <Field label="For" htmlFor="reason">
-          <Select id="reason" value={form.reason} placeholder="Choose a reason" options={SPEC.reasons.map((r) => ({ value: r, label: r }))} onValueChange={(reason) => setForm({ ...form, reason })} />
+          <div className="flex flex-wrap gap-2">
+            {SPEC.reasons.map((r) => (
+              <button
+                key={r}
+                type="button"
+                aria-pressed={form.reason === r}
+                onClick={() => setForm({ ...form, reason: form.reason === r ? '' : r })}
+                className={`rounded-full border px-3 py-1 text-sm transition-colors ${form.reason === r ? 'border-accent bg-accent-soft font-medium text-fg' : 'border-line-subtle text-fg-secondary hover:bg-surface-subtle'}`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
         </Field>
       )}
       <Field label="Note" htmlFor="note">
-        <Textarea id="note" rows={3} value={form.note} onChange={(e) => setForm({ ...form, note: e.currentTarget.value })} />
+        <Textarea id="note" rows={2} value={form.note} placeholder={SPEC.sample.find((x) => x.note)?.note ? `e.g. ${SPEC.sample.find((x) => x.note)!.note}` : 'What did they do?'} onChange={(e) => setForm({ ...form, note: e.currentTarget.value })} />
       </Field>
     </Modal>
   )
@@ -182,21 +212,21 @@ export default function App() {
       { title: 'Earlier', list: listed.filter((e) => e.data.date < daysAgoIso(14)) },
     ].filter((g) => g.list.length > 0)
     return (
-      <Page width="normal">
+      <Page width="normal" className="max-w-3xl">
         <SampleData state={sampleRows} />
         <div className="flex flex-wrap items-center gap-2">
           <div className="w-48">
             <Select size="sm" aria-label="Person" value={who} placeholder="Everyone" options={[{ value: '', label: 'Everyone' }, ...people.map((p) => ({ value: p, label: p }))]} onValueChange={setWho} />
           </div>
-          {(SPEC.reasons ?? []).map((r) => (
+          {['', ...(SPEC.reasons ?? [])].map((r) => (
             <button
-              key={r}
+              key={r || 'all'}
               type="button"
               aria-pressed={why === r}
-              onClick={() => setWhy(why === r ? '' : r)}
-              className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${why === r ? 'border-accent bg-accent-soft font-medium text-fg' : 'border-line-subtle text-fg-secondary hover:bg-surface-subtle'}`}
+              onClick={() => setWhy(r)}
+              className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${why === r ? 'border-fg bg-fg font-medium text-fg-inverse' : 'border-line-subtle text-fg-secondary hover:bg-surface-subtle'}`}
             >
-              {r}
+              {r || 'All reasons'}
             </button>
           ))}
         </div>
@@ -239,7 +269,7 @@ export default function App() {
         <Stat
           lead
           label={`${leaders.length > 1 ? 'Tied for first' : 'Leader'} · ${period === 'all' ? 'all time' : `this ${periodLabel}`}`}
-          value={leader ? (leaders.length > 2 ? `${leaders.length} people` : leaders.map((l) => l.person.split(' ')[0]).join(' & ')) : '—'}
+          value={leader ? (leaders.length > 2 ? `${leaders.length} people` : leaders.map((l) => l.person).join(' & ')) : '—'}
           hint={leader ? `${leader.total} ${unitFor(leader.total)}${leaders.length > 1 ? ' each' : ''}` : undefined}
         />
         <Stat label={`${SPEC.unit.charAt(0).toUpperCase() + SPEC.unit.slice(1)} given`} value={periodTotal} hint={`in ${inPeriod.length} ${inPeriod.length === 1 ? 'entry' : 'entries'}`} />
@@ -279,7 +309,7 @@ export default function App() {
                 <div key={r.reason} className="flex items-center gap-3 text-sm">
                   <span className="w-40 shrink-0 truncate text-fg-secondary">{r.reason}</span>
                   <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-muted">
-                    <span className="block h-full rounded-full bg-fg-subtle" style={{ width: `${(r.n / reasonCounts[0].n) * 100}%` }} />
+                    <span className="block h-full rounded-full" style={{ width: `${(r.n / reasonCounts[0].n) * 100}%`, background: hueColor(reasonHue(r.reason)) }} />
                   </span>
                   <span className="w-10 text-right tabular-nums text-fg">{r.n}</span>
                 </div>
@@ -290,10 +320,15 @@ export default function App() {
         <section className="flex flex-col gap-2 md:col-span-2">
           <h2 className="text-sm font-semibold text-fg">Recent</h2>
           <ul className="flex flex-col">
-            {entries.slice(0, 6).map((e) => (
+            {entries.slice(0, 4).map((e) => (
               <EntryRow key={e.id} entry={e} />
             ))}
           </ul>
+          {entries.length > 4 && (
+            <button type="button" onClick={() => goTo('activity')} className="self-start text-sm font-medium text-accent-strong hover:underline">
+              See all {entries.length} →
+            </button>
+          )}
         </section>
       </div>
       {dialog}
@@ -309,13 +344,13 @@ function EntryRow({ entry: e }: { entry: Entry }) {
       <div className="min-w-0 flex-1">
         <p className="text-sm text-fg">
           <span className="font-medium">{e.data.person}</span>
-          <span className="font-semibold tabular-nums text-accent-strong"> +{e.data.amount}</span>
           {e.data.from && <span className="text-fg-muted"> from {e.data.from}</span>}
+          <span className="text-fg-muted"> · {formatDate(e.data.date)}</span>
         </p>
-        {e.data.reason && <span className="mt-1 inline-flex rounded-md bg-surface-muted px-1.5 py-0.5 text-xs text-fg-secondary">{e.data.reason}</span>}
-        {e.data.note && <p className="mt-1 text-sm text-fg-secondary">{e.data.note}</p>}
+        {e.data.note && <p className="mt-0.5 text-sm text-fg-secondary">{e.data.note}</p>}
+        {e.data.reason && <HueChip hue={reasonHue(e.data.reason)} className="mt-1.5">{e.data.reason}</HueChip>}
       </div>
-      <span className="shrink-0 text-xs text-fg-muted">{formatDate(e.data.date)}</span>
+      <span className="shrink-0 rounded-md bg-accent-soft px-2 py-0.5 text-sm font-semibold tabular-nums text-accent-strong">+{e.data.amount}</span>
     </li>
   )
 }

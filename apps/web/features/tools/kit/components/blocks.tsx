@@ -260,6 +260,10 @@ export interface CalendarItem {
   date: string;
   title: ReactNode;
   hue?: Hue;
+  /** Past due and not done: drawn in the danger colour. */
+  late?: boolean;
+  /** Finished: drawn quietly. */
+  done?: boolean;
 }
 
 export interface MonthCalendarProps {
@@ -346,22 +350,26 @@ export function MonthCalendar({ month, onMonth, items, onOpen, onDay, weekStart 
         ))}
         {days.map((d) => {
           const key = iso(d);
-          // Rolling, the days already gone are the quiet ones; by month, the neighbours' days are.
-          const inMonth = rolling ? key >= today : d.getMonth() === first.getMonth();
+          // By month the neighbours' days are quiet; rolling, only a gone day's number is.
+          const inMonth = rolling ? true : d.getMonth() === first.getMonth();
+          const gone = rolling && key < today;
           const dayItems = byDay.get(key) ?? [];
           return (
             <div
               key={key}
               onClick={onDay ? () => onDay(key) : undefined}
-              className={clsx('flex min-h-24 flex-col gap-1 border-b border-r border-line-subtle p-1.5', !inMonth && 'bg-surface-subtle', onDay && 'cursor-pointer hover:bg-surface-subtle')}
+              className={clsx('group flex min-h-24 min-w-0 flex-col gap-1 border-b border-r border-line-subtle p-1.5', !inMonth && 'bg-surface-subtle', onDay && 'cursor-pointer hover:bg-surface-subtle')}
             >
-              <span
-                className={clsx(
-                  'flex h-6 min-w-6 items-center justify-center self-start rounded-full px-1 text-xs tabular-nums',
-                  key === today ? 'bg-accent-strong font-semibold text-fg-inverse' : inMonth ? 'text-fg-secondary' : 'text-fg-subtle',
-                )}
-              >
-                {rolling && d.getDate() === 1 ? fmtDay(d) : d.getDate()}
+              <span className="flex items-center justify-between">
+                <span
+                  className={clsx(
+                    'flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs tabular-nums',
+                    key === today ? 'bg-accent-strong font-semibold text-fg-inverse' : inMonth && !gone ? 'text-fg-secondary' : 'text-fg-subtle',
+                  )}
+                >
+                  {rolling && d.getDate() === 1 ? fmtDay(d) : d.getDate()}
+                </span>
+                {onDay && <span aria-hidden className="pr-1 text-sm leading-none text-fg-muted opacity-0 group-hover:opacity-100">+</span>}
               </span>
               {(expandedDays.has(key) ? dayItems : dayItems.slice(0, 3)).map((item) => (
                 <button
@@ -372,10 +380,14 @@ export function MonthCalendar({ month, onMonth, items, onOpen, onDay, weekStart 
                     onOpen?.(item.id);
                   }}
                   title={typeof item.title === 'string' ? item.title : undefined}
-                  className="flex min-w-0 items-start gap-1.5 rounded bg-surface-subtle px-1.5 py-1 text-left text-xs text-fg hover:bg-surface-muted"
+                  className={clsx(
+                    'flex min-w-0 items-start gap-1.5 rounded px-1.5 py-1 text-left text-xs',
+                    item.late ? 'bg-danger-wash text-danger-strong hover:opacity-90' : 'bg-surface-subtle text-fg hover:bg-surface-muted',
+                    item.done && 'text-fg-muted line-through decoration-fg-subtle',
+                  )}
                 >
-                  <HueDot hue={item.hue ?? 'blue'} className="mt-1 shrink-0" />
-                  <span className="line-clamp-2 whitespace-normal leading-snug">{item.title}</span>
+                  <HueDot hue={item.late ? 'red' : (item.hue ?? 'blue')} className="mt-1 shrink-0" />
+                  <span className="line-clamp-2 min-w-0 break-words leading-snug">{item.title}</span>
                 </button>
               ))}
               {dayItems.length > 3 && <button type="button" aria-expanded={expandedDays.has(key)} onClick={(e) => {

@@ -297,14 +297,15 @@ export function FieldValue({ field, value, compact = false, due = false }: Field
       );
     case 'email':
       return (
-        <a href={`mailto:${String(value)}`} className="truncate text-fg-link hover:underline" onClick={(e) => e.stopPropagation()}>
+        <a href={`mailto:${String(value)}`} className="truncate text-fg hover:underline" onClick={(e) => e.stopPropagation()}>
           {String(value)}
         </a>
       );
     case 'url':
       return (
-        <a href={String(value)} target="_blank" rel="noreferrer" className="truncate text-fg-link hover:underline" onClick={(e) => e.stopPropagation()}>
-          {hostOf(String(value))}
+        <a href={String(value)} target="_blank" rel="noreferrer" className="inline-flex min-w-0 items-center gap-1 text-fg-link hover:underline" onClick={(e) => e.stopPropagation()}>
+          <span className="truncate">{hostOf(String(value))}</span>
+          <Icon name="external-link" size={12} className="opacity-70" />
         </a>
       );
     case 'boolean':
@@ -337,6 +338,8 @@ export interface FieldInputProps {
   people?: string[];
   /** A filled-in record whose value shows as this field's "e.g." placeholder. */
   example?: RecordData;
+  /** Long text: its height in lines. */
+  rows?: number;
 }
 
 /** "e.g. Northwind" from an example record, for a field that has no placeholder of its own. */
@@ -406,11 +409,11 @@ function PersonInput({ id, value, onChange, people, placeholder }: { id?: string
 }
 
 /** One field's control, chosen by its kind. */
-export function FieldInput({ field, value, onChange, id, autoFocus, people = [], example }: FieldInputProps) {
+export function FieldInput({ field, value, onChange, id, autoFocus, people = [], example, rows = 3 }: FieldInputProps) {
   const hint = exampleFor(field, example);
   switch (field.kind) {
     case 'longtext':
-      return <Textarea id={id} aria-required={field.required} rows={3} value={String(value ?? '')} placeholder={hint} onChange={(e) => onChange(e.currentTarget.value)} />;
+      return <Textarea id={id} aria-required={field.required} rows={rows} value={String(value ?? '')} placeholder={hint} onChange={(e) => onChange(e.currentTarget.value)} />;
     case 'number':
     case 'money':
     case 'percent': {
@@ -524,7 +527,7 @@ export interface RecordFormProps {
   example?: RecordData;
 }
 
-const WIDE: ReadonlySet<FieldKind> = new Set(['longtext', 'tags', 'url']);
+const WIDE: ReadonlySet<FieldKind> = new Set(['longtext', 'tags']);
 
 /**
  * Every field, two to a row on a wide frame; long text, tags and the title
@@ -541,14 +544,32 @@ export function RecordForm({ fields, value, onChange, errors = [], people, examp
     else if (fields[i + 1] && !wide(fields[i + 1])) i++;
     else spans.add(fields[i].key);
   }
+  // A long form keeps its text boxes short, so the dialog opens showing the whole of it.
+  const long = fields.length > 5;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {fields.map((field) => {
         const id = `vv-field-${field.key}`;
+        if (field.kind === 'boolean') {
+          // A yes/no is one row you press: its name, its switch beside it.
+          const set = (v: boolean) => onChange({ ...value, [field.key]: v });
+          return (
+            <div
+              key={field.key}
+              onClick={() => set(!value[field.key])}
+              className={clsx('flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-line-subtle px-3 py-2.5 text-sm text-fg hover:bg-surface-subtle', spans.has(field.key) && 'sm:col-span-2')}
+            >
+              <span className="font-medium">{field.label}</span>
+              <span onClick={(e) => e.stopPropagation()}>
+                <Toggle aria-label={field.label} checked={Boolean(value[field.key])} onChange={set} />
+              </span>
+            </div>
+          );
+        }
         return (
           <div key={field.key} className={clsx(spans.has(field.key) && 'sm:col-span-2')}>
             <Field label={<>{field.label}{field.required && <span className="ml-1 text-fg-muted" aria-label="required">*</span>}</>} htmlFor={id} error={errors.includes(field.key) ? `${field.label} is needed` : undefined}>
-              <FieldInput id={id} field={field} value={value[field.key]} onChange={(v) => onChange({ ...value, [field.key]: v })} people={people} example={example} />
+              <FieldInput id={id} field={field} value={value[field.key]} onChange={(v) => onChange({ ...value, [field.key]: v })} people={people} example={example} rows={long ? 2 : 3} />
             </Field>
           </div>
         );
@@ -958,8 +979,8 @@ export function SampleData({ state }: { state: ReturnType<typeof useSampleRows> 
   // Last on the page whatever its place in the code (`order-last` in Page's
   // column): it names what is shown without pushing it down or covering it.
   return (
-    <div className="order-last -mt-3 flex items-center gap-1 text-xs text-fg-muted">
-      <span>Showing sample data</span>
+    <div className="order-last -mt-2 flex items-center gap-1 self-start rounded-full border border-line-subtle py-0.5 pl-3 pr-0.5 text-xs text-fg-muted">
+      <span>Sample data</span>
       <Button size="sm" variant="ghost" disabled={clearing || state.seeding} onClick={() => void clear()}>{clearing ? 'Clearing…' : 'Clear'}</Button>
     </div>
   );

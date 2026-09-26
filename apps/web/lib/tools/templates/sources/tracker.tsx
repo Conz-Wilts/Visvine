@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
   daysFrom,
-  formatDate,
   formatMoney,
   formatNumber,
   HueDot,
@@ -138,7 +137,6 @@ export default function App() {
   const done = new Set(SPEC.doneValues ?? [])
   const isDone = (r: Row) => Boolean(group) && done.has(String(r.data[group!.key] ?? ''))
   const isLate = (r: Row) => Boolean(dateField) && !isDone(r) && (daysFrom(r.data[dateField!.key]) ?? 0) < 0
-  const byDate = (a: Row, b: Row) => String(a.data[dateField?.key ?? ''] ?? '').localeCompare(String(b.data[dateField?.key ?? ''] ?? ''))
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -267,49 +265,36 @@ export default function App() {
           />
         </div>
       ) : view === 'calendar' && dateField ? (
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-          <div className="md:col-span-2">
-            <MonthCalendar
-              rolling={5}
-              month={month}
-              onMonth={setMonth}
-              items={shown
-                .filter((r) => r.data[dateField.key])
-                .map((r) => ({
-                  id: r.id,
-                  date: String(r.data[dateField.key]),
-                  title: String(r.data[SPEC.fields[0].key] ?? ''),
-                  hue: group ? optionsOf(group).find((o) => o.value === r.data[group.key])?.hue : undefined,
-                }))}
-              onOpen={(id) => setEditing(rows.find((r) => r.id === id) ?? null)}
-              onDay={(date) => startNew({ [dateField.key]: date })}
-            />
-          </div>
-          {/* What the month grid cannot say at a glance: what is late, what is next, what has no date. */}
-          <aside className="flex flex-col gap-6">
-            {[
-              { title: 'Overdue', list: shown.filter(isLate).sort(byDate), late: true },
-              { title: 'Coming up', list: shown.filter((r) => !isDone(r) && (daysFrom(r.data[dateField.key]) ?? -1) >= 0).sort(byDate).slice(0, 8), late: false },
-              { title: 'No date', list: shown.filter((r) => !isDone(r) && !r.data[dateField.key]), late: false },
-            ]
-              .filter((g) => g.list.length > 0)
-              .map((g) => (
-                <section key={g.title} className="flex flex-col gap-1">
-                  <h2 className={`text-xs font-semibold uppercase tracking-wide ${g.late ? 'text-danger' : 'text-fg-muted'}`}>
-                    {g.title} <span className="font-normal">· {g.list.length}</span>
-                  </h2>
-                  {g.list.map((r) => (
-                    <button key={r.id} type="button" onClick={() => setEditing(r)} className="-mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-subtle">
-                      {group && <HueDot hue={optionsOf(group).find((o) => o.value === r.data[group.key])?.hue} />}
-                      <span className="min-w-0 flex-1 truncate text-fg">{String(r.data[SPEC.fields[0].key] ?? '')}</span>
-                      {r.data[dateField.key] ? (
-                        <span className={`shrink-0 text-xs tabular-nums ${g.late ? 'font-medium text-danger' : 'text-fg-muted'}`}>{formatDate(r.data[dateField.key])}</span>
-                      ) : null}
-                    </button>
-                  ))}
-                </section>
+        <div className="flex flex-col gap-3">
+          {/* What has no day cannot sit on the grid, so it waits above it. */}
+          {shown.some((r) => !isDone(r) && !r.data[dateField.key]) && (
+            <section className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-fg-muted">No {dateField.label.toLowerCase()}</span>
+              {shown.filter((r) => !isDone(r) && !r.data[dateField.key]).map((r) => (
+                <button key={r.id} type="button" onClick={() => setEditing(r)} className="inline-flex items-center gap-1.5 rounded-md border border-line-subtle px-2 py-1 text-fg hover:bg-surface-subtle">
+                  {group && <HueDot hue={optionsOf(group).find((o) => o.value === r.data[group.key])?.hue} />}
+                  {String(r.data[SPEC.fields[0].key] ?? '')}
+                </button>
               ))}
-          </aside>
+            </section>
+          )}
+          <MonthCalendar
+            rolling={5}
+            month={month}
+            onMonth={setMonth}
+            items={shown
+              .filter((r) => r.data[dateField.key])
+              .map((r) => ({
+                id: r.id,
+                date: String(r.data[dateField.key]),
+                title: String(r.data[SPEC.fields[0].key] ?? ''),
+                hue: group ? optionsOf(group).find((o) => o.value === r.data[group.key])?.hue : undefined,
+                late: isLate(r),
+                done: isDone(r),
+              }))}
+            onOpen={(id) => setEditing(rows.find((r) => r.id === id) ?? null)}
+            onDay={(date) => startNew({ [dateField.key]: date })}
+          />
         </div>
       ) : (
         <div className="flex flex-col gap-2">

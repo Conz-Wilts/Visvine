@@ -221,7 +221,10 @@ export default function App() {
                       </div>
                     ) : null}
                   </div>
-                  <Button onClick={() => setEditing(current)}>Edit</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(current)}>
+                    <Icon name="pencil" size={14} />
+                    Edit
+                  </Button>
                 </div>
                 <dl className="grid grid-cols-2 gap-x-8 gap-y-4 rounded-lg bg-surface-subtle p-4 lg:grid-cols-3">
                   {SPEC.fields.slice(1).filter((f) => f.key !== group?.key && f.kind !== 'longtext' && hasValue(current.data[f.key])).map((f) => (
@@ -301,8 +304,7 @@ function Prose({ label, text }: { label: string; text: string }) {
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-/** A new entry starts on each select's first option, and a date that records when (Added, Joined) on today. */
+/** A new entry starts with a date that records when (Added, Joined) on today; every choice is left for the person to make. */
 const EMPTY: RecordData = Object.fromEntries([
-  ...SPEC.fields.filter((field) => field.kind === 'select').map((field) => [field.key, optionsOf(field)[0]?.value ?? '']),
   ...SPEC.fields.filter((field) => field.kind === 'date' && /added|created|logged|joined|since|recorded/i.test(field.label)).map((field) => [field.key, iso(new Date())]),
 ])

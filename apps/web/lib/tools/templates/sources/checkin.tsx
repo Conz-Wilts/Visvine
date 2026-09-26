@@ -66,8 +66,6 @@ const hasFlag = (v: unknown) => v !== false && v !== 0 && filled(v)
 const filled = (v: unknown) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
 const dayLabel = (date: string) => {
   const d = new Date(`${date}T00:00:00`)
-  if (date === daysAgo(0)) return 'Today'
-  if (date === daysAgo(1)) return 'Yesterday'
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
@@ -92,7 +90,7 @@ function EntryView({ entry, onEdit }: { entry: Entry; onEdit?: () => void }) {
           {facts.map((f) => (
             <span key={f.key} className="inline-flex items-center gap-1 text-xs text-fg-muted">
               {f.label}
-              <FieldValue field={f} value={entry.data[f.key]} compact />
+              {f.kind === 'rating' ? <span className="font-medium tabular-nums text-fg-secondary">{String(entry.data[f.key])}/5</span> : <FieldValue field={f} value={entry.data[f.key]} compact />}
             </span>
           ))}
           {onEdit && (
@@ -107,7 +105,7 @@ function EntryView({ entry, onEdit }: { entry: Entry; onEdit?: () => void }) {
               entry.data[f.key] ? (
                 <HueChip key={f.key} hue="green">✓ {f.label}</HueChip>
               ) : (
-                <span key={f.key} className="rounded-md border border-dashed border-line px-2 py-0.5 text-xs text-fg-subtle line-through">{f.label}</span>
+                <span key={f.key} className="rounded-md border border-line-subtle px-2 py-0.5 text-xs text-fg-subtle">○ {f.label}</span>
               ),
             )}
           </div>
@@ -149,7 +147,9 @@ function HabitGrid({ entries, me }: { entries: Entry[]; me: string }) {
         <span className="flex items-center gap-1.5 text-xs text-fg-muted">
           None
           <span className="size-3 rounded-sm bg-surface-muted" />
-          <span className="size-3 rounded-sm bg-success-line" />
+          {[0.25, 0.5, 0.75].map((o) => (
+            <span key={o} className="size-3 rounded-sm bg-success" style={{ opacity: 0.25 + 0.75 * o }} />
+          ))}
           <span className="size-3 rounded-sm bg-success" />
           All {checks.length}
           <span className="ml-2 size-3 rounded-sm border border-dashed border-line" />
@@ -161,7 +161,7 @@ function HabitGrid({ entries, me }: { entries: Entry[]; me: string }) {
         {days.map((d) => (
           <span key={d} className="text-center text-xs text-fg-muted">{d === daysAgo(0) ? 'Today' : new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' })}</span>
         ))}
-        <span className="text-right text-xs text-fg-muted">Done</span>
+        <span className="text-right text-xs text-fg-muted">Habits</span>
         <span className="text-right text-xs text-fg-muted">Streak</span>
         {people.map((name) => {
           const shares = days.map((d) => {
@@ -180,7 +180,9 @@ function HabitGrid({ entries, me }: { entries: Entry[]; me: string }) {
               <span
                 key={`${name}-${i}`}
                 title={v === null ? 'Not logged' : `${Math.round(v * checks.length)} of ${checks.length}`}
-                className={`h-7 rounded-md ${v === null ? 'border border-dashed border-line' : v >= 1 ? 'bg-success' : v > 0 ? 'bg-success-line' : 'bg-surface-muted'}`}
+                className={`mx-auto size-6 rounded ${v === null ? 'border border-dashed border-line' : v === 0 ? 'bg-surface-muted' : 'bg-success'}`}
+                // Shade by how many were done: a quarter of the list is a quarter of the green.
+                style={v !== null && v > 0 ? { opacity: 0.25 + 0.75 * v } : undefined}
               />
             )),
             <span key={`${name}-r`} className="text-right text-sm tabular-nums text-fg" title={`${Math.round(done)} of ${span * checks.length} done`}>
@@ -246,6 +248,7 @@ export default function App() {
       onClose={() => setPosting(false)}
       onSave={save}
       saveLabel={mineToday ? 'Save' : 'Post'}
+      example={mineToday ? undefined : SPEC.sample.find((r) => prose.every((f) => r[f.key]))}
     />
   )
 
@@ -267,7 +270,7 @@ export default function App() {
         ) : (
           history.map(([day, list]) => (
             <section key={day}>
-              <h2 className="flex items-baseline gap-2 border-b border-line-subtle pb-2 text-sm font-semibold text-fg">
+              <h2 className="sticky top-0 z-10 flex items-baseline gap-2 border-b border-line-subtle bg-surface pb-2 pt-1 text-base font-semibold text-fg">
                 {dayLabel(day)}
                 <span className="font-normal text-fg-muted">
                   {[`${list.length} posted`, SPEC.flagField && list.some(flag) ? flagCount(list.filter(flag).length) : null].filter(Boolean).join(' · ')}
@@ -296,7 +299,7 @@ export default function App() {
           <Stat label={flagLabel} value={flagged} tone={flagged > 0 ? 'danger' : undefined} hint={flagged ? 'need a hand today' : 'none today'} />
         )}
         {rating && avgRating !== null && <Stat label={`${rating.label} ${todaysAll.length ? 'today' : 'this week'}`} value={`${avgRating.toFixed(1)} / 5`} hint="team average" />}
-        {!rating && <Stat label="This week" value={week.length} hint={week.length === 1 ? 'post' : 'posts'} />}
+        {!rating && <Stat label="This week" value={week.length} hint={`of ${people.length * 7} possible posts`} />}
       </StatRow>
 
       {todayChecks.length > 0 && posted.size > 0 && (
@@ -314,10 +317,9 @@ export default function App() {
             <button
               type="button"
               onClick={() => setPosting(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-accent bg-accent-soft py-0.5 pl-0.5 pr-2.5 font-medium text-fg hover:opacity-90"
+              className="inline-flex items-center gap-1 rounded-full border border-accent bg-accent-soft px-2.5 py-0.5 font-medium text-fg hover:opacity-90"
             >
-              <PersonAvatar name={me} />
-              You
+              + Post yours
             </button>
           )}
           {waiting.map((p) => (

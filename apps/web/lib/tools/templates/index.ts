@@ -418,7 +418,7 @@ const leaderboard: ToolTemplate = {
   keywords: ['leaderboard', 'kudos', 'points', 'score', 'scores', 'ranking', 'rank', 'competition', 'challenge', 'gamification', 'shoutout', 'shoutouts', 'recognition', 'thanks', 'appreciation', 'steps', 'miles', 'km', 'streak', 'contest'],
   spec: leaderboardSpec as unknown as z.ZodType<Record<string, unknown>>,
   specGuide: [
-    'unit: what is counted, plural ("kudos", "points", "km"); unitOne: the singular when it differs ("point"). actionLabel: the button ("Give kudos", "Log a run").',
+    'unit: what is counted, plural ("kudos", "points", "km"); unitOne: the singular only when English has a different one ("point"; never "kudo" — kudos is both). actionLabel: the button ("Give kudos", "Log a run").',
     'amounts: 1–4 quick amounts. reasons: optional kinds of entry.',
     'people: 4–8 realistic names who start on the board.',
     'sample: 8–12 entries for those people with amounts, reasons, a short note on most, `from` (who gave it — another of the people) and daysAgo 0–20.',
