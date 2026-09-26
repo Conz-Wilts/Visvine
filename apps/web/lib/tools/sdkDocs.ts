@@ -693,7 +693,8 @@ declare module '@visvine/tool-kit' {
   export function Progress(props: { value: number; max?: number; hue?: Hue; label?: ReactNode; className?: string }): JSX.Element
   export function ListDetail<T>(props: { items: T[]; itemKey: (item: T) => string; selected: string | null; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode; detail: ReactNode; listHeader?: ReactNode; empty?: ReactNode; placeholder?: ReactNode }): JSX.Element
   export interface CalendarItem { id: string; /** YYYY-MM-DD */ date: string; title: ReactNode; hue?: Hue }
-  export function MonthCalendar(props: { month: string; onMonth: (month: string) => void; items: CalendarItem[]; onOpen?: (id: string) => void; onDay?: (date: string) => void; weekStart?: 0 | 1 }): JSX.Element
+  /** rolling: show that many weeks from the week before \`month\`'s day (late and next in one view) instead of the calendar month. */
+  export function MonthCalendar(props: { month: string; onMonth: (month: string) => void; items: CalendarItem[]; onOpen?: (id: string) => void; onDay?: (date: string) => void; weekStart?: 0 | 1; rolling?: number }): JSX.Element
   /** Today as YYYY-MM-DD. */
   export function todayIso(): string
 
@@ -743,7 +744,7 @@ declare module '@visvine/tool-kit' {
   export function RecordForm(props: { fields: FieldDef[]; value: RecordData; onChange: (next: RecordData) => void; errors?: string[]; people?: string[]; example?: RecordData }): JSX.Element
   /** people: the team a person field offers (the viewer is always added) — usually peopleOf(fields, rows). example: a sample row, shown as "e.g." placeholders on a new record. */
   export function RecordDialog(props: { open: boolean; title: ReactNode; fields: FieldDef[]; initial: RecordData; onClose: () => void; onSave: (value: RecordData) => Promise<void> | void; onDelete?: () => Promise<void> | void; saveLabel?: string; people?: string[]; example?: RecordData }): JSX.Element
-  export function RecordTable<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; rows: T[]; onOpen?: (row: T) => void; empty?: ReactNode; trailing?: (row: T) => ReactNode; maxHeight?: number; dueField?: string; isDone?: (row: T) => boolean }): JSX.Element
+  export function RecordTable<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; rows: T[]; onOpen?: (row: T) => void; empty?: ReactNode; trailing?: (row: T) => ReactNode; maxHeight?: number; dueField?: string; isDone?: (row: T) => boolean; defaultSort?: { key: string; direction: 'asc' | 'desc' } }): JSX.Element
   export function RecordBoard<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; groupBy: string; rows: T[]; onMove: (row: T, toValue: string) => void; onOpen?: (row: T) => void; cardFields?: string[]; sumField?: string; dueField?: string; doneValues?: string[]; onAdd?: (columnValue: string) => void }): JSX.Element | null
   export function RecordsEmpty(props: { noun: string; onAdd?: () => void }): JSX.Element
   /** Seeds an empty collection once per install with sample rows; clear() removes exactly those. */

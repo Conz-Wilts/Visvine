@@ -272,6 +272,11 @@ export interface MonthCalendarProps {
   onDay?: (date: string) => void;
   /** First day of the week: 1 = Monday (default), 0 = Sunday. */
   weekStart?: 0 | 1;
+  /**
+   * Weeks to show from the week before `month`'s day, instead of the calendar
+   * month — what is late and what is next in one view. ‹ › step that many weeks.
+   */
+  rolling?: number;
 }
 
 function iso(d: Date): string {
@@ -284,39 +289,51 @@ export function todayIso(): string {
 }
 
 /** A month grid with each day's items as chips; ‹ › step the month. */
-export function MonthCalendar({ month, onMonth, items, onOpen, onDay, weekStart = 1 }: MonthCalendarProps) {
+export function MonthCalendar({ month, onMonth, items, onOpen, onDay, weekStart = 1, rolling }: MonthCalendarProps) {
   const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set());
   const first = useMemo(() => {
     const d = new Date(`${month.slice(0, 7)}-01T00:00:00`);
     return Number.isNaN(d.getTime()) ? new Date(new Date().getFullYear(), new Date().getMonth(), 1) : d;
   }, [month]);
+  const anchor = useMemo(() => {
+    const d = new Date(`${month.slice(0, 10)}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? new Date() : d;
+  }, [month]);
   const days = useMemo(() => {
+    if (rolling) {
+      const back = ((anchor.getDay() - weekStart + 7) % 7) + 7;
+      const start = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - back);
+      return Array.from({ length: rolling * 7 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+    }
     const offset = (first.getDay() - weekStart + 7) % 7;
     const start = new Date(first.getFullYear(), first.getMonth(), 1 - offset);
     const weeks = Math.ceil((offset + new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()) / 7);
     return Array.from({ length: weeks * 7 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
-  }, [first, weekStart]);
+  }, [first, anchor, weekStart, rolling]);
   const byDay = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
     for (const item of items) map.set(item.date.slice(0, 10), [...(map.get(item.date.slice(0, 10)) ?? []), item]);
     return map;
   }, [items]);
   const today = todayIso();
-  const step = (n: number) => onMonth(iso(new Date(first.getFullYear(), first.getMonth() + n, 1)));
+  const step = (n: number) =>
+    onMonth(rolling ? iso(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + n * rolling * 7)) : iso(new Date(first.getFullYear(), first.getMonth() + n, 1)));
+  const fmtDay = (d: Date) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const heading = rolling ? `${fmtDay(days[0])} – ${fmtDay(days[days.length - 1])}` : first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const names = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + ((i + weekStart + 6) % 7)).toLocaleDateString(undefined, { weekday: 'short' }));
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <span className="text-base font-semibold text-fg">{first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
+        <span className="text-base font-semibold text-fg">{heading}</span>
         <div className="ml-auto flex items-center gap-1">
-          <button type="button" aria-label="Previous month" onClick={() => step(-1)} className="rounded-md p-1.5 text-fg-muted hover:bg-surface-subtle hover:text-fg">
+          <button type="button" aria-label={rolling ? 'Earlier' : 'Previous month'} onClick={() => step(-1)} className="rounded-md p-1.5 text-fg-muted hover:bg-surface-subtle hover:text-fg">
             <Icon name="chevronLeft" />
           </button>
           <button type="button" onClick={() => onMonth(today)} className="rounded-md px-2 py-1 text-sm text-fg-secondary hover:bg-surface-subtle hover:text-fg">
             Today
           </button>
-          <button type="button" aria-label="Next month" onClick={() => step(1)} className="rounded-md p-1.5 text-fg-muted hover:bg-surface-subtle hover:text-fg">
+          <button type="button" aria-label={rolling ? 'Later' : 'Next month'} onClick={() => step(1)} className="rounded-md p-1.5 text-fg-muted hover:bg-surface-subtle hover:text-fg">
             <Icon name="chevronRight" />
           </button>
         </div>
@@ -329,7 +346,8 @@ export function MonthCalendar({ month, onMonth, items, onOpen, onDay, weekStart 
         ))}
         {days.map((d) => {
           const key = iso(d);
-          const inMonth = d.getMonth() === first.getMonth();
+          // Rolling, the days already gone are the quiet ones; by month, the neighbours' days are.
+          const inMonth = rolling ? key >= today : d.getMonth() === first.getMonth();
           const dayItems = byDay.get(key) ?? [];
           return (
             <div
@@ -339,11 +357,11 @@ export function MonthCalendar({ month, onMonth, items, onOpen, onDay, weekStart 
             >
               <span
                 className={clsx(
-                  'flex size-6 items-center justify-center rounded-full text-xs tabular-nums',
+                  'flex h-6 min-w-6 items-center justify-center self-start rounded-full px-1 text-xs tabular-nums',
                   key === today ? 'bg-accent-strong font-semibold text-fg-inverse' : inMonth ? 'text-fg-secondary' : 'text-fg-subtle',
                 )}
               >
-                {d.getDate()}
+                {rolling && d.getDate() === 1 ? fmtDay(d) : d.getDate()}
               </span>
               {(expandedDays.has(key) ? dayItems : dayItems.slice(0, 3)).map((item) => (
                 <button

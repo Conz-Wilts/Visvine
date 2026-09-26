@@ -191,7 +191,7 @@ export function PersonAvatar({ name, size = 'xs' }: { name: string; size?: 'xs' 
 
 export function formatNumber(value: unknown): string {
   const n = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(n) ? new Intl.NumberFormat().format(n) : '';
+  return Number.isFinite(n) ? new Intl.NumberFormat(undefined, { maximumFractionDigits: Math.abs(n) < 10 ? 1 : 0 }).format(n) : '';
 }
 
 /** `YYYY-MM-DD` (or any date string) → "12 Mar", with the year when it is not this one. */
@@ -684,12 +684,14 @@ export interface RecordTableProps<T extends { id: string; data: RecordData }> {
   dueField?: string;
   /** A row that is finished — its due date is never late. */
   isDone?: (row: T) => boolean;
+  /** The order it opens in, before anyone presses a header. */
+  defaultSort?: { key: string; direction: 'asc' | 'desc' };
 }
 
 const RIGHT_KINDS: ReadonlySet<FieldKind> = new Set(['number', 'money']);
 
 /** A sortable table of records: one column per field, the first one bold. */
-export function RecordTable<T extends { id: string; data: RecordData }>({ fields, rows, onOpen, empty, trailing, maxHeight, dueField, isDone }: RecordTableProps<T>) {
+export function RecordTable<T extends { id: string; data: RecordData }>({ fields, rows, onOpen, empty, trailing, maxHeight, dueField, isDone, defaultSort }: RecordTableProps<T>) {
   const shown = fields.filter((f) => !f.hideInTable);
   const columns: DataTableColumn<T>[] = shown.map((field, i) => ({
     key: field.key,
@@ -712,6 +714,7 @@ export function RecordTable<T extends { id: string; data: RecordData }>({ fields
       rowKey={(row) => row.id}
       onRowClick={onOpen}
       maxHeight={maxHeight}
+      defaultSort={defaultSort}
       empty={empty ?? <span className="text-fg-muted">Nothing here yet.</span>}
     />
   );
@@ -798,7 +801,7 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
         }
         count={inCol.length}
         subtitle={
-          sum ? (total !== null && total > 0 ? (sum.kind === 'money' ? formatMoney(total, sum.currency) : `${formatNumber(Math.round(total * 10) / 10)}${sum.kind === 'percent' ? '%' : ''}${averaged ? ' avg' : ''}`) : '') : undefined
+          sum ? (total !== null && total > 0 ? (sum.kind === 'money' ? formatMoney(total, sum.currency) : `${sum.kind === 'number' ? `${sum.label} ` : ''}${formatNumber(total)}${sum.kind === 'percent' ? '%' : ''}${averaged ? ' avg' : ''}`) : '') : undefined
         }
       >
         {inCol.map((row) => (
@@ -809,6 +812,8 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
                 <span className="min-w-0 text-sm font-medium leading-snug text-fg">{String(row.data[titleKey] ?? '') || 'Untitled'}</span>
                 {has(row, headline) && (
                   <span className="shrink-0 text-sm font-semibold tabular-nums text-fg">
+                    {/* A plain number says what it counts; money and a percentage say it themselves. */}
+                    {headline!.kind === 'number' && <span className="mr-1 text-xs font-normal text-fg-muted">{headline!.label}</span>}
                     <FieldValue field={headline!} value={row.data[headline!.key]} compact />
                   </span>
                 )}
@@ -870,6 +875,15 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
  * (an install-wide state key), so clearing the rows keeps them cleared.
  * Returns `clear`, which deletes every row this seeded.
  */
+/** A seeder's hold on an empty collection while it writes the sample rows. */
+interface SeedClaim {
+  claim: string;
+  at: number;
+}
+const CLAIM_SETTLE_MS = 250;
+/** A claim left by a frame that closed mid-seed stops holding after this. */
+const CLAIM_STALE_MS = 30_000;
+
 export function useSampleRows(collection: string, rows: RecordData[]): { seeding: boolean; hasSamples: boolean; clear: () => Promise<void> } {
   const visvine = useVisvine();
   const [seeding, setSeeding] = useState(false);
@@ -879,18 +893,30 @@ export function useSampleRows(collection: string, rows: RecordData[]): { seeding
     let cancelled = false;
     void (async () => {
       try {
-        const done = await visvine.state.get<string[]>(key, { scope: 'install' });
+        const done = await visvine.state.get<string[] | SeedClaim>(key, { scope: 'install' });
         if (cancelled) return;
-        if (done) { setHasSamples(done.length > 0); return; }
+        if (Array.isArray(done)) { setHasSamples(done.length > 0); return; }
+        if (done && Date.now() - done.at < CLAIM_STALE_MS) { setHasSamples(true); return; }
         if (rows.length === 0) return;
         const existing = await visvine.collections.count(collection);
         if (existing.total > 0 || cancelled) {
           await visvine.state.set(key, [], { scope: 'install' });
           return;
         }
+        // Two frames opening at once (a person with two tabs, a builder's
+        // parallel previews) would both find the collection empty and both
+        // seed. Each writes a claim, waits a beat, and only the one whose
+        // claim is still there seeds — the last writer wins.
+        const claim: SeedClaim = { claim: Math.random().toString(36).slice(2), at: Date.now() };
+        await visvine.state.set(key, claim, { scope: 'install' });
+        await new Promise((resolve) => setTimeout(resolve, CLAIM_SETTLE_MS));
+        const held = await visvine.state.get<string[] | SeedClaim>(key, { scope: 'install' });
+        if (cancelled) return;
+        if (Array.isArray(held) || held?.claim !== claim.claim) { setHasSamples(true); return; }
         setSeeding(true);
-        const ids: string[] = [];
-        for (const row of rows) ids.push((await visvine.collections.insert(collection, row)).id);
+        // All at once: one round trip, so a frame closed a moment after it
+        // opened (a preview capture, a tab shut) never leaves half the rows.
+        const ids = (await Promise.all(rows.map((row) => visvine.collections.insert(collection, row)))).map((r) => r.id);
         await visvine.state.set(key, ids, { scope: 'install' });
         if (!cancelled) setHasSamples(ids.length > 0);
       } catch {
@@ -906,7 +932,8 @@ export function useSampleRows(collection: string, rows: RecordData[]): { seeding
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visvine, collection, key]);
   const clear = async () => {
-    const ids = (await visvine.state.get<string[]>(key, { scope: 'install' })) ?? [];
+    const held = await visvine.state.get<string[] | SeedClaim>(key, { scope: 'install' });
+    const ids = Array.isArray(held) ? held : [];
     for (const id of ids) {
       try { await visvine.collections.delete(collection, id); }
       catch (err) { if (!(err instanceof BridgeCallError && err.code === 'not_found')) throw err; }

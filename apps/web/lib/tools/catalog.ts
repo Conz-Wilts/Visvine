@@ -359,7 +359,7 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     kind: 'component',
     what: "A month grid with each day's items as coloured rows; ‹ Today › step the month.",
     when: 'Anything with a date that people plan around: content, rota, launches, leave.',
-    props: 'month: YYYY-MM-DD · onMonth · items: {id,date,title,hue?}[] · onOpen? · onDay?',
+    props: 'month: YYYY-MM-DD · onMonth · items: {id,date,title,hue?}[] · onOpen? · onDay? · rolling? (weeks from last week, for due dates)',
     snippet: `<MonthCalendar month={todayIso()} onMonth={() => {}} items={[{ id: '1', date: todayIso(), title: 'Launch', hue: 'violet' }]} />`,
     imports: ['todayIso'],
   },

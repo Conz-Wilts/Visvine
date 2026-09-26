@@ -163,7 +163,7 @@ const tracker: ToolTemplate = {
     'groupBy: the key of the select field the board has a column per option of (the status or stage). Omit only when nothing has stages.',
     'sumField: a money/number field summed per column and in the stats. dateField: the date that matters (due, close, publish) — gives a calendar and an Overdue count.',
     'doneValues: the options of groupBy that mean finished (["Won", "Lost"], ["Done"]); the first is counted in the stats.',
-    `sample: 8–12 realistic rows with real-sounding names, plausible numbers, spread across every option. ${DATE_OFFSET_NOTE}`,
+    `sample: 10–16 realistic rows with real-sounding names and plausible numbers, EVERY field filled: at least one in every option of groupBy (two or more in the open ones), dates spread over the coming month, and one open row a few days late. ${DATE_OFFSET_NOTE}`,
   ].join('\n'),
   railIcon: 'kanban',
   facts: (spec) => {
@@ -189,6 +189,12 @@ const tracker: ToolTemplate = {
     if (s.dateField && kind(s.dateField) !== 'date') problems.push('dateField must name a date field')
     const group = s.fields.find((f) => f.key === s.groupBy)
     for (const v of s.doneValues ?? []) if (group && !group.options?.some((o) => o.value === v)) problems.push(`doneValues "${v}" is not an option of ${s.groupBy}`)
+    // The first look is the whole flow working: every column holds something.
+    if (group?.kind === 'select') {
+      const empty = (group.options ?? []).filter((o) => !s.sample.some((r) => r[group.key] === o.value)).map((o) => o.value)
+      if (empty.length) problems.push(`sample has no row in ${empty.map((v) => `"${v}"`).join(', ')} — give every ${group.label.toLowerCase()} at least one (two in the open ones)`)
+    }
+    if (s.sample.length < 10) problems.push(`sample has ${s.sample.length} rows — write 10–16 so the board, table and calendar all look lived in`)
     return problems
   },
 }

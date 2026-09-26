@@ -104,8 +104,7 @@ function PollCard({ poll, votes, onVote, onClose, featured = false }: { poll: Po
 
 export default function App() {
   const visvine = useVisvine()
-  // Seeded last-first, so the newest-first list opens on the spec's first poll.
-  const sampleRows = useSampleRows('polls', useMemo(() => [...SPEC.sample].reverse() as unknown as RecordData[], []))
+  const sampleRows = useSampleRows('polls', useMemo(() => SPEC.sample as unknown as RecordData[], []))
   const polls = useCollection<PollData>('polls', { order: 'desc', limit: 100 })
   const votes = useCollection<Vote['data']>('votes', { limit: 200 })
   const [creating, setCreating] = useState(false)
@@ -115,7 +114,14 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   useBandAction('new', () => setCreating(true))
 
-  const all = (polls.data ?? []) as Poll[]
+  // Newest first, except that the sample polls keep the spec's order (they are written in one go), after anything new.
+  const sampleAt = (p: Poll) => SPEC.sample.findIndex((q) => q.question === p.data.question)
+  const all = [...((polls.data ?? []) as Poll[])].sort((a, b) => {
+    const ia = sampleAt(a)
+    const ib = sampleAt(b)
+    if (ia === -1 || ib === -1) return ia === ib ? b.createdAt.localeCompare(a.createdAt) : ia === -1 ? -1 : 1
+    return ia - ib
+  })
   const ballot = (votes.data ?? []) as Vote[]
   const votesFor = (id: string) => ballot.filter((v) => v.data.poll === id)
   const open = all.filter((p) => !p.data.closed)

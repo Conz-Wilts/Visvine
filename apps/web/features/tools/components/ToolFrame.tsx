@@ -554,14 +554,16 @@ function FrameScrim({ rect, corners }: { rect: DOMRect; corners: Corners }) {
   // to them: the sliver outside each curve is neither inside the frame nor
   // outside its rectangle, so it is dimmed here — a square masked to what the
   // curve leaves uncovered.
-  const box = corners.box ?? rect;
+  // Inside the frame's own rectangle, never over the four panes: an overlap
+  // would dim one line twice and draw a bracket round the corner.
   const corner = (r: number, at: 'tl' | 'tr' | 'bl' | 'br') => {
-    if (r <= 0) return null;
-    const x = at[1] === 'l' ? box.left : box.right - r;
-    const y = at[0] === 't' ? box.top : box.bottom - r;
+    const inner = Math.max(0, r - (corners.border ?? 0));
+    if (inner <= 0) return null;
+    const x = at[1] === 'l' ? rect.left : rect.right - inner;
+    const y = at[0] === 't' ? rect.top : rect.bottom - inner;
     const origin = `${at[1] === 'l' ? '100%' : '0%'} ${at[0] === 't' ? '100%' : '0%'}`;
-    const mask = `radial-gradient(circle at ${origin}, transparent ${r - 0.5}px, black ${r}px)`;
-    return <div key={at} className={pane} style={{ left: x, top: y, width: r, height: r, WebkitMaskImage: mask, maskImage: mask }} />;
+    const mask = `radial-gradient(circle at ${origin}, transparent ${Math.max(0, inner - 0.5)}px, black ${inner}px)`;
+    return <div key={at} className={pane} style={{ left: x, top: y, width: inner, height: inner, WebkitMaskImage: mask, maskImage: mask }} />;
   };
   return (
     <div aria-hidden>
@@ -582,23 +584,31 @@ interface Corners {
   tr: number;
   bl: number;
   br: number;
-  /** The rounded box, when it is an ancestor larger than the frame. */
-  box?: DOMRect;
+  /** Its border: the frame is clipped to the curve INSIDE it, so the ring is dimmed too. */
+  border?: number;
 }
 
-/** The rounding the frame is clipped by — its own, or the nearest rounded ancestor's — and where that box is. */
-function clippingCorners(el: HTMLElement | null): Corners {
+/** The nearest element, the frame's slot or above, that rounds its corners — what clips the frame. */
+function roundedAncestor(el: HTMLElement | null): HTMLElement | null {
   for (let node = el; node && node !== document.body; node = node.parentElement) {
     const style = getComputedStyle(node);
-    const c = {
-      tl: parseFloat(style.borderTopLeftRadius) || 0,
-      tr: parseFloat(style.borderTopRightRadius) || 0,
-      bl: parseFloat(style.borderBottomLeftRadius) || 0,
-      br: parseFloat(style.borderBottomRightRadius) || 0,
-    };
-    if (c.tl || c.tr || c.bl || c.br) return { ...c, box: node.getBoundingClientRect() };
+    if (['borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius'].some((k) => parseFloat(style[k as 'borderTopLeftRadius']) > 0)) return node;
   }
-  return { tl: 0, tr: 0, bl: 0, br: 0 };
+  return null;
+}
+
+/** The rounding the frame is clipped by — its own, or the nearest rounded ancestor's — and that box's border. */
+function clippingCorners(el: HTMLElement | null): Corners {
+  const node = roundedAncestor(el);
+  if (!node) return { tl: 0, tr: 0, bl: 0, br: 0 };
+  const style = getComputedStyle(node);
+  return {
+    tl: parseFloat(style.borderTopLeftRadius) || 0,
+    tr: parseFloat(style.borderTopRightRadius) || 0,
+    bl: parseFloat(style.borderBottomLeftRadius) || 0,
+    br: parseFloat(style.borderBottomRightRadius) || 0,
+    border: parseFloat(style.borderTopWidth) || 0,
+  };
 }
 
 /**

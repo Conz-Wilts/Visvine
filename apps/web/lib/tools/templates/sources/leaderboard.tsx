@@ -61,6 +61,11 @@ const SPEC: Spec = {
 type Entry = { id: string; data: { person: string; amount: number; reason?: string; note?: string; date: string; from?: string } }
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const daysAgoIso = (n: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return iso(d)
+}
 const unitFor = (n: number) => (n === 1 ? (SPEC.unitOne ?? SPEC.unit) : SPEC.unit)
 const PERIODS = [
   { value: 'week', label: 'Week' },
@@ -86,6 +91,8 @@ export default function App() {
   // Newest first by the day it happened, not the order the rows were written.
   const entries = useMemo(() => [...((data ?? []) as Entry[])].sort((a, b) => b.data.date.localeCompare(a.data.date)), [data])
   const [period, setPeriod] = useState('month')
+  const [who, setWho] = useState('')
+  const [why, setWhy] = useState('')
   const [giving, setGiving] = useState(false)
   const [form, setForm] = useState<{ person: string; amount: number; reason: string; note: string }>({ person: '', amount: SPEC.amounts[0] ?? 1, reason: '', note: '' })
   const [busy, setBusy] = useState(false)
@@ -168,31 +175,76 @@ export default function App() {
   )
 
   if (section === 'activity') {
+    const listed = entries.filter((e) => (!who || e.data.person === who || e.data.from === who) && (!why || e.data.reason === why))
+    const groups = [
+      { title: 'This week', list: listed.filter((e) => e.data.date >= daysAgoIso(7)) },
+      { title: 'Last week', list: listed.filter((e) => e.data.date < daysAgoIso(7) && e.data.date >= daysAgoIso(14)) },
+      { title: 'Earlier', list: listed.filter((e) => e.data.date < daysAgoIso(14)) },
+    ].filter((g) => g.list.length > 0)
     return (
       <Page width="normal">
-      <SampleData state={sampleRows} />
-        <ul className="flex flex-col">
-          {entries.map((e) => (
-            <EntryRow key={e.id} entry={e} />
+        <SampleData state={sampleRows} />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-48">
+            <Select size="sm" aria-label="Person" value={who} placeholder="Everyone" options={[{ value: '', label: 'Everyone' }, ...people.map((p) => ({ value: p, label: p }))]} onValueChange={setWho} />
+          </div>
+          {(SPEC.reasons ?? []).map((r) => (
+            <button
+              key={r}
+              type="button"
+              aria-pressed={why === r}
+              onClick={() => setWhy(why === r ? '' : r)}
+              className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${why === r ? 'border-accent bg-accent-soft font-medium text-fg' : 'border-line-subtle text-fg-secondary hover:bg-surface-subtle'}`}
+            >
+              {r}
+            </button>
           ))}
-        </ul>
+        </div>
+        {groups.length === 0 ? (
+          <p className="py-8 text-center text-sm text-fg-muted">Nothing matches.</p>
+        ) : (
+          groups.map((g) => (
+            <section key={g.title}>
+              <h2 className="flex items-baseline gap-2 border-b border-line-subtle pb-2 text-sm font-semibold text-fg">
+                {g.title}
+                <span className="font-normal text-fg-muted">
+                  {g.list.reduce((a, e) => a + (Number(e.data.amount) || 0), 0)} {SPEC.unit}
+                </span>
+              </h2>
+              <ul className="flex flex-col">
+                {g.list.map((e) => (
+                  <EntryRow key={e.id} entry={e} />
+                ))}
+              </ul>
+            </section>
+          ))
+        )}
         {dialog}
       </Page>
     )
   }
 
-  const leader = ranking[0]?.total ? ranking[0] : null
+  const leaders = ranking.filter((r) => r.place === 1 && r.total > 0)
+  const leader = leaders[0] ?? null
   const periodLabel = PERIODS.find((p) => p.value === period)?.label.toLowerCase() ?? ''
   const inPeriod = entries.filter((e) => !since || e.data.date >= since)
-  const reasonCounts = (SPEC.reasons ?? []).map((r) => ({ reason: r, n: inPeriod.filter((e) => e.data.reason === r).length })).filter((r) => r.n > 0).sort((a, b) => b.n - a.n)
+  const reasonCounts = (SPEC.reasons ?? []).map((r) => ({ reason: r, n: inPeriod.filter((e) => e.data.reason === r).reduce((a, e) => a + (Number(e.data.amount) || 0), 0) })).filter((r) => r.n > 0).sort((a, b) => b.n - a.n)
+  const givers = new Map<string, number>()
+  for (const e of inPeriod) if (e.data.from) givers.set(e.data.from, (givers.get(e.data.from) ?? 0) + (Number(e.data.amount) || 0))
+  const topGiver = [...givers].sort((a, b) => b[1] - a[1])[0]
   return (
     <Page>
       <SampleData state={sampleRows} />
       <StatRow>
-        <Stat lead label={`Leader · ${period === 'all' ? 'all time' : `this ${periodLabel}`}`} value={leader ? leader.person : '—'} hint={leader ? `${leader.total} ${unitFor(leader.total)}` : undefined} />
-        <Stat label={`${SPEC.unit.charAt(0).toUpperCase() + SPEC.unit.slice(1)} given`} value={periodTotal} hint={`${inPeriod.length} ${inPeriod.length === 1 ? 'time' : 'times'}`} />
-        <Stat label="People on the board" value={ranking.filter((r) => r.total > 0).length} hint={`of ${people.length}`} />
-        {reasonCounts[0] && <Stat label="Most given for" value={reasonCounts[0].reason} hint={`${reasonCounts[0].n} ${reasonCounts[0].n === 1 ? 'time' : 'times'}`} />}
+        <Stat
+          lead
+          label={`${leaders.length > 1 ? 'Tied for first' : 'Leader'} · ${period === 'all' ? 'all time' : `this ${periodLabel}`}`}
+          value={leader ? (leaders.length > 2 ? `${leaders.length} people` : leaders.map((l) => l.person.split(' ')[0]).join(' & ')) : '—'}
+          hint={leader ? `${leader.total} ${unitFor(leader.total)}${leaders.length > 1 ? ' each' : ''}` : undefined}
+        />
+        <Stat label={`${SPEC.unit.charAt(0).toUpperCase() + SPEC.unit.slice(1)} given`} value={periodTotal} hint={`in ${inPeriod.length} ${inPeriod.length === 1 ? 'entry' : 'entries'}`} />
+        {topGiver && <Stat label="Most generous" value={topGiver[0]} hint={`gave ${topGiver[1]} ${unitFor(topGiver[1])}`} />}
+        {reasonCounts[0] && <Stat label="Most given for" value={reasonCounts[0].reason} hint={`${reasonCounts[0].n} ${unitFor(reasonCounts[0].n)}`} />}
       </StatRow>
       <div className="grid grid-cols-1 gap-8 md:grid-cols-5">
         <section className="flex flex-col gap-2 md:col-span-3">
@@ -204,11 +256,11 @@ export default function App() {
             {ranking.map((r) => {
               const first = r.place === 1 && r.total > 0
               return (
-                <li key={r.person} className={`flex items-center gap-3 border-b border-line-subtle px-2 py-2.5 ${first ? 'rounded-lg border-transparent bg-accent-soft' : ''}`}>
+                <li key={r.person} className={`flex items-center gap-3 border-b border-line-subtle px-2 py-2.5 ${first ? 'bg-accent-soft' : ''}`}>
                   <span className={`w-5 text-center text-sm font-semibold tabular-nums ${first ? 'text-accent-strong' : 'text-fg-muted'}`}>{r.place}</span>
-                  <PersonAvatar name={r.person} size={first ? 'md' : 'sm'} />
+                  <PersonAvatar name={r.person} size="sm" />
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                    <span className={`truncate text-fg ${first ? 'text-base font-semibold' : 'text-sm font-medium'}`}>{r.person}</span>
+                    <span className={`truncate text-sm text-fg ${first ? 'font-semibold' : 'font-medium'}`}>{r.person}</span>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
                       <div className={`h-full rounded-full transition-all ${first ? 'bg-accent-strong' : 'bg-fg-subtle'}`} style={{ width: `${(r.total / top) * 100}%` }} />
                     </div>
@@ -220,6 +272,20 @@ export default function App() {
               )
             })}
           </ol>
+          {reasonCounts.length > 0 && (
+            <div className="mt-6 flex flex-col gap-3">
+              <h2 className="text-sm font-semibold text-fg">By reason</h2>
+              {reasonCounts.map((r) => (
+                <div key={r.reason} className="flex items-center gap-3 text-sm">
+                  <span className="w-40 shrink-0 truncate text-fg-secondary">{r.reason}</span>
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-muted">
+                    <span className="block h-full rounded-full bg-fg-subtle" style={{ width: `${(r.n / reasonCounts[0].n) * 100}%` }} />
+                  </span>
+                  <span className="w-10 text-right tabular-nums text-fg">{r.n}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
         <section className="flex flex-col gap-2 md:col-span-2">
           <h2 className="text-sm font-semibold text-fg">Recent</h2>

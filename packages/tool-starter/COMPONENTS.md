@@ -446,7 +446,7 @@ Props: items · itemKey · selected · onSelect · renderItem(item, selected) ·
 
 A month grid with each day's items as coloured rows; ‹ Today › step the month. Anything with a date that people plan around: content, rota, launches, leave.
 
-Props: month: YYYY-MM-DD · onMonth · items: {id,date,title,hue?}[] · onOpen? · onDay?
+Props: month: YYYY-MM-DD · onMonth · items: {id,date,title,hue?}[] · onOpen? · onDay? · rolling? (weeks from last week, for due dates)
 
 ```tsx
 <MonthCalendar month={todayIso()} onMonth={() => {}} items={[{ id: '1', date: todayIso(), title: 'Launch', hue: 'violet' }]} />
