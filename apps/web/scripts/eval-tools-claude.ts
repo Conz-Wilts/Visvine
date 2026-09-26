@@ -176,15 +176,21 @@ async function capture(name: string, dir: string, base: string): Promise<{ shots
   const shots: Shot[] = []
   const captureErrors: string[] = []
   for (const [i, p] of plan.entries()) {
-    type Capture = { available: boolean; reason?: string; png_base64?: string | null; jpeg_base64?: string | null; mime?: string; console_errors?: string[]; action_missing?: string }
-    const out = await act<{ screenshot?: Capture }>('preview_tool', {
-      space_id: SPACE,
-      name,
-      screenshot: true,
-      ...(p.section ? { section: p.section } : {}),
-      ...(p.action ? { action: p.action } : {}),
-    }).catch((err: unknown) => ({ screenshot: { available: false, reason: String(err) } as Capture }))
+    type Capture = { available: boolean; reason?: string; png_base64?: string | null; jpeg_base64?: string | null; mime?: string; console_errors?: string[]; action_missing?: string; rendered?: boolean }
+    const shoot = () =>
+      act<{ screenshot?: Capture }>('preview_tool', {
+        space_id: SPACE,
+        name,
+        screenshot: true,
+        ...(p.section ? { section: p.section } : {}),
+        ...(p.action ? { action: p.action } : {}),
+      }).catch((err: unknown) => ({ screenshot: { available: false, reason: String(err) } as Capture }))
+    // A page still loading when the budget ran out is the server being busy,
+    // not the Tool: look again before it is judged.
+    let out = await shoot()
+    for (let retry = 0; retry < 2 && out.screenshot?.available && out.screenshot.rendered === false; retry++) out = await shoot()
     const s = out.screenshot
+    if (s?.available && s.rendered === false) captureErrors.push(`${p.screen}: the Tool never mounted within the capture budget`)
     const image = s?.png_base64 ?? s?.jpeg_base64
     if (!s?.available || !image) {
       captureErrors.push(`${p.screen}: ${s?.reason ?? 'no image'}`)
@@ -335,6 +341,64 @@ function report(summary: Record<string, unknown>, results: Array<Record<string, 
   return lines.join('\n')
 }
 
+/** Capture and judge again, one Tool at a time, every row of an earlier run that built a Tool. */
+async function rejudge(dir: string) {
+  const { readFileSync } = await import('node:fs')
+  const rows = JSON.parse(readFileSync(join(dir, 'results.json'), 'utf8')) as Array<Record<string, unknown>>
+  for (const row of rows) {
+    if (!row.name) continue
+    const name = String(row.name)
+    try {
+      const { shots, title, captureErrors } = await capture(name, dir, `${slug(String(row.request))}-rj`)
+      const console_errors = [...new Set(shots.flatMap((s) => s.errors))]
+      const judged = shots.length ? await judge(String(row.request), title, shots, dir) : null
+      let score = judged?.verdict?.score ?? 0
+      if (console_errors.length) score = Math.min(score, 4)
+      Object.assign(row, {
+        first_score: row.first_score ?? row.score,
+        score,
+        passes: judged?.verdict ? passes(judged.verdict) && score === judged.verdict.score : false,
+        scores: judged?.verdict?.scores,
+        screens: judged?.screens,
+        fixes: judged?.verdict?.fixes,
+        broken: judged?.broken ?? [],
+        fit: judged?.fit ?? '',
+        capture_errors: captureErrors,
+        console_errors,
+      })
+      delete row.error
+    } catch (err) {
+      Object.assign(row, { score: 0, error: String(err).slice(0, 400) })
+    }
+    console.log(`${String(row.score).padStart(5)}  ${String(row.request)}  (was ${String(row.first_score)})`)
+    writeFileSync(join(dir, 'results.json'), JSON.stringify(rows, null, 2))
+  }
+  finish(dir, String(rows[0]?.label ?? LABEL), rows)
+}
+
+function finish(dir: string, label: string, results: Array<Record<string, unknown>>) {
+  const scored = results.map((r) => Number(r.score ?? 0))
+  const per = Object.fromEntries(
+    RUBRIC.map((r) => [r.key, Math.round((results.reduce((a, row) => a + Number((row.scores as Record<string, number> | undefined)?.[r.key] ?? 0), 0) / results.length) * 10) / 10]),
+  )
+  const summary = {
+    label,
+    builder: BUILDER_MODEL,
+    judge: JUDGE_MODEL,
+    prompts: results.length,
+    mean: Math.round((scored.reduce((a, b) => a + b, 0) / results.length) * 100) / 100,
+    min: Math.min(...scored),
+    passing: results.filter((r) => r.passes).length,
+    from_template: results.filter((r) => r.from_template).length,
+    failed: results.filter((r) => r.error).length,
+    per_criterion: per,
+  }
+  writeFileSync(join(dir, 'summary.json'), JSON.stringify(summary, null, 2))
+  writeFileSync(join(dir, 'report.md'), report(summary, results))
+  console.log('\n' + JSON.stringify(summary, null, 2))
+  console.log(`\nReport: ${join(dir, 'report.md')}`)
+}
+
 async function main() {
   const secret = process.env.AUTH_SECRET
   if (!secret) throw new Error('AUTH_SECRET is needed to act as the dev user')
@@ -345,6 +409,12 @@ async function main() {
   mkdirSync(dir, { recursive: true })
   const mcp = join(dir, 'mcp.json')
   writeFileSync(mcp, JSON.stringify({ mcpServers: { 'visvine-dev': { type: 'http', url: `${ORIGIN}/api/mcp` } } }))
+
+  const REJUDGE = arg('rejudge')
+  if (REJUDGE) {
+    await rejudge(join(process.cwd(), '.eval', 'tools', REJUDGE))
+    return
+  }
 
   // A clean lab: Tools left from an earlier run would change what the builder
   // is told ("this space already has 12 Tools — extend one").
@@ -367,27 +437,8 @@ async function main() {
   }
   await Promise.all(Array.from({ length: Math.max(1, CONCURRENCY) }, worker))
 
-  const scored = results.map((r) => Number(r.score ?? 0))
-  const per = Object.fromEntries(
-    RUBRIC.map((r) => [r.key, Math.round((results.reduce((a, row) => a + Number((row.scores as Record<string, number> | undefined)?.[r.key] ?? 0), 0) / results.length) * 10) / 10]),
-  )
-  const summary = {
-    label: LABEL,
-    run,
-    builder: BUILDER_MODEL,
-    judge: JUDGE_MODEL,
-    prompts: results.length,
-    mean: Math.round((scored.reduce((a, b) => a + b, 0) / results.length) * 100) / 100,
-    min: Math.min(...scored),
-    passing: results.filter((r) => r.passes).length,
-    from_template: results.filter((r) => r.from_template).length,
-    failed: results.filter((r) => r.error).length,
-    per_criterion: per,
-  }
-  writeFileSync(join(dir, 'summary.json'), JSON.stringify(summary, null, 2))
-  writeFileSync(join(dir, 'report.md'), report(summary, results))
-  console.log('\n' + JSON.stringify(summary, null, 2))
-  console.log(`\nReport: ${join(dir, 'report.md')}`)
+  results.forEach((r) => (r.label = LABEL))
+  finish(dir, LABEL, results)
 }
 
 main().catch((err) => {
