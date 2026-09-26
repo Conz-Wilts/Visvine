@@ -45,7 +45,7 @@ export const SCREENSHOT_WIDTH = 1024
 export const SCREENSHOT_HEIGHT = 768
 
 /** Wall clock for the whole capture, launch to close. */
-export const SCREENSHOT_BUDGET_MS = 10_000
+export const SCREENSHOT_BUDGET_MS = 20_000
 
 /** Past this the PNG is retaken as a JPEG — the answer rides in an MCP result. */
 export const SCREENSHOT_MAX_BYTES = 300_000
@@ -129,6 +129,35 @@ const STEP_TIMEOUT_MS = 2500
 /** After an act, a beat for the Tool's state and reads to settle and paint. */
 const STEP_SETTLE_MS = 400
 export const MAX_TOOL_STEPS = 20
+/** Longest the capture waits for a mounted Tool to finish loading. */
+const SETTLE_MAX_MS = 8000
+/** What "still loading" looks like, and how much there is to read. */
+const LOAD_STATE = `() => {
+  const busy = document.querySelectorAll('.animate-spin, [aria-busy="true"], .animate-pulse').length
+  return busy + ':' + (document.body ? document.body.innerText.length : 0)
+}`
+
+/**
+ * Wait until the frame shows no spinner or skeleton and its text has held
+ * still for two looks in a row — at least 600ms, at most \`maxMs\`.
+ */
+async function settle(page: PageLike, frame: FrameLike, maxMs: number): Promise<void> {
+  const until = Date.now() + Math.max(600, maxMs)
+  let last = ''
+  let still = 0
+  while (Date.now() < until) {
+    await page.waitForTimeout(300)
+    let state = ''
+    try {
+      state = String(await frame.evaluate(LOAD_STATE))
+    } catch {
+      return
+    }
+    still = state === last && state.startsWith('0:') ? still + 1 : 0
+    last = state
+    if (still >= 2) return
+  }
+}
 const MAX_OUTLINE_CHARS = 12_000
 /** A full-page capture stops at this height. */
 const MAX_FULL_PAGE_HEIGHT = 4000
@@ -429,19 +458,20 @@ export async function captureToolPreview(req: ScreenshotRequest): Promise<Screen
     let rendered = false
     let toolFrame: FrameLike | undefined
     try {
-      await page.waitForSelector('iframe', { timeout: Math.min(remaining(), 6000), state: 'attached' })
+      await page.waitForSelector('iframe', { timeout: Math.min(remaining(), 12000), state: 'attached' })
       const frame = page.frames().find((f) => f.url().includes('/api/tools/runtime/frame'))
       toolFrame = frame
       if (frame) {
         await frame.waitForFunction(
           '() => { const r = document.getElementById("root"); return !!r && r.childElementCount > 0 }',
           undefined,
-          { timeout: Math.min(remaining(), 6000) },
+          { timeout: Math.min(remaining(), 8000) },
         )
         rendered = true
-        // A beat for effects and the first reads to land and paint — a capture
-        // taken mid-load shows an empty page the author would then "fix".
-        await page.waitForTimeout(Math.min(remaining(), 1500))
+        // Then until it settles: the first reads land, spinners go, the text
+        // stops changing — a capture taken mid-load shows an empty page the
+        // author would then "fix".
+        await settle(page, frame, Math.min(remaining() - 1500, SETTLE_MAX_MS))
       }
     } catch {
       rendered = false

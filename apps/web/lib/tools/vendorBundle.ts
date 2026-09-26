@@ -37,7 +37,7 @@ import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build, type Plugin } from 'esbuild'
 import { logger } from '@/lib/logger'
-import { CURATED_DEPENDENCIES, type CuratedDependencyName } from '@visvine/tool-protocol/dependencies'
+import { CURATED_DEPENDENCIES, curatedPackageOf, type CuratedDependencyName } from '@visvine/tool-protocol/dependencies'
 
 /**
  * The files the import map names: React, its JSX runtime and DOM client, the
@@ -55,6 +55,16 @@ export const VENDOR_FILES = [
   'dep-zod.js',
   'dep-date-fns.js',
   'dep-clsx.js',
+  'dep-lucide-react.js',
+  'dep-motion-react.js',
+  'dep-dnd-kit-core.js',
+  'dep-dnd-kit-sortable.js',
+  'dep-dnd-kit-utilities.js',
+  'dep-tanstack-react-table.js',
+  'dep-react-hook-form.js',
+  'dep-papaparse.js',
+  'dep-fuse.js',
+  'dep-nanoid.js',
 ] as const
 
 export type VendorFileName = (typeof VENDOR_FILES)[number]
@@ -194,13 +204,34 @@ export function installedVersion(name: string): string {
  * An ESM package re-exported whole. Its `default` rides along when it has
  * one — read off the module at build time, like React's names above.
  */
-async function dependencyEntry(name: CuratedDependencyName): Promise<string> {
+async function dependencyEntry(name: CuratedDependencyName, withDefault = true): Promise<string> {
   const require = createRequire(pathToFileURL(join(appRoot(), 'package.json')))
+  const spec = JSON.stringify(name)
+  const pkg = JSON.parse(readFileSync(packageJsonOf(curatedPackageOf(name), require), 'utf8')) as {
+    type?: string
+    module?: string
+    exports?: unknown
+  }
+  if (pkg.type === 'module' || pkg.module || JSON.stringify(pkg.exports ?? '').includes('"import"')) {
+    return [`export * from ${spec}`, withDefault ? `export { default } from ${spec}` : '', ''].filter(Boolean).join('\n')
+  }
   const loaded = require(name) as Record<string, unknown>
-  const hasDefault = 'default' in loaded && loaded.default !== loaded
-  return [`export * from ${JSON.stringify(name)}`, hasDefault ? `export { default } from ${JSON.stringify(name)}` : '', '']
-    .filter(Boolean)
-    .join('\n')
+  // CommonJS: esbuild cannot see through `export *` of one, so its names are
+  // listed from the module Node loaded — the same object the browser gets.
+  const names = Object.keys((loaded.default ?? loaded) as object).filter((key) => /^[A-Za-z_$][\w$]*$/.test(key) && key !== 'default')
+  return [`import __m from ${spec}`, 'export default __m', names.length ? `export const { ${names.join(', ')} } = __m` : '', ''].filter(Boolean).join('\n')
+}
+
+/** A package's own package.json, walking up from its entry. */
+function packageJsonOf(name: string, require: NodeJS.Require): string {
+  let dir = dirname(require.resolve(name))
+  for (;;) {
+    const manifest = join(dir, 'package.json')
+    if (existsSync(manifest) && (JSON.parse(readFileSync(manifest, 'utf8')) as { name?: string }).name === name) return manifest
+    const parent = dirname(dir)
+    if (parent === dir) throw new Error(`No package.json for ${name}`)
+    dir = parent
+  }
 }
 
 /** Tailwind's spacing scale, every step — a Tool may reach for any of them. */
@@ -231,9 +262,14 @@ const TOOL_LAYOUT_UTILITIES: readonly string[] = [
   '{sm:,md:,lg:,}text-{xs,sm,base,lg,xl,2xl,3xl,4xl,5xl} {text-left,text-center,text-right}',
   'font-{normal,medium,semibold,bold} leading-{none,tight,snug,normal,relaxed} tracking-{tight,wide} tabular-nums uppercase',
   'rounded{,-sm,-md,-lg,-xl,-2xl,-full} border{,-2,-t,-b,-l,-r,-0} divide-{y,x}',
-  '{border,divide}-{line,line-subtle,accent,danger}',
-  '{text,bg}-{fg,fg-secondary,fg-muted,fg-subtle,accent,danger,surface,surface-subtle,surface-muted,accent-soft,danger-wash}',
-  '{relative,absolute,sticky} inset-0 {z-0,z-10} aspect-{square,video} opacity-{50,60,70}',
+  '{hover:,focus-visible:,group-hover:,}{border,divide}-{line,line-subtle,accent,danger,success-line,warning-line,info-line,danger-line}',
+  '{hover:,focus-visible:,group-hover:,}{text,bg}-{fg,fg-secondary,fg-muted,fg-subtle,fg-inverse,fg-link,accent,accent-strong,danger,surface,surface-subtle,surface-muted,accent-soft,danger-wash}',
+  '{text,bg,border}-{success,warning,info}{,-wash,-strong,-line}',
+  '{hover:,}{text,bg,border}-hue-{gray,red,orange,amber,yellow,green,teal,cyan,sky,blue,indigo,violet,pink}{,-fg,-wash,-line}',
+  '{relative,absolute,sticky,fixed} inset-0 top-0 {z-0,z-10,z-20} aspect-{square,video} opacity-{0,40,50,60,70,100} {group-hover:,}opacity-100',
+  'group cursor-pointer select-none pointer-events-none transition{,-colors,-opacity,-transform} duration-{100,150,200} ease-out',
+  'shadow{,-sm,-md,-lg} ring{,-1,-2} ring-{line,accent} outline-none line-clamp-{1,2,3} object-{cover,contain} list-{disc,decimal} list-inside',
+  '{sm:,md:,lg:,}{order-first,order-last} items-stretch place-items-center grid-rows-{1,2,3} auto-rows-fr',
 ]
 
 /**
@@ -253,6 +289,9 @@ async function buildKitStylesheet(): Promise<string> {
     '@import "@visvine/tokens/theme.css";',
     '@source "../../packages/ui/src";',
     `@source "./${KIT_DIR.split('\\').join('/')}";`,
+    // The starting Tools a build copies (lib/tools/templates) draw with their
+    // own classes; compiling them in means a template never loses a style.
+    '@source "./lib/tools/templates/sources";',
     ...TOOL_LAYOUT_UTILITIES.map((set) => `@source inline("${set}");`),
   ].join('\n')
   const compiler = await compile(input, { base: root, onDependency: () => {} })
@@ -364,11 +403,30 @@ async function buildOne(name: VendorFileName): Promise<string> {
   const dependency = dependencyOf(name)
   if (dependency) {
     // Pinned: the version on disk is the one the table promises every Tool.
-    const served = installedVersion(dependency)
+    const served = installedVersion(curatedPackageOf(dependency))
     if (served !== CURATED_DEPENDENCIES[dependency].version) {
       throw new Error(`${dependency} is ${served} on disk but the curated table serves ${CURATED_DEPENDENCIES[dependency].version}`)
     }
-    return buildModule({ contents: await dependencyEntry(dependency), resolveDir: root, sourcefile: name, loader: 'js' })
+    // React and every other curated module stay external, so a package that
+    // builds on another (@dnd-kit/sortable on core) shares the one copy the
+    // import map serves instead of bundling a second context of its own.
+    // React goes through the ESM stub (a CommonJS dependency requires it);
+    // the curated modules are ESM themselves and stay plain externals.
+    const bundle = async (withDefault: boolean) =>
+      buildModule({
+        contents: await dependencyEntry(dependency, withDefault),
+        resolveDir: root,
+        sourcefile: name,
+        loader: 'js',
+        external: Object.keys(CURATED_DEPENDENCIES).filter((other) => other !== dependency),
+        plugins: [externalViaEsm(['react', 'react-dom', 'react/jsx-runtime'], root)],
+      })
+    // An ES module's default export is re-exported when it has one; which
+    // ones do is esbuild's to say, not a guess made here.
+    return bundle(true).catch((err: unknown) => {
+      if (err instanceof Error && /No matching export .* for import "default"/.test(err.message)) return bundle(false)
+      throw err
+    })
   }
   switch (name) {
     case 'react.js':

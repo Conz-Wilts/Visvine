@@ -21,9 +21,22 @@
   // Tool SOURCE files the verify scripts read off disk and feed to the
   // server-side Tool compiler. Nothing imports them, and nothing should:
   // `@visvine/tool-kit` only resolves through the frame's import map at run
-  // time. They are fixtures, not modules.
-  "ignore": ["scripts/fixtures/**"],
+  // time. They are fixtures, not modules. The starting Tools are the same:
+  // read as text (scripts/build-tool-templates.ts), typed by their own test.
+  "ignore": ["scripts/fixtures/**", "lib/tools/templates/sources/**"],
   // Curated dependencies the vendor build serves to Tools (lib/tools/vendorBundle.ts,
   // @visvine/tool-protocol/dependencies); nothing in the app imports them.
-  "ignoreDependencies": ["date-fns"]
+  "ignoreDependencies": [
+    "date-fns",
+    "lucide-react",
+    "motion",
+    "@dnd-kit/core",
+    "@dnd-kit/sortable",
+    "@dnd-kit/utilities",
+    "@tanstack/react-table",
+    "react-hook-form",
+    "papaparse",
+    "fuse.js",
+    "nanoid"
+  ]
 }

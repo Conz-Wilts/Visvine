@@ -153,11 +153,13 @@ export interface KanbanColumnProps {
   actions?: ReactNode;
   /** Shown when the column has no cards. */
   empty?: ReactNode;
+  /** Share the board's width with the other columns instead of a fixed 18rem — for a board of four or fewer. */
+  fill?: boolean;
   className?: string;
   children?: ReactNode;
 }
 
-export function KanbanColumn({ id, title, count, actions, empty, className, children }: KanbanColumnProps) {
+export function KanbanColumn({ id, title, count, actions, empty, fill = false, className, children }: KanbanColumnProps) {
   const board = useContext(BoardContext);
   const isOver = board?.drag?.over?.columnId === id;
   const hasCards = Array.isArray(children) ? children.length > 0 : Boolean(children);
@@ -167,7 +169,8 @@ export function KanbanColumn({ id, title, count, actions, empty, className, chil
       <div
         {...attrs}
         className={cx(
-          'flex w-72 shrink-0 flex-col rounded-lg border',
+          'flex flex-col rounded-lg border',
+          fill ? 'min-w-60 flex-1' : 'w-72 shrink-0',
           isOver ? 'border-accent bg-accent-soft' : 'border-transparent bg-surface-subtle',
           className,
         )}

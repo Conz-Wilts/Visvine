@@ -1380,6 +1380,15 @@ iframe on a cookie-less origin. `docs/tools.md` is the guide. The invariants:
   Edit, Manage and Report. The section is `?section=`, pushed into the frame as
   `visvine:route` — a tab press never reloads the frame. Nav and actions are
   surfaces, so changing them is reviewed like a new rail row.
+- **A vague request still gets a designed Tool.** Six templates
+  (`lib/tools/templates/`) are finished Tools whose `SPEC` block is all a build
+  writes; `plan_tool` picks one, `create_tool { template, spec }` makes it, the
+  kit's page blocks and records-by-schema (`RecordBoard`, `RecordDialog`,
+  `StatRow`, `Toolbar`, `useSampleRows`…) draw everything else, and
+  `check_tool { review: true }` scores every screen by eye
+  (`lib/tools/visualReview.ts`, advice only). `build_tool` is the loop in one
+  call on the space's model; `pnpm eval:tools` is the number
+  (`docs/tools.md` § One-shot).
 - **A Tool is planned before it is written.** `plan_tool` reads the space and
   returns where each thing should live (the space's records, a note type with
   `add_type` fields, or the Tool's collection) and the plan to agree with the

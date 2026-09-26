@@ -9,6 +9,7 @@
  * records, a collection where agents needed notes). One that reads this first
  * decides it on purpose, says so, and builds once.
  */
+import { defaultSpecText, matchTemplate, matchTemplates, templateById } from '../templates'
 
 export interface SpaceTypeFact {
   type: string
@@ -70,6 +71,16 @@ export interface PlanBrief {
   existing_tools: Array<{ name: string; title: string; description: string | null }>
   /** Traps the request walks into, said before they cost a refusal. */
   warnings: string[]
+  /** The finished Tool to start from, and how to say what this one is about. */
+  template: {
+    id: string
+    title: string
+    summary: string
+    spec_guide: string
+    /** The template's own spec — the shape to follow, not the content. */
+    example: string
+    alternatives: Array<{ id: string; title: string; summary: string }>
+  }
   /** The decision, then the plan to show the person. */
   decide: string[]
   plan_template: string
@@ -124,6 +135,8 @@ export const PLAN_TEMPLATE = [
 ].join('\n')
 
 export function buildPlanBrief(facts: PlanFacts): PlanBrief {
+  const ranked = matchTemplates(facts.request ?? '')
+  const chosen = matchTemplate(facts.request ?? '')
   const byType = new Map(facts.types.map((t) => [t.type, t]))
   const records = Object.entries(RECORD_KINDS)
     .map(([type, kind]) => {
@@ -159,7 +172,19 @@ export function buildPlanBrief(facts: PlanFacts): PlanBrief {
     custom_types,
     existing_tools: facts.tools,
     warnings,
+    template: {
+      id: chosen.id,
+      title: chosen.title,
+      summary: chosen.summary,
+      spec_guide: chosen.specGuide,
+      example: defaultSpecText(chosen.id),
+      alternatives: ranked
+        .filter((m) => m.id !== chosen.id)
+        .map((m) => templateById(m.id)!)
+        .map((t) => ({ id: t.id, title: t.title, summary: t.summary })),
+    },
     decide: [
+      `Start from a template unless none fits: \`${chosen.id}\` (${chosen.summary}) fits this request best; the alternatives are listed. A template is a finished, designed Tool — you write only its spec (what THIS one is about: nouns, fields, options, realistic sample rows) and get a Tool that already looks right. A vague request still gets a full spec: decide the fields a team like this would want.`,
       'For each kind of thing the Tool shows, pick ONE home (the tool_data guide): the space\'s records when it is about things the space already tracks (records above); a note type of its own in a folder when agents and search should see it (add_type with fields, then a folder binding); the Tool\'s own collection when only this Tool cares (votes, predictions, check-ins).',
       'Give every field with a known set of values an enum — that is what its Select draws.',
       'Pick each chart from the tool_charts guide, and put the numbers beside it.',
@@ -167,7 +192,8 @@ export function buildPlanBrief(facts: PlanFacts): PlanBrief {
     ],
     plan_template: PLAN_TEMPLATE,
     next: [
-      'Fill in plan_template and show it to the person in ONE message; build on their yes, or on "you decide".',
+      'Fast path (most requests): write the template\'s spec — follow spec_guide, shaped like example — tell the person in ONE short message what it will be (the views, the fields, the stages), and on their yes (or "you decide") call create_tool { template, spec, title, description, name }. Then look at it: preview_tool { screenshot: true } per section.',
+      'Custom path (no template fits, or it must work over the space\'s own records): fill in plan_template and show it to the person in ONE message; build on their yes, or on "you decide".',
       'Model the data first: add_type (with fields) for a note type; the collection schema goes in configure_tool.',
       'create_tool with `plan` set to the filled-in template, then configure_tool (surfaces, collections, bindings, permissions), set_tool_icon, and write_tool.',
       'End with the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action, then try_tool through the main act.',

@@ -95,3 +95,6 @@ tmp/
 # build output (desktop: electron-builder; web: esbuild vendor bundles)
 **/dist/
 **/release/
+
+# pnpm eval:tools — screenshots and scores of each run
+apps/web/.eval/

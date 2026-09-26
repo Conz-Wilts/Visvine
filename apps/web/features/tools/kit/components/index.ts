@@ -71,3 +71,43 @@ export {
   Toggle,
 } from '@visvine/ui';
 export type { MenuItem } from '@visvine/ui';
+
+// ── page blocks and records by schema (2026-09) ──
+export { Icon, ICON_NAMES } from './Icon';
+export type { IconName, IconProps } from './Icon';
+export { ListDetail, MonthCalendar, Page, Progress, Stat, StatRow, Toolbar, todayIso } from './blocks';
+export type { CalendarItem, ListDetailProps, MonthCalendarProps, PageProps, ProgressProps, StatProps, ToolbarProps, ToolbarView } from './blocks';
+export {
+  daysFrom,
+  FieldInput,
+  FieldValue,
+  formatDate,
+  formatMoney,
+  formatNumber,
+  HueChip,
+  HueDot,
+  HUES,
+  missingRequired,
+  optionsOf,
+  RecordBoard,
+  RecordDialog,
+  RecordForm,
+  RecordsEmpty,
+  RecordTable,
+  relativeDate,
+  useSampleRows,
+} from './records';
+export type {
+  FieldDef,
+  FieldInputProps,
+  FieldKind,
+  FieldOption,
+  FieldValueProps,
+  Hue,
+  HueChipProps,
+  RecordBoardProps,
+  RecordData,
+  RecordDialogProps,
+  RecordFormProps,
+  RecordTableProps,
+} from './records';

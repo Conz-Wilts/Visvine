@@ -57,6 +57,9 @@ import { TOOL_PHONE_REFUSAL } from '@/lib/tools/clientClass'
 import { describeRequirements, isDegraded, sourceRequirements } from '@/lib/tools/requirements'
 import { TOOL_AUTHOR_GUIDE, TOOL_KIT_DTS } from '@/lib/tools/sdkDocs'
 import { renderCatalog } from '@/lib/tools/catalog'
+import { reviewModel, reviewScreens, visualReviewAvailable } from '@/lib/tools/visualReview'
+import { passes } from '@/lib/tools/shared/visualRubric'
+import { applySpec, checkSpec, templateById, TOOL_TEMPLATES, type ToolTemplate } from '@/lib/tools/templates'
 import { bindableSpace as bindableSpaceService } from '@/lib/tools/bindable'
 import { bindingChoices, type BindableSpace, type BindingValues } from '@visvine/tool-protocol/bindings'
 import {
@@ -377,6 +380,8 @@ interface CreateToolArgs {
   title: string
   description: string
   plan?: string
+  template?: string
+  spec?: Record<string, unknown>
 }
 
 /**
@@ -409,6 +414,10 @@ interface CheckToolArgs {
   name: string
   /** Also render the preview headlessly and include its console errors (no image). */
   render?: boolean
+  /** Also screenshot every section and band action and have them scored by eye. */
+  review?: boolean
+  /** What the person asked for — the review judges fit as well as looks. */
+  request?: string
 }
 interface PreviewToolArgs {
   space_id: string
@@ -442,9 +451,22 @@ interface InstallToolArgs {
   settings?: Record<string, unknown>
 }
 
+/** A template and its spec, checked: the template to copy, or a 400 naming what is wrong with the spec. */
+function startingTool(id: string, spec: Record<string, unknown> | undefined): { template: ToolTemplate; spec: Record<string, unknown> } {
+  const template = templateById(id)
+  if (!template) throw new ActionError(400, `No template "${id}" — pick one of ${TOOL_TEMPLATES.map((t) => t.id).join(', ')}.`)
+  if (!spec) throw new ActionError(400, `A template needs a spec. ${template.id}'s:\n${template.specGuide}`)
+  const checked = checkSpec(template, spec)
+  if (!checked.ok) throw new ActionError(400, `The spec for ${template.id} needs fixing:\n- ${checked.problems.join('\n- ')}\n\nHow to write it:\n${template.specGuide}`)
+  return { template, spec: checked.spec }
+}
+
 // ── handlers ──────────────────────────────────────────────────────────────────
 
 async function createTool(ctx: ActionCaller, args: CreateToolArgs, deps: AppToolDeps = liveDeps) {
+  // A template is checked before anything is written, so a bad spec costs a
+  // refusal with its reasons and never a half-made Tool.
+  const started = args.template ? startingTool(args.template, args.spec) : null
   const target = await deps.resolveTarget(ctx, args.space_id)
   await requireToolsFeature(ctx, target, deps)
   const result = await deps.createTool(target.principal, target.context, {
@@ -460,6 +482,31 @@ async function createTool(ctx: ActionCaller, args: CreateToolArgs, deps: AppTool
     if (index) {
       const written = await deps.writeToolFile(target.principal, target.context, result.name, 'index.md', withDesignSection(index, args.plan))
       if (written.ok) build = written.build
+    }
+  }
+  if (started) {
+    const facts = started.template.facts(started.spec)
+    const configured = await deps.configureTool(target.principal, target.context, result.name, {
+      sdk: '^2.0.0',
+      surfaces: { rail: { label: args.title, icon: started.template.railIcon }, types: [], nav: facts.surfaces.nav, actions: facts.surfaces.actions },
+      collections: facts.collections,
+    })
+    if (!configured.ok) refuse(configured)
+    const written = await deps.writeToolFile(target.principal, target.context, result.name, 'ui.tsx', applySpec(started.template.id, started.spec))
+    if (!written.ok) refuse(written)
+    build = written.build
+    return {
+      name: result.name,
+      template: started.template.id,
+      files: SCAFFOLDED_FILES.map((file) => `tools/${result.name}/${file}`),
+      build: buildReport(build),
+      ...previewLinks(result.name, deps.appOrigin(), target.context.spaceId),
+      sections: facts.surfaces.nav?.sections.map((s) => s.id) ?? [],
+      band_actions: facts.surfaces.actions.map((a) => a.id),
+      next: [
+        `It is built from the ${started.template.title} template with your spec, and opens with the spec's sample rows. Look before you hand it over: preview_tool { screenshot: true } per section and with each band action, or check_tool { review: true } for a scored review.`,
+        'To change what it is about, create again with a new spec. To change how it looks or add behaviour, read_tool then write_tool ui.tsx — the SPEC block at the top holds the fields, and the kit\'s blocks (RecordBoard, RecordTable, RecordDialog, StatRow, Toolbar) draw everything else.',
+      ],
     }
   }
   return {
@@ -605,10 +652,14 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
     runtimeFailed = runtime.console_errors.length > 0 || (runtime.available && !runtime.rendered)
   }
 
+  const review = args.review && build.ok && config ? await reviewTool(ctx, target, config, args.request ?? config.description ?? config.title, deps) : undefined
+  if (review?.available && review.verdict && !passes(review.verdict)) warnings.push(`Review: ${review.verdict.score}/10 — work through review.fixes, then check again.`)
+
   return {
     name: args.name,
     build: buildReport(build),
     ...(runtime ? { runtime } : {}),
+    ...(review ? { review } : {}),
     perimeter: config ? describePerimeter(config.perimeter) : [],
     surfaces: describeSurfaces(config),
     requirements: {
@@ -622,6 +673,55 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
     // A blocking finding stops a publish, and so does a render that failed when
     // one was asked for; flags are what an admin reads.
     ready_to_publish: build.ok && checks.blocking.length === 0 && !runtimeFailed,
+  }
+}
+
+/**
+ * Every screen of a working copy — each section, and each band action pressed
+ * — captured and scored by eye (lib/tools/visualReview.ts). Advice only: the
+ * verdict gates nothing. Null where the capture or the reviewer is unavailable.
+ */
+async function reviewTool(ctx: ActionCaller, target: Target, config: ToolConfig, request: string, deps: AppToolDeps) {
+  if (ctx.client === 'mobile') throw new ActionError(403, TOOL_PHONE_REFUSAL)
+  if (!visualReviewAvailable()) return { available: false as const, reason: 'No reviewer here — OPENROUTER_API_KEY is unset or TOOL_REVIEW=off.' }
+  const sections = config.surfaces.nav?.sections ?? []
+  const plan: Array<{ screen: string; section?: string; action?: string }> = [
+    ...(sections.length ? sections.map((s) => ({ screen: `the ${s.label} section`, section: s.id })) : [{ screen: 'the main page' }]),
+    ...(config.surfaces.actions ?? []).map((a) => ({ screen: `the dialog opened by pressing "${a.label}"`, action: a.id, ...(sections[0] ? { section: sections[0].id } : {}) })),
+  ]
+  // One at a time: each capture is a browser, and several at once starve the
+  // server rendering the pages they wait on.
+  const shots: Array<{ p: (typeof plan)[number]; shot: ScreenshotResult }> = []
+  for (const p of plan) {
+    shots.push({
+      p,
+      shot: await deps.capturePreview({
+        ...previewRequest(ctx, target, config.name, deps, { image: true }),
+        ...(p.section ? { section: p.section } : {}),
+        ...(p.action ? { action: p.action } : {}),
+        budgetMs: 25_000,
+      }),
+    })
+  }
+  const screens = shots
+    .filter(({ shot }) => shot.available && !('navigated_away' in shot && shot.navigated_away) && 'image_base64' in shot && shot.image_base64)
+    .map(({ p, shot }) => {
+      const img = shot as { image_base64: string; mime: 'image/png' | 'image/jpeg' }
+      return { imageBase64: img.image_base64, mime: img.mime, screen: p.screen }
+    })
+  if (screens.length === 0) {
+    const reason = shots.find(({ shot }) => !shot.available)?.shot
+    return { available: false as const, reason: reason && !reason.available ? reason.reason : 'No screen could be captured.' }
+  }
+  const result = await reviewScreens({ request, title: config.title }, screens)
+  const console_errors = [...new Set(shots.flatMap(({ shot }) => (shot.available ? shot.console_errors : [])))]
+  return {
+    available: true as const,
+    model: reviewModel(),
+    verdict: result.verdict,
+    passes: result.verdict ? passes(result.verdict) : null,
+    screens: result.screens.map((s) => ({ screen: s.screen, score: s.verdict?.score ?? null, fixes: s.verdict?.fixes ?? [] })),
+    ...(console_errors.length ? { console_errors } : {}),
   }
 }
 
@@ -1094,6 +1194,11 @@ async function bindTool(ctx: ActionCaller, args: BindToolArgs, deps: AppToolDeps
  */
 export const appToolHandlers = {
   createTool,
+  reviewTool: async (ctx: ActionCaller, args: { space_id: string; name: string; request: string }) => {
+    const { target, detail } = await requireTool(ctx, args.space_id, args.name, liveDeps)
+    if (!detail.config) throw new ActionError(400, 'The tool does not build — fix it before a review.')
+    return reviewTool(ctx, target, detail.config, args.request, liveDeps)
+  },
   listTools,
   readTool,
   writeTool,
@@ -1193,6 +1298,14 @@ export const APP_ACTIONS = [
         .max(8000)
         .optional()
         .describe("plan_tool's plan_template, filled in and agreed with the person — written into index.md as its ## Design section"),
+      template: z
+        .string()
+        .optional()
+        .describe(`Start from a finished Tool instead of a blank one — ${TOOL_TEMPLATES.map((t) => t.id).join(', ')}. plan_tool names the one that fits and its spec guide. Needs \`spec\`.`),
+      spec: z
+        .record(z.string(), z.unknown())
+        .optional()
+        .describe("The template's SPEC: what THIS Tool is about — nouns, fields, options, sample rows (plan_tool's template.spec_guide and template.example)"),
     },
     run: (ctx, args) => createTool(ctx, args),
   }),
@@ -1294,6 +1407,11 @@ export const APP_ACTIONS = [
         .boolean()
         .optional()
         .describe('Also render the preview headlessly and report runtime console errors (slower — a browser launches)'),
+      review: z
+        .boolean()
+        .optional()
+        .describe('Also screenshot every section and band action and have a designer model score them 0–10 with concrete fixes (`review`). Hand over at 8.5+.'),
+      request: z.string().max(2000).optional().describe('What the person asked for, so the review judges fit as well as looks'),
     },
     run: (ctx, args) => checkTool(ctx, args),
   }),
@@ -1355,7 +1473,7 @@ export const APP_ACTIONS = [
     description:
       'Where to look at a tool: a `visvine-desktop://` deep link that opens it in the desktop app and the ' +
       'equivalent web URL, plus its current build status. Hand these to the person you are working for. ' +
-      'Pass `screenshot: true` to also render the preview headlessly AS YOU (1024×768, ~10s budget) and get ' +
+      'Pass `screenshot: true` to also render the preview headlessly AS YOU (1024×768, ~20s budget) and get ' +
       'back the image (`screenshot.png_base64`, or `jpeg_base64` when it had to shrink — `mime` says which), ' +
       'whether the tool mounted, and every console error the page and the frame logged. Where headless ' +
       'rendering is unavailable (no Playwright, or production without TOOLS_SCREENSHOT=on) `screenshot.available` ' +

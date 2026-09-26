@@ -29,6 +29,8 @@ export interface SelectProps {
   /** The chosen value alone — the simpler form of `onChange`. */
   onValueChange?: (value: string) => void;
   placeholder?: string;
+  /** `sm` is a toolbar's height (36px), beside a search and a view switch. */
+  size?: 'sm' | 'md';
   disabled?: boolean;
   required?: boolean;
   id?: string;
@@ -73,6 +75,7 @@ export function Select({
   onChange,
   onValueChange,
   placeholder = 'Choose…',
+  size = 'md',
   disabled,
   required,
   id,
@@ -167,7 +170,7 @@ export function Select({
             cursor.onKeyDown(e);
           }
         }}
-        className={clsx(inputBaseClass, 'flex items-center gap-2 pr-10 text-left')}
+        className={clsx(inputBaseClass, 'flex items-center gap-2 pr-10 text-left', size === 'sm' && 'h-9 py-0 pl-3 text-sm')}
       >
         <span className={clsx('min-w-0 flex-1 truncate', !chosen && 'text-fg-muted')}>{chosen ? chosen.label : placeholder}</span>
       </button>

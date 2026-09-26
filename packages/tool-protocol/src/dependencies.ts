@@ -19,15 +19,33 @@ interface CuratedDependency {
   license: string
   /** One line for the SDK docs and the install sheet. */
   summary: string
+  /** The npm package, where the specifier is a subpath of it (`motion/react` → `motion`). */
+  package?: string
 }
 
 export const CURATED_DEPENDENCIES = {
   zod: { version: '4.3.6', file: 'dep-zod.js', license: 'MIT', summary: 'schema validation' },
   'date-fns': { version: '4.1.0', file: 'dep-date-fns.js', license: 'MIT', summary: 'date arithmetic and formatting' },
   clsx: { version: '2.1.1', file: 'dep-clsx.js', license: 'MIT', summary: 'class name joining' },
+  'lucide-react': { version: '1.48.0', file: 'dep-lucide-react.js', license: 'ISC', summary: 'icons — `import { Users } from "lucide-react"`, sized with `size-4`' },
+  'motion/react': { version: '13.4.4', file: 'dep-motion-react.js', license: 'MIT', summary: 'animation — `motion.div`, `AnimatePresence`', package: 'motion' },
+  '@dnd-kit/core': { version: '6.3.1', file: 'dep-dnd-kit-core.js', license: 'MIT', summary: 'drag and drop' },
+  '@dnd-kit/sortable': { version: '10.0.0', file: 'dep-dnd-kit-sortable.js', license: 'MIT', summary: 'sortable lists over @dnd-kit/core' },
+  '@dnd-kit/utilities': { version: '3.2.2', file: 'dep-dnd-kit-utilities.js', license: 'MIT', summary: 'CSS transform helpers for @dnd-kit' },
+  '@tanstack/react-table': { version: '9.2.4', file: 'dep-tanstack-react-table.js', license: 'MIT', summary: 'headless tables — grouping, column filters, pagination' },
+  'react-hook-form': { version: '7.89.0', file: 'dep-react-hook-form.js', license: 'MIT', summary: 'forms with validation' },
+  papaparse: { version: '5.7.0', file: 'dep-papaparse.js', license: 'MIT', summary: 'CSV parse and unparse — imports and exports' },
+  'fuse.js': { version: '7.5.0', file: 'dep-fuse.js', license: 'Apache-2.0', summary: 'fuzzy search over rows' },
+  nanoid: { version: '6.0.1', file: 'dep-nanoid.js', license: 'MIT', summary: 'short unique ids' },
 } as const satisfies Record<string, CuratedDependency>
 
 export type CuratedDependencyName = keyof typeof CURATED_DEPENDENCIES
+
+/** The npm package a curated specifier is served from. */
+export function curatedPackageOf(name: CuratedDependencyName): string {
+  const dep: CuratedDependency = CURATED_DEPENDENCIES[name]
+  return dep.package ?? name
+}
 
 export function isCuratedDependency(name: string): name is CuratedDependencyName {
   return Object.hasOwn(CURATED_DEPENDENCIES, name)

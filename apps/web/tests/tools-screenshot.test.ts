@@ -91,6 +91,6 @@ test('the minted preview session is minutes long, not the 30-day web session', (
 test('the capture contract the MCP descriptions quote', () => {
   assert.equal(SCREENSHOT_WIDTH, 1024)
   assert.equal(SCREENSHOT_HEIGHT, 768)
-  assert.equal(SCREENSHOT_BUDGET_MS, 10_000)
+  assert.equal(SCREENSHOT_BUDGET_MS, 20_000)
   assert.equal(SCREENSHOT_MAX_BYTES, 300_000)
 })

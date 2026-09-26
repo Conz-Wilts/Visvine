@@ -17,6 +17,8 @@ import { downloadResourceFile } from '@/lib/gcs'
 import { sanitizeToolIcon } from '@/lib/tools/iconSvg'
 import { TOOL_RAIL_ICONS } from '@/lib/tools/config'
 import { buildPlanBrief, type SpaceTypeFact } from '@/lib/tools/shared/planBrief'
+import { buildTool, DEFAULT_BUILD_BUDGET_S } from '@/lib/tools/builder'
+import { TOOL_TEMPLATES } from '@/lib/tools/templates'
 
 const spaceArg = z.string().describe('The space the Tool is for — from list_spaces')
 const nameArg = z.string().describe('The Tool\'s name (its folder under tools/)')
@@ -142,6 +144,28 @@ export const TOOL_PLAN_ACTIONS = [
     },
     annotations: { readOnlyHint: true },
     run: (ctx, args) => planTool(ctx, args),
+  }),
+
+  defineAction({
+    name: 'build_tool',
+    scope: 'tools:author',
+    summary: "Build a whole Tool from one sentence on the space's model: a designed template, a spec for this request, then a review by eye and polish.",
+    description:
+      'The one-call build. Give the person\'s request verbatim — however vague — and the space\'s own model decides what a great version is for this team ' +
+      `and writes it as the spec of a finished, designed template (${TOOL_TEMPLATES.map((t) => t.id).join(', ')}): fields, stages, realistic sample rows. ` +
+      'The Tool is created, every screen is captured and scored 0–10 by a designer model, and while it scores under 8.5 and time allows the model ' +
+      'gets the fixes and rewrites ui.tsx — a rewrite is kept only if it compiles, renders and scores higher. Returns the preview link, the score and ' +
+      'what was done. With no model in the space it runs nothing and hands the round back (`stand_in`): write the spec yourself and call ' +
+      'create_tool { template, spec }. To plan with the person first, use plan_tool instead.',
+    input: {
+      space_id: spaceArg,
+      request: z.string().min(1).max(2000).describe('What the person asked for, verbatim'),
+      name: z.string().optional().describe("The Tool's name, if the person gave one — otherwise the model names it"),
+      template: z.string().optional().describe(`Force a template: ${TOOL_TEMPLATES.map((t) => t.id).join(', ')}`),
+      budget_seconds: z.number().int().min(30).max(600).optional().describe(`Wall clock for the build, default ${DEFAULT_BUILD_BUDGET_S}; polish rounds stop when it runs short. An MCP call ends at 120s.`),
+      polish_rounds: z.number().int().min(0).max(3).optional().describe('Rewrite rounds after the first review, default 2'),
+    },
+    run: (ctx, args) => buildTool(ctx, args),
   }),
 
   defineAction({

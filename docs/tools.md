@@ -226,6 +226,56 @@ the version on disk, vendored like React (`vendorBundle.ts`, `dep-*.js`) and
 importable only when the manifest declares it; a package not served, or a range
 the served version does not meet, blocks the publish (`compat.dependency`).
 
+## One-shot: templates, blocks, the review by eye
+
+A vague request ("crm", "track stuff for my team") should still land on a Tool
+that looks designed and works on first open. Three pieces do that:
+
+- **Templates** (`lib/tools/templates/`). Six finished, hand-polished Tools —
+  `tracker`, `dashboard`, `poll`, `checkin`, `directory`, `leaderboard` — each
+  one `ui.tsx` under `sources/` whose `SPEC` constant (between `// @spec` and
+  `// @end-spec`) is the only thing a build replaces. A spec is what THIS Tool
+  is about: nouns, `FieldDef[]`, stages, realistic sample rows; `checkSpec`
+  refuses one that does not fit, with the reasons. `matchTemplate` picks by
+  keyword overlap (tracker for anything unnamed), `plan_tool` returns the
+  choice with its `spec_guide` and example, and `create_tool { template, spec }`
+  writes the facts (collections, band buttons, sections, rail) and the source.
+  The sources are compiled in as strings by `scripts/build-tool-templates.ts`
+  (committed, `--check`ed) and typed against the kit's published `.d.ts` by
+  `tests/tools-templates.test.ts`. The kit stylesheet scans `sources/` too.
+- **Page blocks** in the kit: `Page`, `Toolbar`, `StatRow`/`Stat`, `Progress`,
+  `ListDetail`, `MonthCalendar`, `Icon`, and records by schema — describe a
+  record's fields once and `FieldValue`, `FieldInput`, `RecordForm`,
+  `RecordDialog`, `RecordTable` and `RecordBoard` draw it. `useSampleRows` seeds
+  an empty collection once per install, so the first look is never empty. A
+  Tool the templates do not cover is built from these rather than from divs.
+- **The review by eye** (`lib/tools/visualReview.ts`,
+  `shared/visualRubric.ts`). Each section and each band action is captured and
+  a vision model on the deployment's key (`TOOL_REVIEW_MODEL`, off with
+  `TOOL_REVIEW=off`) scores six criteria 0–10 with concrete fixes.
+  `check_tool { review: true }` returns it; 8.5 with no criterion under 6
+  passes. Advice only, fails open, gates nothing.
+
+`build_tool` (`lib/tools/builder.ts`) is the whole loop in one call on the
+space's own model: spec → `create_tool` → review → while under the bar and the
+time allows, the model rewrites `ui.tsx` from the fixes, kept only when it
+compiles, renders without errors and scores higher. With no model in the space
+it hands the round back as a `stand_in`. An MCP call ends at 120s, so a long
+build is the HTTP door's (`budget_seconds` up to 600).
+
+`pnpm eval:tools` measures it: the prompts in `scripts/eval/tool-prompts.ts`
+built against the running dev server in a throwaway `tool-lab` space, every
+screen scored by an independent judge model; `--mode freeform` builds the old
+way (a model writing the whole Tool from the guide) for comparison. Results
+land in `apps/web/.eval/tools/`; the plan and its numbers are
+`docs/tools-oneshot-plan.md`.
+
+Tier-one packages a Tool may declare (`@visvine/tool-protocol/dependencies`):
+`zod`, `date-fns`, `clsx`, `lucide-react`, `motion/react`, `@dnd-kit/core`,
+`@dnd-kit/sortable`, `@dnd-kit/utilities`, `@tanstack/react-table`,
+`react-hook-form`, `papaparse`, `fuse.js`, `nanoid` — each pinned, served from
+the tools origin, every other curated module external to it.
+
 ## Authoring loop (over MCP)
 
 An authoring agent (Claude Code, Cursor, …) works entirely through Visvine's

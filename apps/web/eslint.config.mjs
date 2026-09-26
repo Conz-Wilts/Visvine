@@ -50,6 +50,8 @@ const eslintConfig = defineConfig([
     // import `@visvine/tool-kit`, assign to a `handlers` global the isolate
     // provides, and one is a deliberate syntax error.
     "scripts/fixtures/**",
+    // Tool sources, compiled by the Tool compiler and typed against the kit's .d.ts (tests/tools-templates.test.ts).
+    "lib/tools/templates/sources/**",
   ]),
   {
     rules: {

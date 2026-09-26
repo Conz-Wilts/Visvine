@@ -125,6 +125,33 @@ tools/<name>/data.js         optional: server-side handlers (sandboxed isolate)
 tools/<name>/icon.svg        optional: your own sidebar glyph
 ```
 
+## Start from a template
+
+Most Tools are one of a few shapes — records that move through stages, entries
+added up on a dashboard, a poll, a daily check-in, a directory, a leaderboard.
+Each is a finished, designed Tool: `plan_tool` names the one that fits and
+`create_tool { template, spec }` copies it with a spec that says what THIS one is
+about (nouns, fields, stages, realistic sample rows). Write the code yourself only
+when no template fits — and then build from the kit's blocks, not from divs:
+
+```tsx
+const fields: FieldDef[] = [
+  { key: 'name', label: 'Company', kind: 'text', required: true },
+  { key: 'stage', label: 'Stage', kind: 'select', options: [{ value: 'Lead' }, { value: 'Won', hue: 'green' }] },
+  { key: 'value', label: 'Value', kind: 'money' },
+]
+<Page>
+  <StatRow><Stat label="Open" value={12} /></StatRow>
+  <Toolbar search={q} onSearch={setQ} actions={<Button variant="primary">New deal</Button>} />
+  <RecordBoard fields={fields} groupBy="stage" rows={rows} onMove={move} onOpen={open} />
+  <RecordDialog open={…} title="New deal" fields={fields} initial={{}} onSave={save} onClose={close} />
+</Page>
+```
+
+Seed a collection with `useSampleRows` so the first look is the Tool working,
+and look before you hand it over: `check_tool { review: true }` scores every
+screen 0–10 with fixes; hand over at 8.5.
+
 ## index.md — the manifest
 
 ```yaml
@@ -333,6 +360,16 @@ version the server serves — declare it in `dependencies` and import it by name
 - `zod` 4.3.6 — schema validation
 - `date-fns` 4.1.0 — date arithmetic and formatting
 - `clsx` 2.1.1 — class name joining
+- `lucide-react` 1.48.0 — icons — `import { Users } from "lucide-react"`, sized with `size-4`
+- `motion/react` 13.4.4 — animation — `motion.div`, `AnimatePresence`
+- `@dnd-kit/core` 6.3.1 — drag and drop
+- `@dnd-kit/sortable` 10.0.0 — sortable lists over @dnd-kit/core
+- `@dnd-kit/utilities` 3.2.2 — CSS transform helpers for @dnd-kit
+- `@tanstack/react-table` 9.2.4 — headless tables — grouping, column filters, pagination
+- `react-hook-form` 7.89.0 — forms with validation
+- `papaparse` 5.7.0 — CSV parse and unparse — imports and exports
+- `fuse.js` 7.5.0 — fuzzy search over rows
+- `nanoid` 6.0.1 — short unique ids
 
 ## What the kit gives you
 

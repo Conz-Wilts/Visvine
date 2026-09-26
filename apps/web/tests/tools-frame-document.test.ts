@@ -48,12 +48,22 @@ function urlsIn(html: string): string[] {
 test('the import map names every specifier a Tool may import, pointed at vendorBase', () => {
   const imports = importMap(renderFrameDocument(BASE))
   assert.deepEqual(Object.keys(imports).sort(), [
+    '@dnd-kit/core',
+    '@dnd-kit/sortable',
+    '@dnd-kit/utilities',
+    '@tanstack/react-table',
     '@visvine/tool-kit',
     'clsx',
     'date-fns',
+    'fuse.js',
+    'lucide-react',
+    'motion/react',
+    'nanoid',
+    'papaparse',
     'react',
     'react-dom',
     'react-dom/client',
+    'react-hook-form',
     'react/jsx-runtime',
     'zod',
   ])

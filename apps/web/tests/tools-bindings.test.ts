@@ -20,7 +20,7 @@ import {
   type BindableSpace,
 } from '@visvine/tool-protocol/bindings'
 import { parseManifestFacts, type ToolManifestFacts } from '@visvine/tool-protocol/manifest'
-import { CURATED_DEPENDENCIES, dependencyDenial, rangeAdmits } from '@visvine/tool-protocol/dependencies'
+import { CURATED_DEPENDENCIES, curatedPackageOf, dependencyDenial, rangeAdmits } from '@visvine/tool-protocol/dependencies'
 import { refuseRecordRead, refuseRecordWrite, refuseResourceRead } from '@visvine/tool-protocol/reach'
 import { boundRequirements, describeRequirements, isDegraded } from '@/lib/tools/requirements'
 import { installedVersion } from '@/lib/tools/vendorBundle'
@@ -167,6 +167,6 @@ test('a dependency is one the server serves, at a version it serves', () => {
 
 test('the curated table is the version on disk — what the vendor build serves', () => {
   for (const [name, dep] of Object.entries(CURATED_DEPENDENCIES)) {
-    assert.equal(installedVersion(name), dep.version, `${name} on disk`)
+    assert.equal(installedVersion(curatedPackageOf(name as keyof typeof CURATED_DEPENDENCIES)), dep.version, `${name} on disk`)
   }
 })

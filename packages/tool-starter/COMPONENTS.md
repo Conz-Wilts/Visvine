@@ -10,6 +10,8 @@ person it is for asks for one; these are the default, not a wall.
 
 ## Design rules
 
+- Build from blocks, not from divs. A page is `Page` holding a `Toolbar`, a `StatRow`, and a `RecordBoard` / `RecordTable` / `ListDetail` / `MonthCalendar` over rows described once as `FieldDef[]`; adding and editing is `RecordDialog`. Write your own layout only for what no block draws.
+- Never an empty first look: seed a collection with 8–15 realistic rows through `useSampleRows` (real names, plausible numbers, dates around today).
 - The app draws the chrome. The rail row, the band (your sections as tabs, your band buttons, the ⋯ menu) and every state are the app's. Draw only content: never a page title, a top tab strip or a header that repeats what the band says.
 - Lay out with Tailwind classes: grid, flex, gap, padding, widths and text sizes (with sm:/md:/lg: variants) are all compiled in, and the role colours (`text-fg-muted`, `bg-surface-subtle`, `border-line-subtle`, `bg-accent`). A grid of cards is `grid gap-4 sm:grid-cols-2 lg:grid-cols-3`.
 - Flat surfaces: sections separated by hairlines, no cards around everything, no shadows except on things that float.
@@ -18,7 +20,7 @@ person it is for asks for one; these are the default, not a wall.
 - State is data, joined by ·: `12 open · 3 overdue · updated 5m ago`, one muted line.
 - Colour comes from the theme: the kit, or `var(--vv-*)` in your own styles — never a hex, never a painted page background (the frame is transparent over the app's own).
 - Full bleed. The frame IS the page: the root fills it with the app's page gutter (`px-6 py-5`) and nothing else — never an outer border, a rounded box, a card or a max-width container around the whole Tool.
-- Views are sections. Two or more screens (a board and a detail, companies and predictions) are `surfaces.nav` sections read with `useSection` — the app draws them as tabs on its band. Never draw your own tab strip or view switcher at the top of the frame.
+- Views are sections. Two or more screens (a board and a detail, companies and predictions) are `surfaces.nav` sections read with `useSection` — the app draws them as tabs on its band. Never draw your own tab strip at the top of the frame. Two looks at the SAME rows (Board · Table) are the Toolbar's view switch.
 - The main act is always one press away. A Tool that adds things declares that act in `surfaces.actions` and handles it with `useBandAction`, so it works on the first item and the fiftieth — an empty state may offer it too, never only there.
 - Pick the control for the data. A known set of values is a Select (or Segmented for two to five shown at once), a date a DatePicker, a yes/no a Toggle, a share of a whole a PieChart, a tally a BarChart — free text only for what is truly free.
 - The page scrolls. The frame grows to the Tool's height up to the pane and then scrolls, so let content take its natural height: never squeeze a screen to fit (`h-full`, `h-screen`, `overflow-hidden` on the root, flex children forced to share one viewport). A long list is just long.
@@ -375,6 +377,181 @@ Props: the Recharts namespace
 </Recharts.ResponsiveContainer>
 ```
 
+### Page
+
+The Tool's page: the app's gutter and a steady gap between blocks. The root of every Tool. Put Toolbar, StatRow, tables and boards straight inside it.
+
+Props: width?: 'wide' | 'normal' · className?
+
+```tsx
+<Page>
+  <StatRow><Stat label="Open" value={12} /></StatRow>
+</Page>
+```
+
+### Toolbar
+
+One row over a list: search · filters · view switch · the primary action. Above every list, table or board. The view switch is for two looks at the SAME rows (Board · Table); separate screens are sections.
+
+Props: search? · onSearch? · views?: {value,label}[] · view? · onView? · filters? · actions?
+
+```tsx
+<Toolbar search="" onSearch={() => {}} views={[{ value: 'board', label: 'Board' }, { value: 'table', label: 'Table' }]} view="board" onView={() => {}} actions={<Button variant="primary">New deal</Button>} />
+```
+
+### StatRow
+
+Two to five Stats in a row over a hairline, stacking when narrow. The top of a dashboard or a list: the numbers that matter, before the rows.
+
+Props: children: Stat[]
+
+```tsx
+<StatRow>
+  <Stat label="Pipeline" value="$420k" delta={12} deltaLabel="12%" />
+  <Stat label="Won" value={8} />
+</StatRow>
+```
+
+### Stat
+
+One number over its label, with an optional change and a muted hint. Inside a StatRow; a total, a count, a rate.
+
+Props: label · value · delta? · deltaLabel? · invert? · icon?: IconName · hint?
+
+```tsx
+<Stat label="Overdue" value={3} icon="clock" hint="of 24 open" />
+```
+
+### Progress
+
+A thin bar filled to a share, with an optional label and percent. Goals, capacity, a key result, a budget spent.
+
+Props: value · max? · hue?: Hue · label?
+
+```tsx
+<Progress value={7} max={10} label="Hiring plan" hue="green" />
+```
+
+### ListDetail
+
+A list on the left and the chosen item on the right, a hairline between. Anything read one at a time: an inbox, a wiki, a directory, applicants.
+
+Props: items · itemKey · selected · onSelect · renderItem(item, selected) · detail · listHeader? · empty?
+
+```tsx
+<ListDetail items={[{ id: 'a', name: 'Ana' }]} itemKey={(p) => p.id} selected="a" onSelect={() => {}} renderItem={(p) => <span className="text-sm">{p.name}</span>} detail={<p>Ana</p>} />
+```
+
+### MonthCalendar
+
+A month grid with each day's items as coloured rows; ‹ Today › step the month. Anything with a date that people plan around: content, rota, launches, leave.
+
+Props: month: YYYY-MM-DD · onMonth · items: {id,date,title,hue?}[] · onOpen? · onDay?
+
+```tsx
+<MonthCalendar month={todayIso()} onMonth={() => {}} items={[{ id: '1', date: todayIso(), title: 'Launch', hue: 'violet' }]} />
+```
+
+### Icon
+
+A stroke icon by name, in the current colour. Beside a stat label, in an icon button, in an empty state. For any other icon declare `lucide-react`.
+
+Props: name: IconName (plus, search, calendar, users, dollar, chart, star, …) · size?
+
+```tsx
+<Icon name="calendar" className="text-fg-muted" />
+```
+
+### FieldValue
+
+One field's value drawn for reading: a chip, money, a relative date, a person. In any cell, card or detail page — so every Tool draws a status or a sum the same way.
+
+Props: field: FieldDef · value · compact?
+
+```tsx
+<FieldValue field={{ key: 'due', label: 'Due', kind: 'date' }} value="2026-10-01" />
+```
+
+### FieldInput
+
+One field's control, chosen by its kind. An inline edit. For a whole record use RecordForm.
+
+Props: field: FieldDef · value · onChange(value)
+
+```tsx
+<FieldInput field={{ key: 'stage', label: 'Stage', kind: 'select', options: [{ value: 'Lead' }, { value: 'Won' }] }} value="Lead" onChange={() => {}} />
+```
+
+### RecordForm
+
+Every field of a record, two to a row, from the schema. Inside your own dialog or page. RecordDialog is this in a Modal with Save.
+
+Props: fields: FieldDef[] · value · onChange · errors?
+
+```tsx
+<RecordForm fields={[{ key: 'name', label: 'Name', kind: 'text' }, { key: 'value', label: 'Value', kind: 'money' }]} value={{}} onChange={() => {}} />
+```
+
+### RecordDialog
+
+A record's form in the app's dialog with Save, Cancel and Delete. Adding or editing one record — the band action opens it empty, a row opens it filled.
+
+Props: open · title · fields · initial · onClose · onSave(value) · onDelete? · saveLabel?
+
+```tsx
+<RecordDialog open={false} title="New deal" fields={[{ key: 'name', label: 'Name', kind: 'text', required: true }]} initial={{}} onClose={() => {}} onSave={() => {}} />
+```
+
+### RecordTable
+
+A sortable table of collection rows, one column per field, the first bold. The table view of any list of records.
+
+Props: fields · rows: {id,data}[] · onOpen? · empty? · trailing? · maxHeight?
+
+```tsx
+<RecordTable fields={[{ key: 'name', label: 'Name', kind: 'text' }, { key: 'value', label: 'Value', kind: 'money' }]} rows={[{ id: '1', data: { name: 'Acme', value: 12000 } }]} />
+```
+
+### RecordBoard
+
+A board with a column per option of a select field; dragging a card sets it. Anything that moves through stages: deals, hiring, bugs, content, tasks.
+
+Props: fields · groupBy · rows · onMove(row, value) · onOpen? · cardFields? · sumField?
+
+```tsx
+<RecordBoard fields={[{ key: 'name', label: 'Name', kind: 'text' }, { key: 'stage', label: 'Stage', kind: 'select', options: [{ value: 'Lead' }, { value: 'Won' }] }]} groupBy="stage" rows={[{ id: '1', data: { name: 'Acme', stage: 'Lead' } }]} onMove={() => {}} />
+```
+
+### RecordsEmpty
+
+An empty list with its one way out: "No deals yet" and Add deal. In place of a list, table or board that has no rows.
+
+Props: noun (plural) · onAdd?
+
+```tsx
+<RecordsEmpty noun="deals" onAdd={() => {}} />
+```
+
+### HueChip
+
+A soft coloured label in one of the app's hues. A status, a stage, a tag. FieldValue draws one for a select field on its own.
+
+Props: hue?: 'blue' | 'green' | 'amber' | 'red' | 'violet' | … · children
+
+```tsx
+<HueChip hue="green">Won</HueChip>
+```
+
+### HueDot
+
+A small round swatch of a hue. Beside a column title or a legend row.
+
+Props: hue?
+
+```tsx
+<HueDot hue="violet" />
+```
+
 ### Alert
 
 A notice: a 2px rule in its colour down the left, then the words. Only when something is actually wrong or needs saying once — a normal state is silent. In the app: admin, agents, connectors and 8 more.
@@ -612,4 +789,15 @@ Props: useChartColors() → string[]
 
 ```tsx
 const colors = useChartColors()
+```
+
+### useSampleRows
+
+Puts sample rows into an empty collection the first time the Tool opens. Every Tool over a collection: the first look is the Tool working. `clear()` removes exactly those rows.
+
+Props: useSampleRows(collection, rows) → { seeding, clear }
+
+```tsx
+const { clear } = useSampleRows('deals', [{ name: 'Acme', stage: 'Lead', value: 12000 }])
+void clear
 ```

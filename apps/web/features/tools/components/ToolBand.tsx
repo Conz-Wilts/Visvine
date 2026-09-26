@@ -11,6 +11,7 @@
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { clsx } from 'clsx';
+import { Button } from '@visvine/ui';
 import BandTabList from '@/features/shared/components/pane/BandTabList';
 import type { ToolBandAction, ToolNav } from '@/lib/tools/config';
 
@@ -58,19 +59,24 @@ export function ToolSectionTabs({ nav, title }: { nav: ToolSections; title: stri
   );
 }
 
+/**
+ * The Tool's band buttons. The first is its main act — New deal, Give kudos —
+ * and stands as the page's one primary button; a second is quiet beside it.
+ */
 export function ToolActionButtons({ actions, onAction }: { actions: ToolBandAction[]; onAction: (id: string) => void }) {
   return (
     <>
-      {actions.map((action) => (
-        <button
+      {actions.map((action, i) => (
+        <Button
           key={action.id}
-          type="button"
           data-tool-action={action.id}
           onClick={() => onAction(action.id)}
-          className="h-8 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-fg transition-colors hover:bg-surface-subtle"
+          variant={i === 0 ? 'brand' : 'ghost'}
+          size="sm"
+          className="whitespace-nowrap"
         >
           {action.label}
-        </button>
+        </Button>
       ))}
     </>
   );

@@ -32,6 +32,8 @@ export async function toolComplete(input: {
   toolName: string
   messages: AgentMessage[]
   maxTokens: number
+  /** How long the model may take; a Tool's own call gets a minute. */
+  timeoutMs?: number
 }): Promise<{ ok: true; text: string } | Failure> {
   const resolved = await resolveAgentChatConfig(input.spaceId, null)
   if (!resolved.ok) return { ok: false, code: 'degraded', message: resolved.message }
@@ -53,7 +55,7 @@ export async function toolComplete(input: {
     const reply = await chatWithTools(input.messages, [], {
       config,
       maxTokens: input.maxTokens,
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(input.timeoutMs ?? 60_000),
     })
     text = reply.content ?? ''
     usage = reply.usage ?? usage

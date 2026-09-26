@@ -26,5 +26,5 @@
   // verify scripts feed to the server-side Tool compiler, not app code: they
   // import `@visvine/tool-kit`, which only resolves through the frame's import
   // map at run time, and one of them is a deliberate syntax error.
-  "exclude": ["node_modules", "scripts/fixtures/**"]
+  "exclude": ["node_modules", "scripts/fixtures/**", "lib/tools/templates/sources/**"]
 }

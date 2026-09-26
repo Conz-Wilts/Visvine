@@ -439,9 +439,15 @@ declare module '@visvine/tool-kit' {
     value: string
     label: string
   }
-  export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'placeholder'> {
     options?: SelectOption[]
     children?: ReactNode
+    /** The chosen value alone — simpler than onChange's event. */
+    onValueChange?: (value: string) => void
+    /** Shown until something is chosen. */
+    placeholder?: string
+    /** sm: a toolbar's height, beside a search and a view switch. */
+    size?: 'sm' | 'md'
   }
   export function Select(props: SelectProps): JSX.Element
 
@@ -646,6 +652,8 @@ declare module '@visvine/tool-kit' {
     count?: number
     actions?: ReactNode
     empty?: ReactNode
+    /** Share the board's width (four columns or fewer) instead of a fixed 18rem. */
+    fill?: boolean
     className?: string
     children?: ReactNode
   }
@@ -658,6 +666,65 @@ declare module '@visvine/tool-kit' {
   }
   /** Drag with the pointer to move; click still fires when there was no drag. */
   export function KanbanCard(props: KanbanCardProps): JSX.Element
+
+  // ── page blocks ──
+
+  export type IconName = 'plus' | 'search' | 'filter' | 'check' | 'x' | 'trash' | 'edit' | 'calendar' | 'clock' | 'user' | 'users' | 'building' | 'dollar' | 'chart' | 'trend' | 'list' | 'board' | 'table' | 'star' | 'heart' | 'flag' | 'tag' | 'link' | 'mail' | 'message' | 'file' | 'folder' | 'box' | 'target' | 'trophy' | 'bolt' | 'bug' | 'book' | 'home' | 'settings' | 'arrowRight' | 'arrowUp' | 'arrowDown' | 'chevronLeft' | 'chevronRight' | 'more' | 'download' | 'upload' | 'sparkles' | 'inbox' | 'vote'
+  export const ICON_NAMES: IconName[]
+  export function Icon(props: { name: IconName; size?: number; className?: string }): JSX.Element
+  /** The Tool's page: the app's gutter and gap-6 between blocks. The root of every Tool. */
+  export function Page(props: { children: ReactNode; width?: 'wide' | 'normal'; className?: string }): JSX.Element
+  export interface ToolbarView { value: string; label: string }
+  /** search · filters · view switch (two looks at the same rows) · the primary action. */
+  export function Toolbar(props: { search?: string; onSearch?: (value: string) => void; searchPlaceholder?: string; views?: ToolbarView[]; view?: string; onView?: (value: string) => void; filters?: ReactNode; actions?: ReactNode; className?: string }): JSX.Element
+  export function Stat(props: { label: ReactNode; value: ReactNode; delta?: number; deltaLabel?: ReactNode; invert?: boolean; icon?: IconName; hint?: ReactNode }): JSX.Element
+  export function StatRow(props: { children: ReactNode; className?: string }): JSX.Element
+  export function Progress(props: { value: number; max?: number; hue?: Hue; label?: ReactNode; className?: string }): JSX.Element
+  export function ListDetail<T>(props: { items: T[]; itemKey: (item: T) => string; selected: string | null; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode; detail: ReactNode; listHeader?: ReactNode; empty?: ReactNode; placeholder?: ReactNode }): JSX.Element
+  export interface CalendarItem { id: string; /** YYYY-MM-DD */ date: string; title: ReactNode; hue?: Hue }
+  export function MonthCalendar(props: { month: string; onMonth: (month: string) => void; items: CalendarItem[]; onOpen?: (id: string) => void; onDay?: (date: string) => void; weekStart?: 0 | 1 }): JSX.Element
+  /** Today as YYYY-MM-DD. */
+  export function todayIso(): string
+
+  // ── records by schema ──
+  // Describe a record's fields once; every view of it is drawn from that.
+
+  export type Hue = 'gray' | 'red' | 'orange' | 'amber' | 'yellow' | 'green' | 'teal' | 'cyan' | 'sky' | 'blue' | 'indigo' | 'violet' | 'pink'
+  export const HUES: readonly Hue[]
+  export type FieldKind = 'text' | 'longtext' | 'number' | 'money' | 'percent' | 'date' | 'select' | 'tags' | 'person' | 'email' | 'url' | 'boolean' | 'rating'
+  export interface FieldOption { value: string; label?: string; hue?: Hue }
+  export interface FieldDef {
+    key: string
+    label: string
+    kind: FieldKind
+    /** select / tags: the choices in order — a RecordBoard's columns. */
+    options?: FieldOption[]
+    required?: boolean
+    /** money: ISO currency, default USD. */
+    currency?: string
+    placeholder?: string
+    hideInTable?: boolean
+  }
+  export type RecordData = Record<string, unknown>
+  export function optionsOf(field: FieldDef): Required<FieldOption>[]
+  export function missingRequired(fields: FieldDef[], value: RecordData): string[]
+  export function formatMoney(value: unknown, currency?: string): string
+  export function formatNumber(value: unknown): string
+  export function formatDate(value: unknown): string
+  export function relativeDate(value: unknown): string
+  /** Whole days from today; negative once passed. */
+  export function daysFrom(value: unknown): number | null
+  export function HueChip(props: { hue?: Hue; className?: string; children: ReactNode }): JSX.Element
+  export function HueDot(props: { hue?: Hue; className?: string }): JSX.Element
+  export function FieldValue(props: { field: FieldDef; value: unknown; compact?: boolean }): JSX.Element
+  export function FieldInput(props: { field: FieldDef; value: unknown; onChange: (value: unknown) => void; id?: string; autoFocus?: boolean }): JSX.Element
+  export function RecordForm(props: { fields: FieldDef[]; value: RecordData; onChange: (next: RecordData) => void; errors?: string[] }): JSX.Element
+  export function RecordDialog(props: { open: boolean; title: ReactNode; fields: FieldDef[]; initial: RecordData; onClose: () => void; onSave: (value: RecordData) => Promise<void> | void; onDelete?: () => Promise<void> | void; saveLabel?: string }): JSX.Element
+  export function RecordTable<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; rows: T[]; onOpen?: (row: T) => void; empty?: ReactNode; trailing?: (row: T) => ReactNode; maxHeight?: number }): JSX.Element
+  export function RecordBoard<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; groupBy: string; rows: T[]; onMove: (row: T, toValue: string) => void; onOpen?: (row: T) => void; cardFields?: string[]; sumField?: string }): JSX.Element | null
+  export function RecordsEmpty(props: { noun: string; onAdd?: () => void }): JSX.Element
+  /** Seeds an empty collection once per install with sample rows; clear() removes exactly those. */
+  export function useSampleRows(collection: string, rows: RecordData[]): { seeding: boolean; clear: () => Promise<void> }
 
   // ── the app's own (@visvine/ui) ──
 
@@ -707,6 +774,33 @@ tools/<name>/src/<name>.tsx  optional: more modules, imported as './<name>'
 tools/<name>/data.js         optional: server-side handlers (sandboxed isolate)
 tools/<name>/icon.svg        optional: your own sidebar glyph
 \`\`\`
+
+## Start from a template
+
+Most Tools are one of a few shapes — records that move through stages, entries
+added up on a dashboard, a poll, a daily check-in, a directory, a leaderboard.
+Each is a finished, designed Tool: \`plan_tool\` names the one that fits and
+\`create_tool { template, spec }\` copies it with a spec that says what THIS one is
+about (nouns, fields, stages, realistic sample rows). Write the code yourself only
+when no template fits — and then build from the kit's blocks, not from divs:
+
+\`\`\`tsx
+const fields: FieldDef[] = [
+  { key: 'name', label: 'Company', kind: 'text', required: true },
+  { key: 'stage', label: 'Stage', kind: 'select', options: [{ value: 'Lead' }, { value: 'Won', hue: 'green' }] },
+  { key: 'value', label: 'Value', kind: 'money' },
+]
+<Page>
+  <StatRow><Stat label="Open" value={12} /></StatRow>
+  <Toolbar search={q} onSearch={setQ} actions={<Button variant="primary">New deal</Button>} />
+  <RecordBoard fields={fields} groupBy="stage" rows={rows} onMove={move} onOpen={open} />
+  <RecordDialog open={…} title="New deal" fields={fields} initial={{}} onSave={save} onClose={close} />
+</Page>
+\`\`\`
+
+Seed a collection with \`useSampleRows\` so the first look is the Tool working,
+and look before you hand it over: \`check_tool { review: true }\` scores every
+screen 0–10 with fixes; hand over at 8.5.
 
 ## index.md — the manifest
 

@@ -920,7 +920,7 @@ test('preview_tool renders only when asked, and passes the image and console err
       name: 'board',
       viewer: { userId: 'user_1', name: 'Ada', email: 'ada@local.dev' },
       image: true,
-      budgetMs: 10_000,
+      budgetMs: 20_000,
     },
   ])
   assert.equal(rendered.screenshot?.available, true)
