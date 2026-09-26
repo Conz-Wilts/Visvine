@@ -2,7 +2,7 @@
  * The two Tool actions that come before and around the code: `plan_tool`,
  * which reads the space and hands back the design brief a build starts from,
  * and `set_tool_icon`, which gives a Tool its rail icon from a built-in name,
- * SVG text or an uploaded file. Both sit on the Visvine Tools server.
+ * SVG text or an uploaded file.
  *
  * Neither writes around the authoring loop: the icon goes through
  * `write_tool`'s and `configure_tool`'s own handlers, under the same gates.

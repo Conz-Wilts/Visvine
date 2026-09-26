@@ -1,7 +1,10 @@
 /**
- * What each MCP server registers: the `visvine` router, then one tool per
- * action — Visvine over the space's context, connectors, agents and events,
- * Visvine Tools over building and installing Tools (`actionsOn`). Every action is ALSO its own named tool, from the same registry, so a
+ * What the MCP server registers: the `visvine` router, then one tool per action.
+ *
+ * Every action is behind the router — context, Drive, events, connectors,
+ * agents, and planning and building Tools — on ONE server, so a Tool is planned
+ * by a model that can read the space it is for: its types, records, folders and
+ * files are one call away from `plan_tool`. Every action is ALSO its own named tool, from the same registry, so a
  * client can permit, deny and log each by name. What an action costs is
  * enforced by the scope on its definition either way, checked before dispatch
  * and again in `runAction`, so a connection that never asked for
@@ -11,12 +14,6 @@ import type { McpServer } from '@modelcontextprotocol/server'
 import { registerActionTools, registerGateway } from '@/lib/mcp/gateway'
 
 export function registerTools(server: McpServer): void {
-  registerGateway(server, 'visvine')
-  registerActionTools(server, 'visvine')
-}
-
-/** Visvine Tools: the same router and named tools, over the Tool actions alone. */
-export function registerToolTools(server: McpServer): void {
-  registerGateway(server, 'tools')
-  registerActionTools(server, 'tools')
+  registerGateway(server)
+  registerActionTools(server)
 }

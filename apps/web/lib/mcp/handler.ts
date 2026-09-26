@@ -15,20 +15,18 @@ import { mcpBearerVerifier } from '@/lib/mcp/auth'
 import { withScopeGate, withScopeHint } from '@/lib/mcp/challenge'
 import { mcpInstructions, mcpResourceUrl, mcpServerInfo } from '@/lib/mcp/config'
 import { withRequestDeadline } from '@/lib/mcp/deadline'
-import type { McpSurface } from '@/lib/actions/registry'
 
 export function buildMcpHandler(
   register: (server: McpServer) => void,
-  surface: McpSurface = 'visvine',
 ): (req: Request) => Response | Promise<Response> {
-  const resourceUrl = mcpResourceUrl(surface)
+  const resourceUrl = mcpResourceUrl()
   const resourceMetadataUrl = `${resourceUrl}/.well-known/oauth-protected-resource`
 
   const handler = createMcpHandler((server) => register(server), {
-    serverInfo: mcpServerInfo(surface),
+    serverInfo: mcpServerInfo(),
     // Read by the client at initialize, before it has called anything — the
     // only place to correct the note-first misreading this surface invites.
-    instructions: mcpInstructions(surface),
+    instructions: mcpInstructions(),
     verboseLogs: process.env.NODE_ENV !== 'production',
   })
 

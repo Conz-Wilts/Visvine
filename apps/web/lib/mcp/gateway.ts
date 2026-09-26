@@ -37,8 +37,7 @@ import { z } from 'zod'
 import { withCaller, type ToolExtra } from '@/lib/mcp/auth'
 import { buildGuide, buildActionDoc } from '@/lib/actions/guide'
 import { runAction } from '@/lib/actions/run'
-import { actionByName, actionsOn, isOnSurface, schemaOf, type McpSurface } from '@/lib/actions/registry'
-import { mcpResourceUrl } from '@/lib/mcp/config'
+import { allActions, schemaOf } from '@/lib/actions/registry'
 import { ActionError, type ActionDef } from '@/lib/actions/types'
 
 export const TOOL_NAME = 'visvine'
@@ -85,12 +84,9 @@ export function actionAnnotations(def: ActionDef): {
  * no catalogue, no recipes. Those change; this string is cached for the life of
  * a connection.
  */
-function describeTool(surface: McpSurface): string {
-  const count = actionsOn(surface).length
-  const covering =
-    surface === 'tools'
-      ? 'covering building, checking, previewing, publishing and installing Tools'
-      : 'covering context, files, events, connectors and agents'
+function describeTool(): string {
+  const count = allActions().length
+  const covering = 'covering context, files, events, connectors, agents and planning and building Tools'
   return (
     'The router into Visvine — a relationship-context platform where context notes are how you direct ' +
     `agents. ${count} actions sit behind it, ${covering}, and this tool is how you find them, read them and run them. ` +
@@ -141,21 +137,11 @@ const inputSchema = {
     .describe('Return the manual even though `input` was supplied, instead of running anything.'),
 }
 
-/** Where an action this server does not offer lives — said instead of running it. */
-function offSurfaceRefusal(action: string, surface: McpSurface): ActionError {
-  const other: McpSurface = surface === 'tools' ? 'visvine' : 'tools'
-  const name = other === 'tools' ? 'Visvine Tools' : 'Visvine'
-  return new ActionError(
-    404,
-    `'${action}' is on the ${name} MCP server, not this one — connect ${mcpResourceUrl(other)} to use it.`,
-  )
-}
-
-export function registerGateway(server: McpServer, surface: McpSurface = 'visvine'): void {
+export function registerGateway(server: McpServer): void {
   server.registerTool(
     TOOL_NAME,
     {
-      description: describeTool(surface),
+      description: describeTool(),
       inputSchema,
       // Not read-only: this is the door to the write actions too. A client that
       // trusts the hint would be wrong, so there is no hint.
@@ -164,10 +150,8 @@ export function registerGateway(server: McpServer, surface: McpSurface = 'visvin
     (args, extra: ToolExtra) =>
       withCaller(extra, async (caller) => {
         if (!args.action) {
-          return buildGuide({ caller, request: args.request, spaceId: args.space_id, surface })
+          return buildGuide({ caller, request: args.request, spaceId: args.space_id })
         }
-        // A guide is read on either server; an action only on its own.
-        if (actionByName(args.action) && !isOnSurface(args.action, surface)) throw offSurfaceRefusal(args.action, surface)
 
         if (!args.input || args.explain) {
           const doc = await buildActionDoc(args.action)
@@ -191,8 +175,8 @@ export function registerGateway(server: McpServer, surface: McpSurface = 'visvin
  * line plus where the manual is; the schema is the action's own Zod shape, so
  * the client sees every argument and its description without a round trip.
  */
-export function registerActionTools(server: McpServer, surface: McpSurface = 'visvine'): void {
-  for (const def of actionsOn(surface)) {
+export function registerActionTools(server: McpServer): void {
+  for (const def of allActions()) {
     server.registerTool(
       actionToolName(def.name),
       {

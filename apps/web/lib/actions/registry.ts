@@ -39,45 +39,6 @@ export function allActions(): readonly ActionDef[] {
 }
 
 /**
- * Which MCP server offers an action. Visvine has two: the main one, and Visvine
- * Tools, which carries the Tool authoring loop, its listings and installs so the
- * main catalogue stays about a space's context and the Tools one about building.
- * The split is about what a client is shown, never what it may do — HTTP and
- * `runAction` reach every action, and each is still gated by its own scope.
- */
-export type McpSurface = 'visvine' | 'tools'
-
-const TOOL_ACTION_NAMES: ReadonlySet<string> = new Set([...TOOL_PLAN_ACTIONS, ...APP_ACTIONS, ...TOOL_LISTING_ACTIONS].map((a) => a.name))
-/**
- * What a Tool author needs beside the Tool actions, on both servers: finding
- * the space and its data, uploading an icon or a logo, and giving a note type
- * its fields.
- */
-const SHARED_READS: ReadonlySet<string> = new Set([
-  'list_spaces',
-  'list_context',
-  'read_context',
-  'search_context',
-  'list_resources',
-  'upload_file',
-  'request_upload',
-  'add_type',
-  'set_image',
-])
-
-/** Whether `surface` offers the action by this name. */
-export function isOnSurface(name: string, surface: McpSurface): boolean {
-  const canonical = actionByName(name)?.name ?? name
-  if (SHARED_READS.has(canonical)) return true
-  return TOOL_ACTION_NAMES.has(canonical) === (surface === 'tools')
-}
-
-/** The actions one server offers, in catalogue order. */
-export function actionsOn(surface: McpSurface): readonly ActionDef[] {
-  return ALL.filter((def) => isOnSurface(def.name, surface))
-}
-
-/**
  * Names an action answered to before it was renamed, so a client that learned
  * the old one keeps working. Resolved here and nowhere else — the catalogue and
  * the named tools list only the current name.

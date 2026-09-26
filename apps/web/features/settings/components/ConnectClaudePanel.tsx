@@ -27,7 +27,6 @@ import { fetchJson } from '@/lib/fetchJson';
 
 interface McpConnectInfo {
   url: string;
-  toolsUrl: string;
   issuer: string;
   scopes: { scope: string; description: string }[];
 }
@@ -79,14 +78,9 @@ export default function ConnectClaudePanel() {
   const { info, error } = useMcpConnectInfo();
 
   return (
-    <>
-      <SettingsSection title="MCP">
-        {error && <Alert variant="error" inline>{error}</Alert>}
-        <McpServerUrlRow url={info?.url ?? null} />
-      </SettingsSection>
-      <SettingsSection title="Tools MCP">
-        <McpServerUrlRow url={info?.toolsUrl ?? null} label="Tools MCP server address" />
-      </SettingsSection>
-    </>
+    <SettingsSection title="MCP">
+      {error && <Alert variant="error" inline>{error}</Alert>}
+      <McpServerUrlRow url={info?.url ?? null} />
+    </SettingsSection>
   );
 }

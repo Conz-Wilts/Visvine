@@ -462,7 +462,7 @@ const RECIPES: Recipe[] = [
       { n: 11, tool: 'publish_tool', why: 'Publishes it into this space: an admin\'s publish is approved as it lands, a member\'s waits for an admin. It goes no further than this space.', args: { space_id: spaceId(ctx), name: '<name>' }, optional: true },
     ],
     mustKnow: () => [
-      "Tools are built on the Visvine Tools MCP server (/api/mcp/tools). Authoring needs the 'tools:author' scope; if create_tool refuses you, reconnect asking for it.",
+      "Authoring needs the 'tools:author' scope; if create_tool refuses you, reconnect asking for it. Everything else you need to plan — list_context, search_context, list_resources — is on the same server: read the space before deciding anything.",
       'Decide before you code: plan_tool, then the plan agreed with the person. A Tool whose data model was decided by accident is rebuilt.',
       'In ui.tsx `react`, `react-dom` and `@visvine/tool-kit` are importable, plus the curated packages the manifest declares under `dependencies` (zod, date-fns, clsx). Charts are the kit\'s (Recharts underneath) — no other chart library.',
       '"company" is the built-in organisation record (`space`): build on those, or name a type for what it is here.',

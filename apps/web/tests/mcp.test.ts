@@ -19,7 +19,7 @@ import {
 import { mintAccessToken, verifyAccessToken } from '@/lib/mcp/tokens'
 import {
   mcpResourceUrl,
-  legacyResourceUrl,
+  legacyResourceUrls,
   mcpServerInfo,
   canonicalizeResource,
   isCanonicalResource,
@@ -131,14 +131,16 @@ test('only our own resource identifier is an acceptable audience', () => {
 
 test('there is one resource, and the address the creator server used still names it', () => {
   assert.equal(mcpResourceUrl(), 'http://localhost:3000/api/mcp')
-  assert.equal(legacyResourceUrl(), 'http://localhost:3000/api/mcp/creator')
+  assert.deepEqual(legacyResourceUrls(), ['http://localhost:3000/api/mcp/creator', 'http://localhost:3000/api/mcp/tools'])
   assert.equal(protectedResourceMetadata().resource, mcpResourceUrl())
 
   // A connection made before the surfaces were one presents the old identifier
   // as its `resource` and as its token's `aud`. Both keep working — there is
   // one resource for them to name, so nothing is confused by accepting it.
-  assert.equal(isCanonicalResource(legacyResourceUrl()), true)
-  assert.equal(isCanonicalResource(`${legacyResourceUrl()}/`), true)
+  for (const url of legacyResourceUrls()) {
+    assert.equal(isCanonicalResource(url), true)
+    assert.equal(isCanonicalResource(`${url}/`), true)
+  }
   // Someone else's server never is, whichever suffix it wears.
   assert.equal(isCanonicalResource('https://someone-else.example/api/mcp/creator'), false)
   assert.equal(isCanonicalResource(null), false)
@@ -425,7 +427,7 @@ test('a token issued for the creator address still verifies', async () => {
   const legacy = await new SignJWT({ typ: 'mcp_access', scope: 'tools:author', client_id: 'mcp_client_1' })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject('user_1')
-    .setAudience(legacyResourceUrl())
+    .setAudience(legacyResourceUrls()[0])
     .setIssuedAt()
     .setExpirationTime('1h')
     .sign(new TextEncoder().encode(process.env.AUTH_SECRET))

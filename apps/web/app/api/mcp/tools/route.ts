@@ -1,18 +1,18 @@
 /**
- * The Visvine Tools MCP endpoint (Streamable HTTP): the `visvine` router and a
- * named tool per action, over building, checking, previewing, publishing and
- * installing Tools — and the few reads an author needs to find the space and
- * its data. Everything else is the main server at `/api/mcp`.
+ * Where Tool authoring briefly had a server of its own.
  *
- * Same assembly as the main endpoint (lib/mcp/handler.ts); only the surface
- * differs — its resource URL, metadata, instructions and catalogue.
+ * Tools are planned and built on the one Visvine server (`/api/mcp`), where
+ * the model can read the space it is building for, so this redirects there —
+ * permanently, method and body preserved (308) — and its tokens still verify
+ * (`legacyResourceUrls`). Deletable once nothing is configured this way.
  */
-import { buildMcpHandler } from '@/lib/mcp/handler'
-import { registerToolTools } from '@/lib/mcp/register'
+import { NextRequest, NextResponse } from 'next/server'
+import { mcpResourceUrl } from '@/lib/mcp/config'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
 
-const authHandler = buildMcpHandler(registerToolTools, 'tools')
+function redirect(_req: NextRequest) {
+  return NextResponse.redirect(mcpResourceUrl(), 308)
+}
 
-export { authHandler as GET, authHandler as POST, authHandler as DELETE }
+export { redirect as GET, redirect as POST, redirect as DELETE }

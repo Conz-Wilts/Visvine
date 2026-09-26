@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     },
     build: result.build,
     previewUrl: `${appOrigin()}/tools/preview/${result.name}`,
-    creatorMcpUrl: mcpResourceUrl('tools'),
+    creatorMcpUrl: mcpResourceUrl(),
   }
   return NextResponse.json(answer, { status: 201 })
 }

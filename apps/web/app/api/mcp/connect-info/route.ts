@@ -21,7 +21,6 @@ export async function GET() {
 
   return NextResponse.json({
     url: mcpResourceUrl(),
-    toolsUrl: mcpResourceUrl('tools'),
     issuer: oauthIssuer(),
     scopes: MCP_SCOPES.map((scope) => ({ scope, description: SCOPE_DESCRIPTIONS[scope] })),
   });

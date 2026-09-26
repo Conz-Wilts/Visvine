@@ -8,7 +8,6 @@
  * building them here.
  */
 import { oauthIssuer, mcpResourceUrl } from '@/lib/mcp/config'
-import type { McpSurface } from '@/lib/actions/registry'
 import { MCP_SCOPES } from '@/lib/mcp/scopes'
 
 /** These documents are public and fetched cross-origin by browser-based agents. */
@@ -46,12 +45,12 @@ export function authorizationServerMetadata(): Record<string, unknown> {
 }
 
 /** OAuth 2.0 Protected Resource Metadata (RFC 9728) for the MCP server. */
-export function protectedResourceMetadata(surface: McpSurface = 'visvine'): Record<string, unknown> {
+export function protectedResourceMetadata(): Record<string, unknown> {
   return {
-    resource: mcpResourceUrl(surface),
+    resource: mcpResourceUrl(),
     authorization_servers: [oauthIssuer()],
     scopes_supported: [...MCP_SCOPES],
     bearer_methods_supported: ['header'],
-    resource_name: surface === 'tools' ? 'Visvine Tools' : 'Visvine',
+    resource_name: 'Visvine',
   }
 }
