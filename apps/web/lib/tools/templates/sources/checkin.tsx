@@ -242,7 +242,7 @@ export default function App() {
   const dialog = (
     <RecordDialog
       open={posting}
-      title={mineToday ? `Your ${SPEC.noun}` : `Post your ${SPEC.noun}`}
+      title={`${mineToday ? `Your ${SPEC.noun}` : `Post your ${SPEC.noun}`} · ${dayLabel(today)}`}
       fields={SPEC.fields}
       initial={mineToday ? mineToday.data : EMPTY}
       onClose={() => setPosting(false)}
@@ -332,6 +332,7 @@ export default function App() {
       )}
 
       <section>
+        <h2 className="border-b border-line-subtle pb-2 text-sm font-semibold text-fg">{dayLabel(today)}</h2>
         {mineToday && <EntryView entry={mineToday} onEdit={() => setPosting(true)} />}
         {todays.map((e) => (
           <EntryView key={e.id} entry={e} />

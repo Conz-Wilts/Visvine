@@ -148,9 +148,9 @@ export function DataTable<T>({
                 aria-sort={active ? (sort?.direction === 'asc' ? 'ascending' : 'descending') : undefined}
               >
                 {sortable ? (
-                  <button type="button" className="group inline-flex items-center gap-1 uppercase tracking-wide hover:text-fg" onClick={() => toggleSort(c.key)}>
+                  <button type="button" className={cx('group inline-flex items-center gap-1 uppercase tracking-wide hover:text-fg', c.align === 'right' && 'flex-row-reverse')} onClick={() => toggleSort(c.key)}>
                     <span>{c.header}</span>
-                    {/* The sorted column says so; the rest show their arrow only under the pointer. */}
+                    {/* The sorted column says so; the rest show their arrow only under the pointer — on the inner side, so a right-aligned header still sits over its numbers. */}
                     <span className={cx('text-[10px]', active ? 'text-fg' : 'opacity-0 group-hover:opacity-50')} aria-hidden>
                       {active ? (sort?.direction === 'asc' ? '▲' : '▼') : '▴'}
                     </span>

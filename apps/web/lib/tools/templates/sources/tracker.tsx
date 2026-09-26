@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import {
   daysFrom,
+  formatDate,
   formatMoney,
   formatNumber,
   HueDot,
-  MonthCalendar,
   optionsOf,
+  FieldValue,
+  PersonAvatar,
   Page,
   peopleOf,
   plural,
@@ -17,7 +19,6 @@ import {
   Spinner,
   Stat,
   StatRow,
-  todayIso,
   Toolbar,
   useBandAction,
   useCollection,
@@ -116,7 +117,7 @@ export default function App() {
   const views = [
     ...(group ? [{ value: 'board', label: 'Board' }] : []),
     { value: 'table', label: 'Table' },
-    ...(dateField ? [{ value: 'calendar', label: 'Calendar' }] : []),
+    ...(dateField ? [{ value: 'schedule', label: 'Schedule' }] : []),
   ]
   // The view is the band's section; a Tool with one view has none.
   const [section] = useSection()
@@ -125,7 +126,6 @@ export default function App() {
   const [filter, setFilter] = useState('')
   const [onlyOverdue, setOnlyOverdue] = useState(false)
   const [editing, setEditing] = useState<Row | 'new' | null>(null)
-  const [month, setMonth] = useState(todayIso())
   const [draft, setDraft] = useState<RecordData>({})
   const startNew = (extra: RecordData = {}) => {
     setDraft({ ...(group ? { [group.key]: optionsOf(group)[0]?.value } : {}), ...extra })
@@ -209,7 +209,7 @@ export default function App() {
           <Stat
             label={firstDone}
             value={doneCount}
-            tone={doneCount > 0 ? 'success' : undefined}
+            tone={doneCount > 0 && optionsOf(group!).find((o) => o.value === firstDone)?.hue === 'green' ? 'success' : undefined}
             hint={[sumField && !averaged ? fmt(total(rows.filter((r) => String(r.data[group!.key] ?? '') === firstDone))) : null, rate !== null ? `${rate}% of closed` : `${rows.length ? Math.round((doneCount / rows.length) * 100) : 0}% of all`].filter(Boolean).join(' · ')}
           />
         )}
@@ -264,38 +264,16 @@ export default function App() {
             onAdd={(value) => startNew({ [group.key]: value })}
           />
         </div>
-      ) : view === 'calendar' && dateField ? (
-        <div className="flex flex-col gap-3">
-          {/* What has no day cannot sit on the grid, so it waits above it. */}
-          {shown.some((r) => !isDone(r) && !r.data[dateField.key]) && (
-            <section className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-fg-muted">No {dateField.label.toLowerCase()}</span>
-              {shown.filter((r) => !isDone(r) && !r.data[dateField.key]).map((r) => (
-                <button key={r.id} type="button" onClick={() => setEditing(r)} className="inline-flex items-center gap-1.5 rounded-md border border-line-subtle px-2 py-1 text-fg hover:bg-surface-subtle">
-                  {group && <HueDot hue={optionsOf(group).find((o) => o.value === r.data[group.key])?.hue} />}
-                  {String(r.data[SPEC.fields[0].key] ?? '')}
-                </button>
-              ))}
-            </section>
-          )}
-          <MonthCalendar
-            rolling={5}
-            month={month}
-            onMonth={setMonth}
-            items={shown
-              .filter((r) => r.data[dateField.key])
-              .map((r) => ({
-                id: r.id,
-                date: String(r.data[dateField.key]),
-                title: String(r.data[SPEC.fields[0].key] ?? ''),
-                hue: group ? optionsOf(group).find((o) => o.value === r.data[group.key])?.hue : undefined,
-                late: isLate(r),
-                done: isDone(r),
-              }))}
-            onOpen={(id) => setEditing(rows.find((r) => r.id === id) ?? null)}
-            onDay={(date) => startNew({ [dateField.key]: date })}
-          />
-        </div>
+      ) : view === 'schedule' && dateField ? (
+        <Schedule
+          rows={shown.filter((r) => !isDone(r))}
+          dateKey={dateField.key}
+          group={group}
+          person={SPEC.fields.find((f) => f.kind === 'person')}
+          value={sumField && !averaged ? sumField : undefined}
+          onOpen={setEditing}
+          noDate={`No ${dateField.label.toLowerCase()}`}
+        />
       ) : (
         <div className="flex flex-col gap-2">
           <RecordTable
@@ -328,4 +306,66 @@ export default function App() {
       />
     </Page>
   )
+}
+
+/**
+ * What is due, in the order it falls due: late, this week, next week, later,
+ * then what has no date — every open row on one page, each where it belongs.
+ */
+function Schedule({ rows, dateKey, group, person, value, onOpen, noDate }: { rows: Row[]; dateKey: string; group?: FieldDef; person?: FieldDef; value?: FieldDef; onOpen: (row: Row) => void; noDate: string }) {
+  const today = new Date()
+  const toSunday = 7 - ((today.getDay() + 6) % 7)
+  const buckets: Array<{ title: string; late?: boolean; test: (days: number | null) => boolean }> = [
+    { title: 'Overdue', late: true, test: (d) => d !== null && d < 0 },
+    { title: 'This week', test: (d) => d !== null && d >= 0 && d < toSunday },
+    { title: 'Next week', test: (d) => d !== null && d >= toSunday && d < toSunday + 7 },
+    { title: 'Later', test: (d) => d !== null && d >= toSunday + 7 },
+    { title: noDate, test: (d) => d === null },
+  ]
+  const sorted = [...rows].sort((a, b) => String(a.data[dateKey] ?? '9999').localeCompare(String(b.data[dateKey] ?? '9999')))
+  return (
+    <div className="flex flex-col gap-6">
+      {buckets.map((b) => {
+        const list = sorted.filter((r) => b.test(daysFrom(r.data[dateKey])))
+        if (!list.length) return null
+        return (
+          <section key={b.title}>
+            <h2 className={`flex items-baseline gap-2 border-b border-line-subtle pb-2 text-sm font-semibold ${b.late ? 'text-danger' : 'text-fg'}`}>
+              {b.title}
+              <span className="font-normal text-fg-muted">{list.length}</span>
+              {value && <span className="ml-auto font-normal tabular-nums text-fg-muted">{formatMoneyOrNumber(value, list)}</span>}
+            </h2>
+            <ul>
+              {list.map((r) => {
+                const option = group ? optionsOf(group).find((o) => o.value === r.data[group.key]) : undefined
+                return (
+                  <li key={r.id}>
+                    <button type="button" onClick={() => onOpen(r)} className="flex w-full items-center gap-3 border-b border-line-subtle px-1 py-2.5 text-left text-sm hover:bg-surface-subtle">
+                      <span className={`w-14 shrink-0 tabular-nums ${b.late ? 'font-medium text-danger' : 'text-fg-muted'}`}>{r.data[dateKey] ? formatDate(r.data[dateKey]) : '—'}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium text-fg">{String(r.data[SPEC.fields[0].key] ?? '') || 'Untitled'}</span>
+                      {option && group && <FieldValue field={group} value={option.value} />}
+                      {value && r.data[value.key] !== undefined && r.data[value.key] !== null && r.data[value.key] !== '' && (
+                        <span className="w-24 shrink-0 text-right tabular-nums text-fg"><FieldValue field={value} value={r.data[value.key]} /></span>
+                      )}
+                      {person && r.data[person.key] ? (
+                        <span className="flex w-36 shrink-0 items-center gap-1.5 truncate text-fg-secondary">
+                          <PersonAvatar name={String(r.data[person.key])} />
+                          <span className="truncate">{String(r.data[person.key])}</span>
+                        </span>
+                      ) : person ? <span className="w-36 shrink-0" /> : null}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
+function formatMoneyOrNumber(field: FieldDef, list: Row[]): string {
+  const sum = list.reduce((a, r) => a + (Number(r.data[field.key]) || 0), 0)
+  return field.kind === 'money' ? formatMoney(sum, field.currency) : formatNumber(sum)
 }

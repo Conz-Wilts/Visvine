@@ -149,7 +149,7 @@ const recordsSpec = z.object({
 const tracker: ToolTemplate = {
   id: 'tracker',
   title: 'Tracker',
-  summary: 'Records that move through stages: a board by status, a sortable table, a calendar by date, numbers across the top, add and edit in a dialog.',
+  summary: 'Records that move through stages: a board by status, a sortable table, a schedule of what falls due, numbers across the top, add and edit in a dialog.',
   keywords: [
     'crm', 'pipeline', 'deal', 'deals', 'sales', 'lead', 'leads', 'track', 'tracker', 'tracking', 'task', 'tasks', 'todo', 'project', 'projects',
     'bug', 'bugs', 'issue', 'issues', 'hiring', 'candidate', 'candidates', 'applicant', 'recruiting', 'inventory', 'stock', 'content', 'calendar',
@@ -161,7 +161,7 @@ const tracker: ToolTemplate = {
     'noun / plural: what one record is ("deal" / "deals").',
     'fields: 4–8 FieldDefs; the FIRST is the title (kind text, required). Pick kinds that fit: a known set is select (with 3–6 options in flow order, each a hue), money for amounts, date for deadlines, person for an owner, rating for 1–5.',
     'groupBy: the key of the select field the board has a column per option of (the status or stage). Omit only when nothing has stages.',
-    'sumField: a money/number field summed per column and in the stats. dateField: the date that matters (due, close, publish) — gives a calendar and an Overdue count.',
+    'sumField: a money/number field summed per column and in the stats. dateField: the date that matters (due, close, publish) — gives a Schedule (overdue, this week, next week, later) and an Overdue count.',
     'doneValues: the options of groupBy that mean finished (["Won", "Lost"], ["Done"]); the first is counted in the stats.',
     `sample: 10–16 realistic rows with real-sounding names and plausible numbers, EVERY field filled: at least one in every option of groupBy (two or more in the open ones), dates spread over the coming month, and one open row a few days late. ${DATE_OFFSET_NOTE}`,
   ].join('\n'),
@@ -173,7 +173,7 @@ const tracker: ToolTemplate = {
     const sections = [
       ...(kind(s.groupBy) === 'select' ? [{ id: 'board', label: 'Board' }] : []),
       { id: 'table', label: 'Table' },
-      ...(kind(s.dateField) === 'date' ? [{ id: 'calendar', label: 'Calendar' }] : []),
+      ...(kind(s.dateField) === 'date' ? [{ id: 'schedule', label: 'Schedule' }] : []),
     ]
     return {
       surfaces: { nav: sections.length > 1 ? { style: 'tabs', sections } : null, actions: [{ id: 'new', label: `New ${s.noun}` }] },
@@ -194,7 +194,7 @@ const tracker: ToolTemplate = {
       const empty = (group.options ?? []).filter((o) => !s.sample.some((r) => r[group.key] === o.value)).map((o) => o.value)
       if (empty.length) problems.push(`sample has no row in ${empty.map((v) => `"${v}"`).join(', ')} — give every ${group.label.toLowerCase()} at least one (two in the open ones)`)
     }
-    if (s.sample.length < 10) problems.push(`sample has ${s.sample.length} rows — write 10–16 so the board, table and calendar all look lived in`)
+    if (s.sample.length < 10) problems.push(`sample has ${s.sample.length} rows — write 10–16 so the board, table and schedule all look lived in`)
     return problems
   },
 }

@@ -408,6 +408,35 @@ function PersonInput({ id, value, onChange, people, placeholder }: { id?: string
   );
 }
 
+const RATING_WORDS = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
+
+/** Five stars that fill as the pointer moves over them, with the word for the value beside. */
+function RatingInput({ label, value, onChange }: { label: string; value: number; onChange: (v: unknown) => void }) {
+  const [hover, setHover] = useState(0);
+  const shown = hover || value;
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex gap-0.5" role="radiogroup" aria-label={label} onMouseLeave={() => setHover(0)}>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <button
+            key={i}
+            type="button"
+            role="radio"
+            aria-checked={value === i}
+            aria-label={`${i} — ${RATING_WORDS[i]}`}
+            onMouseEnter={() => setHover(i)}
+            onClick={() => onChange(value === i ? 0 : i)}
+            className={clsx('px-0.5 text-2xl leading-none transition-colors', i <= shown ? 'text-warning' : 'text-line hover:text-fg-subtle')}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+      <span className="text-sm text-fg-muted">{shown ? RATING_WORDS[shown] : 'Not rated'}</span>
+    </div>
+  );
+}
+
 /** One field's control, chosen by its kind. */
 export function FieldInput({ field, value, onChange, id, autoFocus, people = [], example, rows = 3 }: FieldInputProps) {
   const hint = exampleFor(field, example);
@@ -478,26 +507,8 @@ export function FieldInput({ field, value, onChange, id, autoFocus, people = [],
     }
     case 'boolean':
       return <Toggle checked={Boolean(value)} onChange={onChange} />;
-    case 'rating': {
-      const n = Number(value) || 0;
-      return (
-        <div className="flex gap-1" role="radiogroup" aria-label={field.label}>
-          {[1, 2, 3, 4, 5].map((i) => (
-            <button
-              key={i}
-              type="button"
-              role="radio"
-              aria-checked={n === i}
-              aria-label={`${i}`}
-              onClick={() => onChange(n === i ? 0 : i)}
-              className={clsx('text-xl leading-none transition-colors', i <= n ? 'text-warning' : 'text-fg-subtle hover:text-fg-muted')}
-            >
-              ★
-            </button>
-          ))}
-        </div>
-      );
-    }
+    case 'rating':
+      return <RatingInput label={field.label} value={Number(value) || 0} onChange={onChange} />;
     default:
       return (
         <Input
