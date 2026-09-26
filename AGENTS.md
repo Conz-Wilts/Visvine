@@ -1386,6 +1386,13 @@ iframe on a cookie-less origin. `docs/tools.md` is the guide. The invariants:
   Edit, Manage and Report. The section is `?section=`, pushed into the frame as
   `visvine:route` — a tab press never reloads the frame. Nav and actions are
   surfaces, so changing them is reviewed like a new rail row.
+- **A Tool is planned before it is written.** `plan_tool` reads the space and
+  returns where each thing should live (the space's records, a note type with
+  `add_type` fields, or the Tool's collection) and the plan to agree with the
+  person; `create_tool { plan }` keeps it as the index's `## Design`. Icons are
+  `set_tool_icon`; a Tool adds files only through `resources.upload` under
+  `permissions.resources.write`, and a `format: resource` field holds only a
+  visible file of its own space.
 - **The app builds no Tools; it shows them.** A Tool is made over MCP, from
   its author's repo (`visvine-tool`), or from a `.vvtool` — and
   `/tools/preview/<name>` is where the person looks before anything is

@@ -61,7 +61,7 @@ function asReach(perimeter: ToolPerimeter | ToolReach): ToolReach {
     : {
         ...perimeter,
         records: { read: [], write: [] },
-        resources: { read: [] },
+        resources: { read: [], write: [] },
         connectorActions: {},
         actions: [],
         ai: { complete: false, decide: false },
@@ -85,6 +85,7 @@ const COLLECTIONS = new Set<BridgeCallSite['method']>([
   'collections.count',
 ])
 const RESOURCES = new Set<BridgeCallSite['method']>(['resources.list', 'resources.get', 'resources.read', 'resources.blob'])
+const RESOURCE_WRITES = new Set<BridgeCallSite['method']>(['resources.upload'])
 
 export function declaredVsUsed(
   declared: ToolPerimeter | ToolReach,
@@ -130,6 +131,7 @@ export function declaredVsUsed(
   }
   family('usage.undeclared-records', RECORDS, reach.records.read.length + reach.records.write.length > 0, 'Uses records, and declares none in permissions.records')
   family('usage.undeclared-resources', RESOURCES, reach.resources.read.length > 0, 'Uses files, and declares none in permissions.resources')
+  family('usage.undeclared-resource-writes', RESOURCE_WRITES, reach.resources.write.length > 0, 'Adds files, and declares no folder in permissions.resources.write')
   family('usage.undeclared-ai', new Set(['ai.complete']), reach.ai.complete, 'Asks ai.complete, and does not declare permissions.ai.complete')
   family('usage.undeclared-ai', new Set(['ai.decide']), reach.ai.decide, 'Asks ai.decide, and does not declare permissions.ai.decide')
   family('usage.undeclared-download', new Set(['ui.download']), reach.ui.download, 'Hands the viewer a download, and does not declare permissions.ui.download')
@@ -148,6 +150,7 @@ export function declaredVsUsed(
   }
   if (reach.records.write.length > 0 && !uses(new Set(['records.update']))) unused('usage.unused-records', 'Declares record edits it never makes')
   if (reach.resources.read.length > 0 && !uses(RESOURCES)) unused('usage.unused-resources', 'Declares files it never reads')
+  if (reach.resources.write.length > 0 && !uses(RESOURCE_WRITES)) unused('usage.unused-resource-writes', 'Declares a folder to add files to, and never adds one')
   if (reach.actions.length > 0 && !uses(new Set(['actions.run']))) unused('usage.unused-action', `Declares actions (${reach.actions.join(', ')}) it never runs`)
   if (reach.ai.complete && !uses(new Set(['ai.complete']))) unused('usage.unused-ai', 'Declares ai.complete and never asks')
   if (reach.ai.decide && !uses(new Set(['ai.decide']))) unused('usage.unused-ai', 'Declares ai.decide and never asks')

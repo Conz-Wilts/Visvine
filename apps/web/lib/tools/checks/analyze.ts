@@ -103,7 +103,7 @@ export async function runStaticChecks(input: StaticCheckInput): Promise<CheckRep
     'compatibility',
     [
       ...compatibilityFindings({ build: input.build, config: input.config, hasUi: !!input.ui?.trim(), facts: input.facts }),
-      ...designFindings({ ui: input.ui ?? null, modules: input.modules, config: input.config }),
+      ...designFindings({ ui: input.ui ?? null, index: input.index ?? null, modules: input.modules, config: input.config }),
     ],
     compatStarted,
   )

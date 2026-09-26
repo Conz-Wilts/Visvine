@@ -75,7 +75,25 @@ test('a fixed class is caught in a className, and the word elsewhere is not', ()
   assert.deepEqual(rules(`export default () => <p>The price is fixed</p>`), [])
 })
 
+test('a chart with no height is named, one with a height is not', () => {
+  assert.deepEqual(rules(`export default () => <PieChart data={[]} nameKey="n" valueKey="v" />`), ['design.chart-unsized'])
+  assert.deepEqual(rules(`export default () => <PieChart data={[]} nameKey="n" valueKey="v" height={112} />`), [])
+})
+
+test('an index with no Design section is told where the plan goes', () => {
+  const found = designFindings({ ui: 'export default () => null', index: '---\ntype: tool\n---\n\nA tool.\n', config: null })
+  assert.deepEqual(found.map((f) => [f.rule, f.severity]), [['design.no-plan', 'info']])
+  assert.deepEqual(designFindings({ ui: 'export default () => null', index: 'A tool.\n\n## Design\n\nViews…\n', config: null }), [])
+})
+
 test('the rules read the modules as well as ui.tsx, and point at the file', () => {
   const found = designFindings({ ui: 'export default () => null', modules: { 'src/board.tsx': `export const B = () => <div className="text-red-500" />` }, config: null })
   assert.deepEqual(found.map((f) => [f.rule, f.file]), [['design.colour', 'src/board.tsx']])
+})
+
+test('a chart whose props hold an arrow is still read to its end', () => {
+  const ui = `export default () => (
+  <PieChart data={pie} nameKey="label" valueKey="n" colors={pie.map((x) => x.color)} height={112} donut />
+)`
+  assert.deepEqual(rules(ui), [])
 })

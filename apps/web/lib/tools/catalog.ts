@@ -186,6 +186,22 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     props: 'value: string | null · onChange(value) · min? · max?',
     snippet: `<DatePicker value={null} onChange={() => {}} />`,
   },
+  {
+    name: 'ImageUpload',
+    kind: 'component',
+    what: 'A picture the viewer adds — a logo, a photo — into the Drive, as them.',
+    when: 'A row that carries an image. Declare the folder in permissions.resources.write (and read), store the id in a `format: resource` field.',
+    props: "value: string | null · onChange(resourceId) · label · folder? · shape?: 'square' | 'circle' · size?",
+    snippet: `<ImageUpload label="Logo" value={null} onChange={() => {}} />`,
+  },
+  {
+    name: 'ResourceImage',
+    kind: 'component',
+    what: 'A picture from the Drive by id, or the initials of what it is of.',
+    when: 'Drawing a stored logo or photo in a list or a header. It falls back to initials, so a row without one still lines up.',
+    props: "id · alt · shape?: 'square' | 'circle' · size?",
+    snippet: `<ResourceImage id={null} alt="Azonic" size={40} />`,
+  },
   // ── data ──
   {
     name: 'Table',
@@ -266,7 +282,7 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     name: 'PieChart',
     kind: 'component',
     what: 'A pie or donut in the app\'s chart palette.',
-    when: 'Shares of a whole, few slices.',
+    when: 'Shares of a whole, five slices or fewer — with the counts listed beside it, in a parent with a width (`w-28 shrink-0`). See the tool_charts guide.',
     props: 'data · nameKey · valueKey · donut?',
     snippet: `<PieChart data={[{ name: 'Won', n: 2 }, { name: 'Lost', n: 1 }]} nameKey="name" valueKey="n" donut />`,
   },

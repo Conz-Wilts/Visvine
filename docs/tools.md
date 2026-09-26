@@ -258,6 +258,26 @@ server's catalogue stays about a space's context. `/api/mcp/creator` 308s to it
 and the tokens it minted still verify. Both addresses are shown in Settings →
 MCP (`/api/mcp/connect-info`).
 
+**A build is researched and planned before it is written.** `plan_tool`
+(`lib/actions/defs/toolPlan.ts`, brief in `lib/tools/shared/planBrief.ts`)
+reads the space — its record types and counts, the types it made with their
+fields, its folders, its Tools — warns about traps in the request ("company"
+is the built-in `space` record), and hands back where each kind of thing
+should live and a plan template. The model agrees the plan with the person;
+`create_tool { plan }` writes it into `index.md` as `## Design`
+(`design.no-plan` otherwise). The `tool_data` and `tool_charts` guides carry
+the decision and the chart rules; `add_type` takes `fields`, so a note type a
+Tool builds on is queryable from its first note.
+
+**Icons and pictures.** `set_tool_icon` takes a built-in name, SVG text or an
+uploaded SVG (`resource_id`), strips what the rail will not draw and says what
+it stripped. A Tool adds files with `resources.upload`, gated by
+`permissions.resources.write` (a folder under `resources/`, asked before the
+bytes are read, then every upload check in `lib/resources/receive.ts`); the
+kit's `ImageUpload` and `ResourceImage` draw it, and a collection field
+declared `format: resource` only holds a file of the Tool's space its writer
+can see.
+
 **A build is reviewed before it is handed over.** `create_tool` and
 `write_tool` end with the loop: `check_tool { render: true }`, then
 `preview_tool { screenshot: true }` once per section (`section`) and once with

@@ -109,6 +109,8 @@ function deps(over: Partial<BridgeDeps> = {}): BridgeDeps {
     requireVisibleResource: trap('requireVisibleResource') as never,
     readResourceText: trap('readResourceText') as never,
     resourceBlob: trap('resourceBlob') as never,
+    receiveFile: trap('receiveFile') as never,
+    resourceFolderPath: trap('resourceFolderPath') as never,
     tenantArgDenial: trap('tenantArgDenial') as never,
     runAction: trap('runAction') as never,
     complete: trap('complete') as never,

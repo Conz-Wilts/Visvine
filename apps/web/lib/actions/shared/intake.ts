@@ -151,19 +151,19 @@ const TOOL_QUESTIONS: readonly IntakeQuestion[] = [
     skipWhen: 'The request already describes the screen ("a table of this week\'s RSVPs") — then build it and offer the next step.',
   },
   {
-    ask: 'What does it read or change — which folders, which kinds of notes, which of the space\'s connectors?',
-    decides: 'The perimeter: the narrowest `read`/`write` globs, `types` and `connectors` that do the job. Everything else is refused at the bridge.',
-    skipWhen: 'The space\'s folders make it obvious (list_context shows one `deals/` folder for a deals board) — then say which you chose.',
+    ask: 'Is this about things the space already keeps (its people, organisations, events), a new kind of note, or data only this tool needs (votes, predictions)?',
+    decides: 'Where each thing lives: the space\'s records, a note type of its own (add_type with fields), or the Tool\'s collection — plan_tool says what the space already has.',
+    skipWhen: 'plan_tool makes it obvious (the space has 40 organisation records and the request is a board of companies) — then say which you chose.',
+  },
+  {
+    ask: 'Any charts, pictures or a particular icon?',
+    decides: 'Which chart per the tool_charts guide, whether rows carry an image (ImageUpload + a resource field), and set_tool_icon.',
+    skipWhen: 'The request names them or plainly needs none — pick from the guides and say so.',
   },
   {
     ask: 'Who uses it — everyone in the space, or the admins?',
     decides: 'What it may write, and whether its sections for admins are marked `admin: true`.',
     skipWhen: 'Default to everyone in the space, read-only, and say so.',
-  },
-  {
-    ask: 'Should it look like the rest of the app, or its own way?',
-    decides: 'Whether you build from the kit and the `tool_design` guide (the default) or style it yourself.',
-    skipWhen: 'Almost always — build it to look like the app unless the person has already asked for a look of its own.',
   },
 ]
 
@@ -181,7 +181,7 @@ const PREAMBLE: Record<IntakeKind, string> = {
   connector: 'Building a connector is configuration that then runs on its own, so spend a moment on intake before you write anything.',
   event: 'An event is a date people plan around and a page they are sent to, and nobody fills in a form for it — you are the form. Get the few facts that make it right before you create it.',
   space: 'A space cannot be deleted through an action, and its id is fixed by its name, so confirm the few facts that decide it first.',
-  tool: 'A tool is code people will open every day, so learn the one screen they picture before you scaffold it.',
+  tool: 'A tool is code people will open every day, so run plan_tool, learn the one screen they picture, and agree the plan before you scaffold it.',
 }
 
 export function intakeQuestions(kind: IntakeKind): readonly IntakeQuestion[] {

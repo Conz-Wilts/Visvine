@@ -21,6 +21,7 @@ import { rowDenial } from '@visvine/tool-protocol/schema'
 import type { CollectionRow } from '@visvine/tool-protocol/protocol'
 import type { CollectionSpec } from '@visvine/tool-protocol/manifest'
 import { manifestOf } from './config'
+import { requireVisibleResource } from '@/lib/resources/visibility'
 import { previewTargetKey, targetKey as targetKeyOf, type ResolvedTarget } from './target'
 import {
   collectionChangePath,
@@ -111,10 +112,38 @@ function jsonWhere(where: Where | undefined): Prisma.AppToolRecordWhereInput[] {
   )
 }
 
+/** The top-level fields a schema marks `format: resource` — ids of files in the space's Drive. */
+function resourceFields(schema: Record<string, unknown>): string[] {
+  const props = (schema.properties ?? {}) as Record<string, { format?: unknown }>
+  return Object.entries(props)
+    .filter(([, p]) => p && typeof p === 'object' && p.format === 'resource')
+    .map(([key]) => key)
+}
+
+/**
+ * A `format: resource` field holds a file of THIS space the viewer can see —
+ * so a row can never carry an id that points past its Tool's space, or at a
+ * file its writer could not open.
+ */
+async function resourceDenial(t: ResolvedTarget, schema: Record<string, unknown>, data: Record<string, unknown>): Promise<string | null> {
+  for (const key of resourceFields(schema)) {
+    const id = data[key]
+    if (id === undefined || id === null || id === '') continue
+    if (typeof id !== 'string') return `${key} is a resource id`
+    try {
+      const gated = await requireVisibleResource(id, t.principal.userId, t.principal.email)
+      if (gated.spaceId !== t.spaceId) return `${key} is not a file in this space`
+    } catch {
+      return `${key} is not a file you can see here`
+    }
+  }
+  return null
+}
+
 export async function insertRow(t: ResolvedTarget, name: string, data: Record<string, unknown>): Promise<CollectionAnswer<CollectionRow>> {
   const allowed = gate(t, name, 'insert')
   if (!allowed.ok) return allowed
-  const invalid = rowDenial(allowed.spec.schema, data) ?? rowSizeDenial(data)
+  const invalid = rowDenial(allowed.spec.schema, data) ?? rowSizeDenial(data) ?? (await resourceDenial(t, allowed.spec.schema, data))
   if (invalid) return { ok: false, code: 'invalid', message: invalid }
   const targetKey = targetKeyOf(t)
   const held = await prisma.appToolRecord.count({ where: { targetKey, collection: name, detachedAt: null } })
@@ -193,7 +222,7 @@ export async function updateRow(t: ResolvedTarget, name: string, id: string, dat
   if (!row) return { ok: false, code: 'not_found', message: `No such row in ${name}.` }
   const allowed = gate(t, name, 'update', { mine: row.userId === t.principal.userId })
   if (!allowed.ok) return allowed
-  const invalid = rowDenial(allowed.spec.schema, data) ?? rowSizeDenial(data)
+  const invalid = rowDenial(allowed.spec.schema, data) ?? rowSizeDenial(data) ?? (await resourceDenial(t, allowed.spec.schema, data))
   if (invalid) return { ok: false, code: 'invalid', message: invalid }
   const updated = await prisma.appToolRecord.update({ where: { id: row.id }, data: { data: data as Prisma.InputJsonValue } })
   announce(row.targetKey, name, row.userId)

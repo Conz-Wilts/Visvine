@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { CONTEXT_ACTIONS } from '@/lib/actions/defs/context'
 import { APP_ACTIONS } from '@/lib/actions/defs/apps'
 import { TOOL_LISTING_ACTIONS } from '@/lib/actions/defs/toolListings'
+import { TOOL_PLAN_ACTIONS } from '@/lib/actions/defs/toolPlan'
 import { AGENT_ACTIONS } from '@/lib/actions/defs/agents'
 import { VM_ACTIONS } from '@/lib/actions/defs/vm'
 import { SPACE_ACTIONS } from '@/lib/actions/defs/spaces'
@@ -22,7 +23,7 @@ import { RECORD_ACTIONS } from '@/lib/actions/defs/records'
 import type { ActionDef } from '@/lib/actions/types'
 import type { McpScope } from '@/lib/mcp/scopes'
 
-const ALL: readonly ActionDef[] = [...CONTEXT_ACTIONS, ...RECORD_ACTIONS, ...SPACE_ACTIONS, ...CHANNEL_ACTIONS, ...DRIVE_ACTIONS, ...RESOURCE_ACTIONS, ...APP_ACTIONS, ...TOOL_LISTING_ACTIONS, ...AGENT_ACTIONS, ...VM_ACTIONS]
+const ALL: readonly ActionDef[] = [...CONTEXT_ACTIONS, ...RECORD_ACTIONS, ...SPACE_ACTIONS, ...CHANNEL_ACTIONS, ...DRIVE_ACTIONS, ...RESOURCE_ACTIONS, ...TOOL_PLAN_ACTIONS, ...APP_ACTIONS, ...TOOL_LISTING_ACTIONS, ...AGENT_ACTIONS, ...VM_ACTIONS]
 
 const BY_NAME: ReadonlyMap<string, ActionDef> = new Map(ALL.map((a) => [a.name, a]))
 
@@ -46,9 +47,23 @@ export function allActions(): readonly ActionDef[] {
  */
 export type McpSurface = 'visvine' | 'tools'
 
-const TOOL_ACTION_NAMES: ReadonlySet<string> = new Set([...APP_ACTIONS, ...TOOL_LISTING_ACTIONS].map((a) => a.name))
-/** The reads a Tool author needs to find the space and the data a Tool will draw — on both servers. */
-const SHARED_READS: ReadonlySet<string> = new Set(['list_spaces', 'list_context', 'read_context', 'search_context'])
+const TOOL_ACTION_NAMES: ReadonlySet<string> = new Set([...TOOL_PLAN_ACTIONS, ...APP_ACTIONS, ...TOOL_LISTING_ACTIONS].map((a) => a.name))
+/**
+ * What a Tool author needs beside the Tool actions, on both servers: finding
+ * the space and its data, uploading an icon or a logo, and giving a note type
+ * its fields.
+ */
+const SHARED_READS: ReadonlySet<string> = new Set([
+  'list_spaces',
+  'list_context',
+  'read_context',
+  'search_context',
+  'list_resources',
+  'upload_file',
+  'request_upload',
+  'add_type',
+  'set_image',
+])
 
 /** Whether `surface` offers the action by this name. */
 export function isOnSurface(name: string, surface: McpSurface): boolean {

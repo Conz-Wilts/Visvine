@@ -65,7 +65,8 @@ export interface ConnectorUse {
 export interface ToolPermissions {
   context: { read: string[]; write: string[] }
   records: { read: string[]; write: Array<{ type: string; fields: string[] }> }
-  resources: { read: string[] }
+  /** `read` lists and opens files; `write` adds them (a logo, an attachment) into these folders. */
+  resources: { read: string[]; write: string[] }
   connectors: ConnectorUse[]
   agents: string[]
   /** Node types the Tool works with (v1's `perimeter.types`). */
@@ -104,7 +105,7 @@ export interface ToolManifestFacts {
 export const EMPTY_PERMISSIONS: ToolPermissions = {
   context: { read: [], write: [] },
   records: { read: [], write: [] },
-  resources: { read: [] },
+  resources: { read: [], write: [] },
   connectors: [],
   agents: [],
   types: [],
@@ -296,12 +297,17 @@ function parsePermissions(raw: unknown, bindings: Record<string, BindingSlot>): 
   }
 
   const resources = isRecord(raw.resources) ? raw.resources : raw.resources === undefined ? {} : null
-  if (!resources) return { ok: false, error: '`permissions.resources` must be { read }' }
+  if (!resources) return { ok: false, error: '`permissions.resources` must be { read, write }' }
   const resourceRead = strings(resources.read, 'permissions.resources.read')
   if (!resourceRead.ok) return resourceRead
   const resourceRefs = checkRefs(resourceRead.value, bindings, ['folder'], 'permissions.resources.read')
   if (resourceRefs) return { ok: false, error: resourceRefs }
   out.resources.read = resourceRead.value
+  const resourceWrite = strings(resources.write, 'permissions.resources.write')
+  if (!resourceWrite.ok) return resourceWrite
+  const writeRefs = checkRefs(resourceWrite.value, bindings, ['folder'], 'permissions.resources.write')
+  if (writeRefs) return { ok: false, error: writeRefs }
+  out.resources.write = resourceWrite.value
 
   if (raw.connectors !== undefined) {
     if (!Array.isArray(raw.connectors)) return { ok: false, error: 'permissions.connectors must be a list' }

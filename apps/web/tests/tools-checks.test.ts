@@ -378,3 +378,26 @@ test('manifest 2 reach raises the risk the way the v1 lists do', () => {
   assert.ok(risk.factors.some((line) => line.includes('writes what the space’s AI answers')))
   assert.ok(risk.factors.some((line) => line.includes('as files')))
 })
+
+test('the kit components that read and add files count as the Tool reading and adding them', async () => {
+  const report = await runStaticChecks({
+    index: '---\ntype: tool\n---\n',
+    ui: `import { ImageUpload, ResourceImage } from '@visvine/tool-kit'
+export default function App() { return <div><ResourceImage id={null} alt="A" /><ImageUpload label="Logo" value={null} onChange={() => {}} /></div> }`,
+    data: null,
+    config: v2({ resources: { read: ['resources/logos/**'], write: ['resources/logos/**'] } }),
+    build: { ok: true, errors: [], warnings: [], configError: null },
+  })
+  const found = rules(report.security.findings)
+  assert.ok(!found.includes('usage.unused-resources'), found.join(', '))
+  assert.ok(!found.includes('usage.unused-resource-writes'), found.join(', '))
+  const undeclared = await runStaticChecks({
+    index: '---\ntype: tool\n---\n',
+    ui: `import { ImageUpload } from '@visvine/tool-kit'
+export default function App() { return <ImageUpload label="Logo" value={null} onChange={() => {}} /> }`,
+    data: null,
+    config: v2({}),
+    build: { ok: true, errors: [], warnings: [], configError: null },
+  })
+  assert.ok(rules(undeclared.security.findings).includes('usage.undeclared-resource-writes'))
+})

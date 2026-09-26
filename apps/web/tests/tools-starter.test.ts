@@ -59,10 +59,10 @@ test('a project carries its sources and docs, never its fixtures, tests or decla
   assert.deepEqual(Object.keys(projectFiles(dir)).sort(), ['README.md', 'src/ui.tsx', 'visvine-tool.json'])
 })
 
-test('data.js reaches every bridge method but data.call and subject.get, positional as on the server', () => {
+test('data.js reaches every bridge method but data.call, subject.get and the bytes in and out, positional as on the server', () => {
   assert.deepEqual(
     [...ISOLATE_METHODS].sort(),
-    BRIDGE_METHODS.filter((m) => !['data.call', 'subject.get', 'resources.blob'].includes(m)).sort(),
+    BRIDGE_METHODS.filter((m) => !['data.call', 'subject.get', 'resources.blob', 'resources.upload'].includes(m)).sort(),
   )
   assert.deepEqual(ISOLATE_PARAMS['context.list']!([]), {})
   assert.deepEqual(ISOLATE_PARAMS['context.search']!(['acme', 5]), { query: 'acme', k: 5 })

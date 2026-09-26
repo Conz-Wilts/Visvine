@@ -224,6 +224,8 @@ declare module '@visvine/tool-kit' {
       read(id: string, offset?: number): Promise<{ text: string; offset: number; totalChars: number; nextOffset: number | null }>
       /** The bytes (or a thumb/preview image) as a data URL an <img> can draw; ${BRIDGE_LIMITS.maxBlobBytes.toLocaleString('en-US')} bytes at most. */
       blob(id: string, rendition?: 'original' | 'thumb' | 'preview'): Promise<{ mimeType: string; dataUrl: string }>
+      /** Add a file the viewer chose into a folder permissions.resources.write names (the first when none is given); ${BRIDGE_LIMITS.maxUploadBytes.toLocaleString('en-US')} bytes at most. */
+      upload(file: { name: string; dataUrl: string; folder?: string }): Promise<ToolResource>
     }
     collections: {
       /** Add a row to a collection this Tool declares; checked against its schema, 16 KB at most. */
@@ -457,6 +459,11 @@ declare module '@visvine/tool-kit' {
   }
   /** Two to five joined buttons, one on — a vote on a scale, a view switch. */
   export function Segmented(props: SegmentedProps): JSX.Element
+
+  /** A picture from the Drive (its thumb, through permissions.resources.read), or the initials of what it is of. */
+  export function ResourceImage(props: { id: string | null | undefined; alt: string; shape?: 'square' | 'circle'; size?: number; className?: string }): JSX.Element
+  /** A picture the viewer adds (a logo, a photo): uploads through permissions.resources.write and hands back the resource id. */
+  export function ImageUpload(props: { value: string | null; onChange: (resourceId: string) => void; label: string; folder?: string; shape?: 'square' | 'circle'; size?: number; className?: string }): JSX.Element
 
   export type ChipTone = 'neutral' | 'accent' | 'danger' | 'warn' | 'info'
   export interface ChipProps {
@@ -725,7 +732,7 @@ bindings:                                  # what the Tool needs; each space bin
 permissions:
   context: { read: ["$deals/**"], write: ["$deals/**"] }
   records: { read: [$deal], write: [{ type: $deal, fields: [stage] }] }
-  resources: { read: ["resources/contracts/**"] }
+  resources: { read: ["resources/contracts/**"], write: ["resources/logos/**"] }   # write: where ImageUpload adds files
   connectors: [{ use: $crm, actions: [search_deals] }]
   agents: ["deal-*"]
   actions: [list_events]

@@ -107,7 +107,75 @@ const TOOL_DESIGN: Guide = {
   ].join('\n'),
 }
 
-export const GUIDES: readonly Guide[] = [WRITING_NOTES, TOOL_DESIGN]
+/**
+ * How a Tool draws a number — which chart answers which question, and the
+ * rules that keep one legible. The library is the kit's; nothing else charts.
+ */
+const TOOL_CHARTS: Guide = {
+  id: 'tool_charts',
+  title: 'Tool charts',
+  summary: 'Which chart answers which question in a Tool, the one library to draw it with, and the rules that keep it legible.',
+  body: [
+    'THE LIBRARY: `LineChart`, `BarChart`, `AreaChart` and `PieChart` from `@visvine/tool-kit` — the app\'s chart palette, themed, no setup. ' +
+      'For anything they do not draw, `Recharts` (the whole recharts namespace, from the kit) coloured with `useChartColors()`. No other chart library can be imported.',
+    '',
+    '## Question → chart',
+    '',
+    '- **A share of a whole, five slices or fewer** (votes by answer, deals by stage): `PieChart donut`, with the counts listed beside it — a pie alone hides the numbers.',
+    '- **Comparing categories** (raise by company, notes by owner): `BarChart`, sorted largest first; horizontal when the labels are long.',
+    '- **Change over time** (signups per week): `LineChart`, time on x, one line per series, at most four.',
+    '- **Parts of a total over time**: `AreaChart stacked`.',
+    '- **Answers on a scale** (hell no → hell yes, 1–5 ratings): a `BarChart stacked` of one row, or a donut with the scale\'s colours in order — bad to good.',
+    '- **One number** (total raised, votes cast): a stat — `text-3xl font-semibold tabular-nums` over a muted label — never a chart.',
+    '- **A list with a value each**: a table (`DataTable`) with the value right-aligned, not a chart.',
+    '',
+    '## Rules',
+    '',
+    '- Give every chart a `height` and a parent with a width — a chart in a flex row with no width draws nothing (`w-28 shrink-0` for a small donut, `w-full` for a trend).',
+    '- Colour means something or comes from the palette: a scale runs danger → warning → info → accent (`var(--vv-color-danger)` …), a set of categories takes `useChartColors()`. Never a hex.',
+    '- Show the numbers: a legend with counts, a label on each bar, or a stat beside the chart. A chart without its numbers is decoration.',
+    '- Hide a chart with no data rather than drawing an empty one; say "No votes" in a muted line if the absence matters.',
+    '- No 3D, no dual axes, no more than one chart per row below `md:`. Turn `legend` off when you draw your own list.',
+  ].join('\n'),
+}
+
+/**
+ * Where a Tool's data should live — the decision `plan_tool` fills in for a
+ * space, written once so every authoring action carries the same rule.
+ */
+const TOOL_DATA: Guide = {
+  id: 'tool_data',
+  title: 'Tool data',
+  summary: "Where a Tool's data lives — the space's records, a note type of its own, or the Tool's own collection — and how images and icons are handled.",
+  body: [
+    'Decide where each kind of thing lives BEFORE writing code. `plan_tool` lists what the space already has.',
+    '',
+    '## Three homes',
+    '',
+    '- **Records the space already keeps** — people (`people/`), organisations (`spaces/`, type `space`), events. Use them when the Tool is ABOUT things the space tracks: a person\'s photo or an organisation\'s logo is `set_image`, their fields are tracked fields. Bind the type (`bindings: { org: { kind: type, suggest: space } }`) and read with `records.query`.',
+    '- **A note type of its own, in a folder** — `add_type` with `fields`, then a folder binding (`suggest: deals`). Use it when agents and search should see the data: a pipeline, a register, a set of memos. The Tool writes notes with `context.write` (frontmatter = the fields) and reads with `records.query`.',
+    '- **The Tool\'s own collection** — declared under `collections` with a JSON Schema. Use it for what only this Tool cares about: votes, predictions, check-ins, reactions. Rows are written as the viewer and never say who, only `mine`.',
+    '',
+    'Mix them: a board of organisation records (the space\'s) with votes in a collection (the Tool\'s), keyed by the record\'s path or node id.',
+    '',
+    '## Traps',
+    '',
+    '- `company`, `companies` and `organisation` are the built-in `space` type — `add_type Company` is refused. Use the organisation records, or name the type for what it is here (`Portfolio company`, `Applicant`).',
+    '- Every field with a known set of values gets an `enum` (a collection) or `kind: select` with `options` (a type) — that is what the Select draws from.',
+    '',
+    '## Images',
+    '',
+    '- A picture a person adds inside the Tool (a logo on a company row): declare `permissions.resources.write` on a folder binding, draw `ImageUpload`, store the returned id in a field declared `{ type: string, format: resource }`, and show it with `ResourceImage` (it falls back to initials).',
+    '- A picture you already have (the person attached it, or it is at a URL): `upload_file` it, then `set_image` for a record, or store the `resource_id` in the row.',
+    '',
+    '## The icon',
+    '',
+    '- A built-in rail icon (grid, kanban, list, table, calendar, chart, note, folder, people, sparkle) with `set_tool_icon { icon }`, or your own with `set_tool_icon { svg }` / `{ resource_id }`.',
+    '- Draw one on a 24×24 viewBox in strokes only — `path`, `circle`, `rect`, `line` — 2px, round caps, one idea. Colour, text, images and gradients are stripped: the rail paints it in the theme.',
+  ].join('\n'),
+}
+
+export const GUIDES: readonly Guide[] = [WRITING_NOTES, TOOL_DESIGN, TOOL_CHARTS, TOOL_DATA]
 
 export function guideById(id: string): Guide | null {
   return GUIDES.find((g) => g.id === id) ?? null

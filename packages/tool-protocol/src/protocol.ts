@@ -56,6 +56,8 @@ export const BRIDGE_LIMITS = {
   dataCallTimeoutMs: 20_000,
   /** Largest file `resources.blob` hands back inline, as a data URL. */
   maxBlobBytes: 2_000_000,
+  /** Largest file `resources.upload` takes, decoded. */
+  maxUploadBytes: 5_000_000,
   /** Most text one `resources.read` page returns. */
   maxResourceReadChars: 20_000,
   /** Longest answer `ai.complete` asks the model for, in tokens. */
@@ -282,6 +284,11 @@ export interface BridgeMethods {
     params: { id: string; rendition?: 'original' | 'thumb' | 'preview' }
     result: { mimeType: string; dataUrl: string }
   }
+  /** Add a file the viewer chose (a logo, an attachment) into a folder `permissions.resources.write` names. */
+  'resources.upload': {
+    params: { name: string; dataUrl: string; folder?: string }
+    result: ToolResource
+  }
   /** One of the space's actions from the fixed allowlist, in this space only. */
   'actions.run': { params: { name: string; input?: Record<string, unknown> }; result: unknown }
   'ai.complete': {
@@ -348,6 +355,7 @@ export const BRIDGE_METHODS = [
   'resources.get',
   'resources.read',
   'resources.blob',
+  'resources.upload',
   'actions.run',
   'ai.complete',
   'ai.decide',

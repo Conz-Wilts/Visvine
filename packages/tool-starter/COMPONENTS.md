@@ -210,6 +210,26 @@ Props: value: string | null · onChange(value) · min? · max?
 <DatePicker value={null} onChange={() => {}} />
 ```
 
+### ImageUpload
+
+A picture the viewer adds — a logo, a photo — into the Drive, as them. A row that carries an image. Declare the folder in permissions.resources.write (and read), store the id in a `format: resource` field.
+
+Props: value: string | null · onChange(resourceId) · label · folder? · shape?: 'square' | 'circle' · size?
+
+```tsx
+<ImageUpload label="Logo" value={null} onChange={() => {}} />
+```
+
+### ResourceImage
+
+A picture from the Drive by id, or the initials of what it is of. Drawing a stored logo or photo in a list or a header. It falls back to initials, so a row without one still lines up.
+
+Props: id · alt · shape?: 'square' | 'circle' · size?
+
+```tsx
+<ResourceImage id={null} alt="Azonic" size={40} />
+```
+
 ### Table
 
 Rows under column headers. A short list of records with a few facts each.
@@ -320,7 +340,7 @@ Props: LineChart's props · stacked?
 
 ### PieChart
 
-A pie or donut in the app's chart palette. Shares of a whole, few slices.
+A pie or donut in the app's chart palette. Shares of a whole, five slices or fewer — with the counts listed beside it, in a parent with a width (`w-28 shrink-0`). See the tool_charts guide.
 
 Props: data · nameKey · valueKey · donut?
 

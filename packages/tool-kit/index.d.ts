@@ -196,6 +196,8 @@ export interface VisvineApi {
     read(id: string, offset?: number): Promise<{ text: string; offset: number; totalChars: number; nextOffset: number | null }>
     /** The bytes (or a thumb/preview image) as a data URL an <img> can draw; 2,000,000 bytes at most. */
     blob(id: string, rendition?: 'original' | 'thumb' | 'preview'): Promise<{ mimeType: string; dataUrl: string }>
+    /** Add a file the viewer chose into a folder permissions.resources.write names (the first when none is given); 5,000,000 bytes at most. */
+    upload(file: { name: string; dataUrl: string; folder?: string }): Promise<ToolResource>
   }
   collections: {
     /** Add a row to a collection this Tool declares; checked against its schema, 16 KB at most. */
@@ -429,6 +431,11 @@ export interface SegmentedProps {
 }
 /** Two to five joined buttons, one on — a vote on a scale, a view switch. */
 export function Segmented(props: SegmentedProps): JSX.Element
+
+/** A picture from the Drive (its thumb, through permissions.resources.read), or the initials of what it is of. */
+export function ResourceImage(props: { id: string | null | undefined; alt: string; shape?: 'square' | 'circle'; size?: number; className?: string }): JSX.Element
+/** A picture the viewer adds (a logo, a photo): uploads through permissions.resources.write and hands back the resource id. */
+export function ImageUpload(props: { value: string | null; onChange: (resourceId: string) => void; label: string; folder?: string; shape?: 'square' | 'circle'; size?: number; className?: string }): JSX.Element
 
 export type ChipTone = 'neutral' | 'accent' | 'danger' | 'warn' | 'info'
 export interface ChipProps {

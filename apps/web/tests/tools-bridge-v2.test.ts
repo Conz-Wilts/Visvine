@@ -8,7 +8,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { handleBridgeCall, type BridgeDeps } from '@/lib/tools/bridge'
+import { folderOfWriteGlob, handleBridgeCall, type BridgeDeps } from '@/lib/tools/bridge'
 import type { ResolvedTarget } from '@/lib/tools/target'
 import { EMPTY_PERIMETER } from '@/lib/tools/perimeter'
 import { BRIDGE_METHODS, type BridgeMethod, type BridgeResponse } from '@/lib/tools/protocol'
@@ -29,7 +29,7 @@ const VIEWER: ContextPrincipal = {
 const NOTHING: ToolReach = {
   ...EMPTY_PERIMETER,
   records: { read: [], write: [] },
-  resources: { read: [] },
+  resources: { read: [], write: [] },
   connectorActions: {},
   actions: [],
   ai: { complete: false, decide: false },
@@ -108,6 +108,7 @@ const VALID: Partial<Record<BridgeMethod, unknown>> = {
   'resources.get': { id: 'res-1' },
   'resources.read': { id: 'res-1' },
   'resources.blob': { id: 'res-1' },
+  'resources.upload': { name: 'logo.png', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' },
   'actions.run': { name: 'list_events', input: {} },
   'ai.complete': { prompt: 'Summarise' },
   'ai.decide': { items: ['a'], questions: [{ id: 'q', ask: 'It is urgent' }] },
@@ -214,7 +215,7 @@ test('a Tool without ai writes as a person edits', async () => {
 })
 
 test('resources: a file outside resources.read is refused after it is found, and one the viewer cannot see is absent', async () => {
-  const r = reach({ resources: { read: ['resources/contracts/**'] } })
+  const r = reach({ resources: { read: ['resources/contracts/**'], write: [] } })
   const view = { id: 'res-1', name: 'NDA.pdf', kind: 'pdf', source: 'upload', mimeType: 'application/pdf', fileSize: 10, url: null, notePath: 'resources/design/nda/index.md', hasText: true, createdAt: '' }
   const outside = await handleBridgeCall(
     target(r),
@@ -471,4 +472,20 @@ test('under Visvine’s dynamic run every call is recorded and a door out is rec
   const undeclared = refusal(await handleBridgeCall(review, 'agents.run', { name: 'digest' }, deps({ recordReviewEvent: record })))
   assert.equal(undeclared.code, 'perimeter')
   assert.deepEqual(events.map((e) => e.kind), ['bridge'])
+})
+
+test('resources.upload: only into a folder resources.write names, and the declaration is asked before the bytes are read', async () => {
+  const none = refusal(await handleBridgeCall(target(reach({ resources: { read: ['resources/logos/**'], write: [] } })), 'resources.upload', { name: 'a.png', dataUrl: 'not a data url' }, deps()))
+  assert.equal(none.code, 'perimeter')
+  const elsewhere = refusal(
+    await handleBridgeCall(
+      target(reach({ resources: { read: [], write: ['resources/logos/**'] } })),
+      'resources.upload',
+      { name: 'a.png', dataUrl: 'data:image/png;base64,iVBORw0KGgo=', folder: 'resources/contracts' },
+      deps(),
+    ),
+  )
+  assert.equal(elsewhere.code, 'perimeter')
+  assert.equal(folderOfWriteGlob('resources/logos/**'), 'resources/logos')
+  assert.equal(folderOfWriteGlob('resources/*/x'), 'resources')
 })

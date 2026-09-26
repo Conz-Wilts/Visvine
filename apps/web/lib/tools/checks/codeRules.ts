@@ -41,6 +41,7 @@ export interface BridgeCallSite {
     | 'resources.get'
     | 'resources.read'
     | 'resources.blob'
+    | 'resources.upload'
     | 'actions.run'
     | 'ai.complete'
     | 'ai.decide'
@@ -123,7 +124,7 @@ const BRIDGE_FAMILIES: Record<string, Record<string, BridgeCallSite['method']>> 
   data: { call: 'data.call' },
   state: { get: 'state.get', set: 'state.set' },
   records: { query: 'records.query', get: 'records.get', update: 'records.update' },
-  resources: { list: 'resources.list', get: 'resources.get', read: 'resources.read', blob: 'resources.blob' },
+  resources: { list: 'resources.list', get: 'resources.get', read: 'resources.read', blob: 'resources.blob', upload: 'resources.upload' },
   actions: { run: 'actions.run' },
   ai: { complete: 'ai.complete', decide: 'ai.decide' },
   ui: { download: 'ui.download' },
@@ -142,6 +143,12 @@ const BRIDGE_HOOKS: Record<string, BridgeCallSite['method']> = {
   usePagedList: 'context.list',
   useCollection: 'collections.list',
   useCollectionCount: 'collections.count',
+}
+
+/** The kit's components that call the bridge for the Tool — `jsx(ResourceImage, …)` once JSX is lowered. */
+const BRIDGE_COMPONENTS: Record<string, BridgeCallSite['method']> = {
+  ResourceImage: 'resources.blob',
+  ImageUpload: 'resources.upload',
 }
 
 type AnyNode = acorn.AnyNode
@@ -517,6 +524,14 @@ export function scanCode(unit: CodeUnit): CodeScan {
         if (isFactory) {
           const tag = stringValue(node.arguments[0] as AnyNode)
           if (tag) checkElement(node, tag, propsOf(node.arguments[1] as AnyNode))
+          // A few of the kit's components call the bridge on the Tool's behalf.
+          const first = node.arguments[0] as AnyNode | undefined
+          if (first?.type === 'Identifier' && Object.hasOwn(BRIDGE_COMPONENTS, first.name)) {
+            const method = BRIDGE_COMPONENTS[first.name]
+            calls.push({ method, arg: null, file: unit.file, ...lineOf(where(node)) })
+            // An upload also shows what it added: the picker draws its own ResourceImage.
+            if (method === 'resources.upload') calls.push({ method: 'resources.blob', arg: null, file: unit.file, ...lineOf(where(node)) })
+          }
           break
         }
         if (callee.type === 'Identifier' && isGlobal(callee.name)) {

@@ -17,7 +17,7 @@ export type BindingValues = Record<string, string>
 /** Every family of reach, concrete: the v1 perimeter plus v2's new families. */
 export interface ToolReach extends ToolPerimeter {
   records: { read: string[]; write: Array<{ type: string; fields: string[] }> }
-  resources: { read: string[] }
+  resources: { read: string[]; write: string[] }
   /** Per connector name, the actions a global Tool may call on it (null = any). */
   connectorActions: Record<string, string[] | null>
   actions: string[]
@@ -89,7 +89,7 @@ export function resolveReach(facts: ToolManifestFacts, values: BindingValues): R
       connectors,
       agents: sub(p.agents),
       records: { read: sub(p.records.read), write: recordWrites },
-      resources: { read: sub(p.resources.read) },
+      resources: { read: sub(p.resources.read), write: sub(p.resources.write) },
       connectorActions,
       actions: [...p.actions],
       ai: { ...p.ai },

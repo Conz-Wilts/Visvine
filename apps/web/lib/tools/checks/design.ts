@@ -15,6 +15,8 @@ import type { CheckFile, CheckFinding } from './findings'
 
 export interface DesignInput {
   ui: string | null
+  /** The index note; absent where a caller has none (a package check). */
+  index?: string | null
   modules?: Record<string, string>
   config: ToolConfig | null
 }
@@ -29,6 +31,9 @@ const PALETTE =
 const BOXED = /className=["'`{][^\n]*(?:\bmax-w-[^\s"'`]+[^\n]*\bmx-auto\b|\bmx-auto\b[^\n]*\bmax-w-[^\s"'`]+)/
 const TABS_USE = /<Tabs\b/
 const INSERTS = /\.insert\s*\(|collections\.insert/
+/** A kit chart with no `height` — inside a flex row it draws nothing. */
+/** A kit chart tag, to its end — props hold arrows (`=>`), so the tag runs to `/>` or `>` at a line end. */
+const CHART_TAG = /<(?:Line|Bar|Area|Pie)Chart\b[\s\S]*?(?:\/>|>\s*$)/gm
 
 function lineOf(source: string, index: number): number {
   return source.slice(0, index).split('\n').length
@@ -67,6 +72,7 @@ export function designFindings(input: DesignInput): CheckFinding[] {
   const boxed = once('design.boxed', 'A centred max-width column — a Tool is full bleed; drop the container and keep the page gutter')
   const tabs = once('design.tab-strip', 'A tab strip in the frame — declare the views as surfaces.nav sections and read useSection')
   const enumInput = once('design.enum-input', 'A text box for a field with a fixed set of values — draw it with Select or Segmented')
+  const unsized = once('design.chart-unsized', 'A chart with no height — give it one, and a parent with a width, or it draws nothing (the tool_charts guide)')
 
   const nav = input.config?.surfaces.nav?.sections ?? []
   const enums = input.config ? enumFields(input.config) : []
@@ -87,7 +93,22 @@ export function designFindings(input: DesignInput): CheckFinding[] {
       const e = firstMatch(code, new RegExp(`<Input\\b[^>]*\\b${escape(key)}\\b`))
       if (e) enumInput(file, e)
     }
+    for (const tag of code.matchAll(CHART_TAG)) {
+      if (!/\bheight=/.test(tag[0])) {
+        unsized(file, lineOf(code, tag.index ?? 0))
+        break
+      }
+    }
     if (INSERTS.test(code)) inserts = true
+  }
+
+  if (input.index != null && !/^##\s+Design\b/m.test(input.index)) {
+    findings.push({
+      rule: 'design.no-plan',
+      severity: 'info',
+      message: 'index.md has no ## Design section — write the plan agreed with the person there (create_tool { plan }) so the next edit starts from it',
+      file: 'index.md',
+    })
   }
 
   if (inserts && input.config && (input.config.surfaces.actions ?? []).length === 0) {

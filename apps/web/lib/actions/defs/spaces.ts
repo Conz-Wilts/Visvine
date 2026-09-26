@@ -21,6 +21,8 @@ import { isAdmin } from '@/lib/auth'
 import { provisionSpace } from '@/lib/spaces/provision'
 import { requireSpaceContext } from '@/lib/actions/resolve'
 import { mergeNodeType, type MergeNodeTypeResult } from '@/lib/types'
+import { addTrackedField, TRACKED_FIELD_KINDS } from '@/lib/directory/table'
+import type { NodeTypeConfig } from '@/lib/types'
 import { updateSpaceConfig, bustSpaceConfigCache, UnknownSpaceError } from '@/lib/spaces/spaceConfig'
 
 export const SPACE_ACTIONS = [
@@ -134,11 +136,26 @@ export const SPACE_ACTIONS = [
       'can add a tag. Adding a name the space already has returns that type unchanged; the first writer\'s ' +
       'colour wins. Built-in kinds (person, space, event, resource…) and platform words are reserved. Pick an ' +
       'existing type from list_context\'s `types` before adding one — a type is only worth adding when several ' +
-      'notes will wear it. Then write notes with `type: <Name>` through edit_context.',
+      'notes will wear it. Then write notes with `type: <Name>` through edit_context. Give it `fields` to give it a ' +
+      'shape: each is a frontmatter key its notes carry (minted from the label, `Round` → `round`), shown as a column ' +
+      'in the Directory and queryable by list_records and a Tool\'s records.query — a `select` field carries its ' +
+      'options. Fields go on a type as it is made; adding them to one that exists is an admin\'s. A name that is ' +
+      'already a built-in (Company is the organisation record, `space`) comes back as that type, and the answer says so.',
     input: {
       space_id: z.string().describe('The space to act in — list_spaces returns the ids you can act in'),
       name: z.string().trim().min(1).describe("The type's name, singular, e.g. 'Grant'"),
       color: z.string().optional().describe('A 6-digit hex colour like #3b82f6. Leave it out for a default'),
+      fields: z
+        .array(
+          z.object({
+            label: z.string().trim().min(1).max(40).describe('The field\'s name, e.g. "Round" — its key is minted from it'),
+            kind: z.enum(TRACKED_FIELD_KINDS.map((k) => k.value) as [string, ...string[]]).describe('text · number · date · select · checkbox · url · email'),
+            options: z.array(z.string()).max(50).optional().describe('A select field\'s choices'),
+          }),
+        )
+        .max(20)
+        .optional()
+        .describe('The fields its notes carry'),
     },
     run: async (ctx, args) => {
       const resolved = await requireSpaceContext(ctx, args.space_id)
@@ -148,14 +165,35 @@ export const SPACE_ACTIONS = [
       })
       if (!membership) throw new ActionError(403, 'Only an active member of the space can add a type')
 
+      const wantsFields = (args.fields?.length ?? 0) > 0
+      const admin = wantsFields ? await isAdmin(ctx.userId, resolved.spaceId, ctx.email) : false
       let merged: MergeNodeTypeResult | null = null
+      let fieldError: string | null = null
       try {
         await updateSpaceConfig(
           resolved.spaceId,
           (stored) => {
             const next = mergeNodeType(stored.nodeTypes, { name: args.name, color: args.color })
             merged = next
-            return next.ok && next.created ? { nodeTypes: next.types } : {}
+            if (!next.ok) return {}
+            // Fields shape a type as it is made; on one that exists they are
+            // the admin's, as tracked fields always are — and never on a
+            // built-in record kind reached through a synonym.
+            const shapeable = wantsFields && next.type.scope === 'note' && (next.created || admin)
+            if (!shapeable) return next.created ? { nodeTypes: next.types } : {}
+            let config: NodeTypeConfig = next.type
+            for (const field of args.fields ?? []) {
+              if ((config.fields ?? []).some((f) => f.label.toLowerCase() === field.label.toLowerCase())) continue
+              const added = addTrackedField(config, { label: field.label, kind: field.kind as never, options: field.options })
+              if (!added.ok) {
+                fieldError = `${field.label}: ${added.error}`
+                return {}
+              }
+              config = added.config
+            }
+            const types = next.types.map((t) => (t.name === config.name ? config : t))
+            merged = { ...next, types, type: config }
+            return { nodeTypes: types }
           },
           { skipRevalidate: true },
         )
@@ -166,8 +204,22 @@ export const SPACE_ACTIONS = [
       const result = merged as MergeNodeTypeResult | null
       if (!result) throw new ActionError(500, 'The type could not be added')
       if (!result.ok) throw new ActionError(400, result.error)
-      if (result.created) bustSpaceConfigCache()
-      return { type: result.type.name, color: result.type.color, created: result.created }
+      if (fieldError) throw new ActionError(400, fieldError)
+      const shaped = wantsFields && (result.created || admin) && result.type.scope === 'note'
+      if (result.created || shaped) bustSpaceConfigCache()
+      const folded = !result.created && result.type.name.toLowerCase() !== args.name.trim().toLowerCase()
+      return {
+        type: result.type.name,
+        color: result.type.color,
+        created: result.created,
+        fields: (result.type.fields ?? []).map((f) => ({ key: f.key, label: f.label, kind: f.kind, ...(f.options ? { options: f.options } : {}) })),
+        ...(folded
+          ? { note: `"${args.name}" is the built-in ${result.type.name} type here — build on those records, or name a type for what these are (e.g. "Portfolio company").` }
+          : {}),
+        ...(wantsFields && !shaped
+          ? { fields_skipped: result.type.scope !== 'note' ? 'A built-in type keeps its own fields.' : 'This type already exists — adding fields to it is an admin\'s.' }
+          : {}),
+      }
     },
   }),
 ] as const

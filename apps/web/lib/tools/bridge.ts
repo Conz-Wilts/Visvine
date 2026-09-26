@@ -88,11 +88,15 @@ import {
   refuseRecordWrite,
   refuseResourceList,
   refuseResourceRead,
+  refuseResourceWrite,
   usesAi,
 } from '@visvine/tool-protocol/reach'
 import { planToolAction, toolActionActs } from './actionAllowlist'
 import { tenantArgDenial } from './toolActions'
 import { resourceBlob, toToolResource } from './toolResources'
+import { receiveFile } from '@/lib/resources/receive'
+import { resourceFolderPath } from '@/lib/resources/tree'
+import { ApiError } from '@/lib/api/route'
 import { toolComplete, toolDecide } from './toolAi'
 import { acquireDataCall, acquireDataCallShared } from './limits'
 import { targetKey, type ResolvedTarget } from './target'
@@ -140,6 +144,8 @@ export interface BridgeDeps {
   requireVisibleResource: typeof requireVisibleResource
   readResourceText: typeof readResourceTextAs
   resourceBlob: typeof resourceBlob
+  receiveFile: typeof receiveFile
+  resourceFolderPath: typeof resourceFolderPath
   logResourceAccess: typeof logResourceAccess
   tenantArgDenial: typeof tenantArgDenial
   /** Run one action as the viewer (lib/actions/run.ts), reached lazily: the registry imports half the app. */
@@ -188,6 +194,8 @@ const REAL_DEPS: BridgeDeps = {
   requireVisibleResource,
   readResourceText: readResourceTextAs,
   resourceBlob,
+  receiveFile,
+  resourceFolderPath,
   logResourceAccess,
   tenantArgDenial,
   runAction: async (caller, name, input) => (await (await import('@/lib/actions/run')).runAction(caller, name, input)).result,
@@ -318,6 +326,11 @@ const P = {
   resource: z.object({ id: z.string().min(1).max(200) }),
   resourceRead: z.object({ id: z.string().min(1).max(200), offset: z.number().int().min(0).optional() }),
   resourceBlob: z.object({ id: z.string().min(1).max(200), rendition: z.enum(['original', 'thumb', 'preview']).optional() }),
+  resourceUpload: z.object({
+    name: z.string().min(1).max(200),
+    dataUrl: z.string().min(1).max(Math.ceil((BRIDGE_LIMITS.maxUploadBytes * 4) / 3) + 200),
+    folder: z.string().max(PATH_MAX).optional(),
+  }),
   action: z.object({ name: z.string().min(1).max(64), input: z.record(z.string(), z.unknown()).optional() }),
   complete: z
     .object({
@@ -754,7 +767,7 @@ function reachOf(t: ResolvedTarget): ToolReach {
     t.reach ?? {
       ...t.perimeter,
       records: { read: [], write: [] },
-      resources: { read: [] },
+      resources: { read: [], write: [] },
       connectorActions: {},
       actions: [],
       ai: { complete: false, decide: false },
@@ -1220,6 +1233,60 @@ async function resourcesBlob(t: ResolvedTarget, params: unknown, deps: BridgeDep
   return ok({ mimeType: blob.mimeType, dataUrl: blob.dataUrl })
 }
 
+/** The folder a write glob names — `resources/logos/**` → `resources/logos`. */
+export function folderOfWriteGlob(glob: string): string {
+  const parts: string[] = []
+  for (const part of glob.split('/')) {
+    if (!part || /[*?[{]/.test(part)) break
+    parts.push(part)
+  }
+  return parts.join('/')
+}
+
+/**
+ * A file the viewer chose, added to the space's Drive as them, into a folder
+ * the Tool declared it writes files to. The declaration is asked first; then
+ * everything an upload anywhere asks — the viewer may add files here at all,
+ * the name, the size, the bytes sniffed (lib/resources/receive.ts).
+ */
+async function resourcesUpload(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
+  const parsed = parseParams(P.resourceUpload, params)
+  if (!parsed.ok) return parsed.response
+  const reach = reachOf(t)
+  if (reach.resources.write.length === 0) return err('perimeter', refuseResourceWrite(reach, 'resources')!)
+  const folder = normalizeNotePath(parsed.value.folder ?? folderOfWriteGlob(reach.resources.write[0]))
+  if (!folder || !`${folder}/`.startsWith('resources/')) return err('invalid', 'folder is a folder under resources/.')
+  const declared = refuseResourceWrite(reach, folder)
+  if (declared) return err('perimeter', declared)
+  const match = /^data:([\w.+-]+\/[\w.+-]+)?(;[^,]*)?;base64,([A-Za-z0-9+/=\s]*)$/.exec(parsed.value.dataUrl)
+  if (!match) return err('invalid', 'dataUrl is a base64 data: URL — read the file with FileReader.readAsDataURL.')
+  const bytes = Buffer.from(match[3], 'base64')
+  if (bytes.length > BRIDGE_LIMITS.maxUploadBytes) return err('too_large', `That file is over the ${BRIDGE_LIMITS.maxUploadBytes} byte limit.`)
+  const held = await heldForReview(t, 'resources.upload', { name: parsed.value.name, folder }, deps)
+  if (held) return held
+  if (coAuthors(t).length > 0) return err('forbidden', `${DRAFT_REACH}; a draft adds no files until it is approved.`)
+  try {
+    const target = await deps.resourceFolderPath(t.spaceId, folder)
+    const uploaded = await deps.receiveFile({
+      userId: t.principal.userId,
+      email: t.principal.email,
+      spaceId: t.spaceId,
+      folder: target,
+      name: parsed.value.name,
+      mimeType: match[1] ?? null,
+      bytes,
+      via: 'upload',
+      agentName: toolLabel(t),
+    })
+    const view = await deps.loadView(uploaded.id, await deps.resourceViewer(t.spaceId, t.principal.userId, t.principal.email))
+    if (!view) return err('not_found', 'The file was added but cannot be read back.')
+    return ok(toToolResource(view))
+  } catch (e) {
+    if (e instanceof ApiError) return err(e.status === 403 ? 'forbidden' : e.status === 404 ? 'not_found' : 'invalid', e.message)
+    throw e
+  }
+}
+
 // ── actions ───────────────────────────────────────────────────────────────────
 
 /**
@@ -1455,6 +1522,8 @@ export async function handleBridgeCall(
         return await resourcesRead(t, params, deps)
       case 'resources.blob':
         return await resourcesBlob(t, params, deps)
+      case 'resources.upload':
+        return await resourcesUpload(t, params, deps)
       case 'actions.run':
         return await actionsRun(t, params, deps)
       case 'ai.complete':

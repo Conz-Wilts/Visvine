@@ -79,9 +79,10 @@ export function mcpInstructions(surface: McpSurface = 'visvine'): string {
   if (surface === 'tools') {
     return (
       'This server builds Visvine Tools — small apps that run inside a space, drawn in the main pane. It exposes ' +
-      "the `visvine` router and one tool per action, `visvine_<action>`. Start with the router, `request` set to the " +
-      "user's message verbatim: it returns the build plan. Then `get_tool_sdk` once, and the loop create_tool → " +
-      'write_tool → check_tool → preview_tool → publish_tool.\n\n' +
+      "the `visvine` router and one tool per action, `visvine_<action>`. Research, plan, then build: `plan_tool` " +
+      "first (with the user's request verbatim) — it reads the space and says where each thing should live; fill in " +
+      'its plan and agree it with the person in one message; then get_tool_sdk once, add_type if the plan needs a ' +
+      'type, create_tool { plan } → configure_tool → set_tool_icon → write_tool → check_tool → preview_tool → publish_tool.\n\n' +
       'A Tool is the page, so build it as one: full bleed with the page gutter and no box around it; its views as ' +
       '`surfaces.nav` sections the app draws on its band; its main act (Add …) as a `surfaces.actions` band button ' +
       'that works every time; a Select or Segmented for any known set of values; the kit Modal for forms.\n\n' +

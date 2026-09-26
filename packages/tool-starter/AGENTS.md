@@ -149,7 +149,7 @@ bindings:                                  # what the Tool needs; each space bin
 permissions:
   context: { read: ["$deals/**"], write: ["$deals/**"] }
   records: { read: [$deal], write: [{ type: $deal, fields: [stage] }] }
-  resources: { read: ["resources/contracts/**"] }
+  resources: { read: ["resources/contracts/**"], write: ["resources/logos/**"] }   # write: where ImageUpload adds files
   connectors: [{ use: $crm, actions: [search_deals] }]
   agents: ["deal-*"]
   actions: [list_events]

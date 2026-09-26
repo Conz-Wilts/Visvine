@@ -38,6 +38,17 @@ export function refuseResourceRead(reach: ToolReach, notePath: string | null): s
   return reach.resources.read.some((glob) => globMatch(glob, notePath)) ? null : denied(`${notePath} is outside permissions.resources.read`)
 }
 
+/**
+ * May the Tool add a file into `folder` (a folder under `resources/`)? Its
+ * note will sit at `<folder>/<slug>/index.md`, so that is what the declared
+ * globs are asked about.
+ */
+export function refuseResourceWrite(reach: ToolReach, folder: string): string | null {
+  if (reach.resources.write.length === 0) return denied('this tool declares no folder to add files to — add one to permissions.resources.write')
+  const probe = `${folder.replace(/\/+$/, '')}/_new/index.md`
+  return reach.resources.write.some((glob) => globMatch(glob, probe)) ? null : denied(`${folder}/ is outside permissions.resources.write`)
+}
+
 /** May the Tool list resources at all? */
 export function refuseResourceList(reach: ToolReach): string | null {
   return reach.resources.read.length ? null : denied('this tool declares no files — add a folder to permissions.resources.read')

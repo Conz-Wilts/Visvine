@@ -374,6 +374,19 @@ interface CreateToolArgs {
   name: string
   title: string
   description: string
+  plan?: string
+}
+
+/**
+ * The index note with the agreed plan written in as its `## Design` section —
+ * above the scaffold's docs, so whoever edits the Tool next (any model, any
+ * person) starts from what was decided rather than re-deciding it.
+ */
+export function withDesignSection(index: string, plan: string): string {
+  const body = plan.trim().replace(/^#{1,6}\s*design\s*\n+/i, '')
+  const section = `## Design\n\n${body}\n\n`
+  const cut = [index.indexOf('\n## How it works'), index.indexOf('\n<!-- index:children -->')].find((i) => i >= 0)
+  return cut === undefined ? `${index.trimEnd()}\n\n${section}` : `${index.slice(0, cut + 1)}${section}${index.slice(cut + 1)}`
 }
 interface ListToolsArgs {
   space_id: string
@@ -429,16 +442,26 @@ async function createTool(ctx: ActionCaller, args: CreateToolArgs, deps: AppTool
     description: args.description,
   })
   if (!result.ok) refuse(result)
+  let build = result.build
+  if (args.plan?.trim()) {
+    const detail = await deps.describeAuthoredTool(target.principal, target.context, result.name)
+    const index = detail?.sources['index.md']
+    if (index) {
+      const written = await deps.writeToolFile(target.principal, target.context, result.name, 'index.md', withDesignSection(index, args.plan))
+      if (written.ok) build = written.build
+    }
+  }
   return {
     name: result.name,
     files: SCAFFOLDED_FILES.map((file) => `tools/${result.name}/${file}`),
-    build: buildReport(result.build),
+    build: buildReport(build),
     ...previewLinks(result.name, deps.appOrigin(), target.context.spaceId),
     next: [
       'Call get_tool_sdk once — it returns the authoring guide, the @visvine/tool-kit type definitions and the bridge method list.',
-      `Then write_tool { name: "${result.name}", file: "ui.tsx", content } and read the build it hands back.`,
-      'Declare everything the tool touches in index.md `perimeter:` — the bridge refuses anything undeclared.',
-      'Style with the kit components and the --vv-* theme tokens, and never paint a page background — the frame is transparent so the app’s own backdrop shows through.',
+      'configure_tool: surfaces (nav sections, band actions), collections, bindings and permissions — everything the plan decided. The bridge refuses anything undeclared.',
+      'set_tool_icon: a built-in name or your own 24×24 stroke SVG.',
+      `write_tool { name: "${result.name}", file: "ui.tsx", content } and read the build it hands back — kit components and Tailwind layout classes, never a painted page background.`,
+      'Then the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action.',
     ],
   }
 }
@@ -557,6 +580,13 @@ async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDe
     runtime = runtimeReport(
       await deps.capturePreview(previewRequest(ctx, target, args.name, deps, { image: false })),
     )
+    // A frame that stayed blank with nothing logged is, the first time, most
+    // often the runtime still warming — asked once more before it is a finding.
+    if (runtime.available && !runtime.rendered && runtime.console_errors.length === 0) {
+      runtime = runtimeReport(
+        await deps.capturePreview(previewRequest(ctx, target, args.name, deps, { image: false })),
+      )
+    }
     for (const line of runtime.console_errors) warnings.push(`Runtime: ${line}`)
     if (runtime.available && !runtime.rendered) {
       warnings.push('Runtime: the tool did not mount anything within the render budget.')
@@ -1077,10 +1107,10 @@ export const APP_ACTIONS = [
   defineAction({
     name: 'create_tool',
     scope: 'tools:author',
-    guides: ['tool_design'],
+    guides: ['tool_design', 'tool_data'],
     summary: 'Scaffold a new Tool in a space — the entity, its config note and two source files that already compile.',
     description:
-      `BEFORE YOU CALL THIS: ${intakeSummary('tool')}\n` +
+      `BEFORE YOU CALL THIS: run plan_tool — it reads the space and returns the plan to agree with the person. ${intakeSummary('tool')}\n` +
       'Scaffold a new Tool in a space: the directory entity, its config note and two source files that ' +
       `already compile and render. Start here when asked to build something for a space. ${TOOL_SHAPE} ` +
       'Returns the file list, a preview link, and a pointer to get_tool_sdk. The name must be unique in ' +
@@ -1092,6 +1122,11 @@ export const APP_ACTIONS = [
       description: z
         .string()
         .describe('One sentence on what it does. This is the marketplace card and the install checklist.'),
+      plan: z
+        .string()
+        .max(8000)
+        .optional()
+        .describe("plan_tool's plan_template, filled in and agreed with the person — written into index.md as its ## Design section"),
     },
     run: (ctx, args) => createTool(ctx, args),
   }),
@@ -1131,7 +1166,7 @@ export const APP_ACTIONS = [
   defineAction({
     name: 'write_tool',
     scope: 'tools:author',
-    guides: ['tool_design'],
+    guides: ['tool_design', 'tool_charts'],
     summary: "Replace one of a Tool's three files and get the fresh build back in the same answer.",
     description:
       "Write one of a tool's three files, replacing it, and get the fresh build back in the same answer — " +

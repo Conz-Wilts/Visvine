@@ -68,6 +68,8 @@ export interface VisvineApi {
     read(id: string, offset?: number): Promise<{ text: string; offset: number; totalChars: number; nextOffset: number | null }>;
     /** Its bytes — or an image made from it — as a data URL an `<img>` can draw. */
     blob(id: string, rendition?: 'original' | 'thumb' | 'preview'): Promise<{ mimeType: string; dataUrl: string }>;
+    /** Add a file the viewer chose into a folder `permissions.resources.write` names; the first one when none is given. */
+    upload(file: { name: string; dataUrl: string; folder?: string }): Promise<ToolResource>;
   };
   collections: {
     /** Add a row to one of this Tool's collections (`collections` in the manifest). */
@@ -245,6 +247,7 @@ export function VisvineProvider({
         get: (id) => client.call('resources.get', { id }),
         read: (id, offset) => client.call('resources.read', offset === undefined ? { id } : { id, offset }),
         blob: (id, rendition) => client.call('resources.blob', rendition ? { id, rendition } : { id }),
+        upload: (file) => client.call('resources.upload', file),
       },
       collections: {
         insert: (collection, data) => client.call('collections.insert', { collection, data: data as Record<string, unknown> }) as never,

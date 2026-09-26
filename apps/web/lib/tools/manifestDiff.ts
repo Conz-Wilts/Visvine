@@ -43,7 +43,7 @@ export const REVIEWED_FIELDS = {
         read: sorted(p.records.read),
         write: [...p.records.write].map((w) => ({ type: w.type, fields: sorted(w.fields) })).sort((a, b) => a.type.localeCompare(b.type)),
       },
-      resources: { read: sorted(p.resources.read) },
+      resources: { read: sorted(p.resources.read), write: sorted(p.resources.write) },
       connectors: [...p.connectors].map((u) => ({ use: u.use, actions: u.actions ? sorted(u.actions) : null })).sort((a, b) => a.use.localeCompare(b.use)),
       agents: sorted(p.agents),
       types: sorted(p.types),
