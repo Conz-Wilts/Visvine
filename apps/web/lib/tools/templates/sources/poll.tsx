@@ -7,6 +7,7 @@ import {
   Modal,
   Page,
   Spinner,
+  plural,
   useBandAction,
   useCollection,
   useSampleRows,
@@ -39,26 +40,27 @@ type Vote = { id: string; mine: boolean; data: { poll: string; choice: string } 
 
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-function PollCard({ poll, votes, onVote, onClose }: { poll: Poll; votes: Vote[]; onVote: (poll: Poll, choice: string, current?: Vote) => void; onClose?: () => void }) {
+function PollCard({ poll, votes, onVote, onClose, featured = false }: { poll: Poll; votes: Vote[]; onVote: (poll: Poll, choice: string, current?: Vote) => void; onClose?: () => void; featured?: boolean }) {
   const mine = votes.find((v) => v.mine)
   const counts = poll.data.options.map((o, i) => (poll.data.tally?.[i] ?? 0) + votes.filter((v) => v.data.choice === o).length)
   const total = counts.reduce((a, b) => a + b, 0)
   const leader = Math.max(0, ...counts)
+  const leaders = counts.filter((c) => c === leader && leader > 0).length
   const closed = Boolean(poll.data.closed)
   return (
-    <section className="flex flex-col gap-3 border-b border-line-subtle pb-6">
+    <section className="mb-8 flex break-inside-avoid flex-col gap-3">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-fg">{poll.data.question}</h2>
+          <h2 className={`font-semibold leading-snug text-fg ${featured ? 'text-xl' : 'text-base'}`}>{poll.data.question}</h2>
           <p className="mt-0.5 text-xs text-fg-muted">
             {total} {total === 1 ? 'vote' : 'votes'}
-            {mine ? ` · you voted ${mine.data.choice}` : closed ? ' · closed' : ' · you have not voted'}
+            {mine ? ` · you voted ${mine.data.choice}` : closed ? ' · closed' : ''}
           </p>
         </div>
         {!closed && onClose && total > 0 && (
-          <Button size="sm" variant="ghost" onClick={onClose}>
-            Close
-          </Button>
+          <button type="button" onClick={onClose} className="shrink-0 rounded-md px-2 py-1 text-xs text-fg-muted hover:bg-surface-subtle hover:text-fg">
+            End poll
+          </button>
         )}
       </div>
       <div className="flex flex-col gap-2" role="radiogroup" aria-label={poll.data.question}>
@@ -74,11 +76,13 @@ function PollCard({ poll, votes, onVote, onClose }: { poll: Poll; votes: Vote[];
               aria-checked={chosen}
               disabled={closed}
               onClick={() => onVote(poll, option, mine)}
-              className={`group relative flex h-11 items-center gap-3 overflow-hidden rounded-lg border px-3 text-left text-sm transition-colors ${
-                chosen ? 'border-accent' : 'border-line-subtle hover:border-line'
+              className={`group relative flex h-12 items-center gap-3 overflow-hidden rounded-lg border px-3 pb-1 text-left text-sm transition-colors ${
+                chosen ? 'border-accent bg-accent-soft/40' : 'border-line-subtle hover:border-line hover:bg-surface-subtle'
               } ${closed ? 'cursor-default' : 'cursor-pointer'}`}
             >
-              <span className={`absolute inset-y-0 left-0 transition-all ${winning ? 'bg-accent-soft' : 'bg-surface-subtle'}`} style={{ width: `${share * 100}%` }} />
+              <span aria-hidden className="absolute inset-x-3 bottom-1.5 h-1 overflow-hidden rounded-full bg-surface-muted">
+                <span className={`block h-full rounded-full transition-all ${winning ? 'bg-accent-strong' : 'bg-fg-subtle'}`} style={{ width: `${share * 100}%` }} />
+              </span>
               <span
                 aria-hidden
                 className={`relative flex size-4 shrink-0 items-center justify-center rounded-full border ${chosen ? 'border-accent-strong bg-accent-strong' : 'border-line group-hover:border-fg-muted'}`}
@@ -86,8 +90,9 @@ function PollCard({ poll, votes, onVote, onClose }: { poll: Poll; votes: Vote[];
                 {chosen && <span className="size-1.5 rounded-full bg-surface" />}
               </span>
               <span className={`relative min-w-0 flex-1 truncate ${winning || chosen ? 'font-medium text-fg' : 'text-fg-secondary'}`}>{option}</span>
-              <span className="relative tabular-nums text-fg-muted">
-                {Math.round(share * 100)}% · {counts[i]}
+              {winning && total > 0 && <span className="relative rounded bg-accent-strong px-1.5 py-0.5 text-[11px] font-semibold text-fg-inverse">{leaders > 1 ? 'Tied' : closed ? 'Won' : 'Leading'}</span>}
+              <span className={`relative w-16 text-right tabular-nums ${winning ? 'font-semibold text-fg' : 'text-fg-muted'}`}>
+                {Math.round(share * 100)}%<span className="font-normal text-fg-muted"> · {counts[i]}</span>
               </span>
             </button>
           )
@@ -99,7 +104,8 @@ function PollCard({ poll, votes, onVote, onClose }: { poll: Poll; votes: Vote[];
 
 export default function App() {
   const visvine = useVisvine()
-  const sampleRows = useSampleRows('polls', useMemo(() => SPEC.sample as unknown as RecordData[], []))
+  // Seeded last-first, so the newest-first list opens on the spec's first poll.
+  const sampleRows = useSampleRows('polls', useMemo(() => [...SPEC.sample].reverse() as unknown as RecordData[], []))
   const polls = useCollection<PollData>('polls', { order: 'desc', limit: 100 })
   const votes = useCollection<Vote['data']>('votes', { limit: 200 })
   const [creating, setCreating] = useState(false)
@@ -116,6 +122,8 @@ export default function App() {
   const closed = all.filter((p) => p.data.closed)
   const voted = open.filter((p) => votesFor(p.id).some((v) => v.mine)).length
   const answers = [...new Set(options.map((o) => o.trim()).filter(Boolean))]
+  const votesCast = open.reduce((n, p) => n + (p.data.tally ?? []).reduce((a, b) => a + b, 0) + votesFor(p.id).length, 0)
+  const endPoll = (poll: Poll) => void visvine.collections.update('polls', poll.id, { ...poll.data, closed: true })
 
   const vote = async (poll: Poll, choice: string, current?: Vote) => {
     if (current?.data.choice === choice) return
@@ -147,32 +155,36 @@ export default function App() {
   }
 
   return (
-    <Page className="max-w-3xl">
+    <Page>
       <SampleData state={sampleRows} />
       {open.length > 0 && (
         <p className="text-sm text-fg-muted">
-          {open.length} open · you voted on <span className="font-medium text-fg">{voted}</span> of {open.length}
+          {open.length} open · {voted < open.length ? <span className="font-medium text-fg">{open.length - voted} waiting for your vote</span> : 'you have voted on all of them'} · {votesCast} votes cast
         </p>
       )}
       {open.length === 0 ? (
-        <EmptyState title={`No open ${SPEC.noun}s`} action={<Button variant="primary" onClick={() => setCreating(true)}>New {SPEC.noun}</Button>} />
+        <EmptyState title={`No open ${plural(SPEC.noun)}`} action={<Button variant="primary" onClick={() => setCreating(true)}>New {SPEC.noun}</Button>} />
       ) : (
-        open.map((poll) => (
-          <PollCard
-            key={poll.id}
-            poll={poll}
-            votes={votesFor(poll.id)}
-            onVote={(p, c, cur) => void vote(p, c, cur)}
-            onClose={() => void visvine.collections.update('polls', poll.id, { ...poll.data, closed: true })}
-          />
-        ))
+        <>
+          {/* The newest poll leads at full width; the rest sit two across under it. */}
+          <div className="max-w-3xl">
+            <PollCard featured poll={open[0]} votes={votesFor(open[0].id)} onVote={(p, c, cur) => void vote(p, c, cur)} onClose={() => endPoll(open[0])} />
+          </div>
+          {open.length > 1 && (
+            <div className="columns-1 gap-10 border-t border-line-subtle pt-6 md:columns-2">
+              {open.slice(1).map((poll) => (
+                <PollCard key={poll.id} poll={poll} votes={votesFor(poll.id)} onVote={(p, c, cur) => void vote(p, c, cur)} onClose={() => endPoll(poll)} />
+              ))}
+            </div>
+          )}
+        </>
       )}
       {closed.length > 0 && (
         <section className="flex flex-col gap-4">
           <button type="button" onClick={() => setShowClosed(!showClosed)} className="self-start text-sm font-medium text-fg-secondary hover:text-fg">
             {showClosed ? 'Hide' : 'Show'} {closed.length} closed
           </button>
-          {showClosed && closed.map((poll) => <PollCard key={poll.id} poll={poll} votes={votesFor(poll.id)} onVote={() => {}} />)}
+          {showClosed && <div className="columns-1 gap-10 md:columns-2">{closed.map((poll) => <PollCard key={poll.id} poll={poll} votes={votesFor(poll.id)} onVote={() => {}} />)}</div>}
         </section>
       )}
       <Modal
@@ -195,7 +207,7 @@ export default function App() {
           {options.map((option, i) => (
             <Field key={i} label={`Answer ${i + 1}`} htmlFor={`answer-${i}`}>
               <div className="flex items-center gap-2">
-                <Input id={`answer-${i}`} value={option} onChange={(e) => setOptions(options.map((value, index) => index === i ? e.currentTarget.value : value))} />
+                <Input id={`answer-${i}`} value={option} placeholder={SPEC.sample[0]?.options[i] ?? `Answer ${i + 1}`} onChange={(e) => setOptions(options.map((value, index) => index === i ? e.currentTarget.value : value))} />
                 {options.length > 2 && <Button size="sm" variant="ghost" onClick={() => setOptions(options.filter((_, index) => index !== i))} aria-label={`Remove answer ${i + 1}`}>Remove</Button>}
               </div>
             </Field>

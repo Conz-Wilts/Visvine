@@ -2,10 +2,13 @@ import { useMemo, useState } from 'react'
 import {
   Button,
   FieldValue,
+  formatDate,
+  HueDot,
   Icon,
   ListDetail,
   optionsOf,
   Page,
+  peopleOf,
   PersonAvatar,
   RecordDialog,
   RecordsEmpty,
@@ -70,6 +73,10 @@ const SPEC: Spec = {
 
 type Row = { id: string; data: RecordData }
 
+/** A date that falls due (a renewal, a follow-up) turns red once past; a date that only records (added, joined) never does. */
+const DUE = /due|renew|deadline|expir|follow|next|review|until|end/i
+const hasValue = (v: unknown) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
+
 function resolveDates(rows: RecordData[]): RecordData[] {
   const dateKeys = SPEC.fields.filter((f) => f.kind === 'date').map((f) => f.key)
   return rows.map((row) => {
@@ -88,7 +95,8 @@ function resolveDates(rows: RecordData[]): RecordData[] {
 
 export default function App() {
   const visvine = useVisvine()
-  const sampleRows = useSampleRows('items', useMemo(() => resolveDates(SPEC.sample), []))
+  const samples = useMemo(() => resolveDates(SPEC.sample), [])
+  const sampleRows = useSampleRows('items', samples)
   const { data, loading } = useCollection<RecordData>('items', { limit: 200 })
   const nameKey = SPEC.fields[0].key
   const rows = useMemo(() => [...((data ?? []) as Row[])].sort((a, b) => String(a.data[nameKey] ?? '').localeCompare(String(b.data[nameKey] ?? ''))), [data, nameKey])
@@ -109,6 +117,8 @@ export default function App() {
     )
   }, [rows, search, filter, group])
   const current = shown.find((r) => r.id === selected) ?? shown[0] ?? null
+  const rating = SPEC.fields.find((f) => f.kind === 'rating')
+  const related = current && group && current.data[group.key] ? rows.filter((r) => r.id !== current.id && r.data[group.key] === current.data[group.key]).slice(0, 6) : []
 
   const save = async (value: RecordData) => {
     if (editing === 'new') {
@@ -174,12 +184,26 @@ export default function App() {
           renderItem={(r) => (
             <span className="flex min-w-0 items-center gap-3">
               {SPEC.avatar && <PersonAvatar name={String(r.data[nameKey] ?? '?')} size="sm" />}
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-medium text-fg">{String(r.data[nameKey] ?? 'Untitled')}</span>
-                {subtitle && r.data[subtitle.key] ? (
-                  <span className="truncate text-xs text-fg-muted">{subtitle.kind === 'select' ? String(r.data[subtitle.key]) : <FieldValue field={subtitle} value={r.data[subtitle.key]} compact />}</span>
-                ) : null}
-                {group && group.key !== subtitle?.key && r.data[group.key] ? <span className="mt-1"><FieldValue field={group} value={r.data[group.key]} compact /></span> : null}
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-fg">{String(r.data[nameKey] ?? 'Untitled')}</span>
+                  {rating && r.data[rating.key] ? (
+                    <span className="shrink-0 text-xs">
+                      <FieldValue field={rating} value={r.data[rating.key]} compact />
+                    </span>
+                  ) : null}
+                </span>
+                <span className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
+                  {group && r.data[group.key] ? <HueDot hue={optionsOf(group).find((o) => o.value === r.data[group.key])?.hue} /> : null}
+                  <span className="truncate">
+                    {[
+                      group && r.data[group.key] ? String(r.data[group.key]) : null,
+                      subtitle && subtitle.key !== group?.key && r.data[subtitle.key] ? (subtitle.kind === 'date' ? formatDate(r.data[subtitle.key]) : String(r.data[subtitle.key])) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </span>
               </span>
             </span>
           )}
@@ -199,22 +223,42 @@ export default function App() {
                   </div>
                   <Button onClick={() => setEditing(current)}>Edit</Button>
                 </div>
-                <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-                  {SPEC.fields.slice(1).filter((f) => f.key !== group?.key && f.kind !== 'longtext').map((f) => (
+                <dl className="grid grid-cols-2 gap-x-8 gap-y-4 rounded-lg bg-surface-subtle p-4 lg:grid-cols-3">
+                  {SPEC.fields.slice(1).filter((f) => f.key !== group?.key && f.kind !== 'longtext' && hasValue(current.data[f.key])).map((f) => (
                     <div key={f.key} className="min-w-0">
-                      <dt className="text-xs font-medium uppercase tracking-wide text-fg-muted">{f.label}</dt>
-                      <dd className="mt-1 text-sm text-fg">
-                        <FieldValue field={f} value={current.data[f.key]} due={f.kind === 'date'} />
+                      <dt className="text-xs text-fg-muted">{f.label}</dt>
+                      <dd className="mt-1 truncate text-sm font-medium text-fg">
+                        <FieldValue field={f} value={current.data[f.key]} due={f.kind === 'date' && DUE.test(f.label)} />
                       </dd>
                     </div>
                   ))}
                 </dl>
                 {SPEC.fields.filter((f) => f.kind === 'longtext' && current.data[f.key]).map((f) => (
-                  <section key={f.key} className="border-t border-line-subtle pt-4">
-                    <h2 className="text-xs font-medium uppercase tracking-wide text-fg-muted">{f.label}</h2>
-                    <p className="mt-2 whitespace-pre-wrap text-sm text-fg">{String(current.data[f.key])}</p>
+                  <section key={f.key}>
+                    <h2 className="text-sm font-semibold text-fg">{f.label}</h2>
+                    <Prose label={f.label} text={String(current.data[f.key])} />
                   </section>
                 ))}
+                {related.length > 0 && (
+                  <section className="border-t border-line-subtle pt-4">
+                    <h2 className="text-sm font-semibold text-fg">
+                      More in {String(current.data[group!.key])}
+                    </h2>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {related.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setSelected(r.id)}
+                          className="inline-flex items-center gap-2 rounded-full border border-line-subtle py-1 pl-1 pr-3 text-sm text-fg hover:bg-surface-subtle"
+                        >
+                          <PersonAvatar name={String(r.data[nameKey] ?? '?')} />
+                          {String(r.data[nameKey] ?? 'Untitled')}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </div>
             )
           }
@@ -229,9 +273,36 @@ export default function App() {
         onSave={save}
         onDelete={editing && editing !== 'new' ? remove : undefined}
         saveLabel={editing === 'new' ? `Add ${SPEC.noun}` : 'Save'}
+        people={peopleOf(SPEC.fields, rows)}
+        example={samples[0]}
       />
     </Page>
   )
 }
 
-const EMPTY: RecordData = Object.fromEntries(SPEC.fields.filter((field) => field.kind === 'select').map((field) => [field.key, optionsOf(field)[0]?.value ?? '']))
+/**
+ * Long text as it is meant to be read: lines (or a comma-run of ingredients)
+ * as a list — numbered for steps — and anything else as paragraphs.
+ */
+function Prose({ label, text }: { label: string; text: string }) {
+  const steps = /step|method|instruction|direction|how to|process|agenda/i.test(label)
+  let items = text.split(/\n+/).map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()).filter(Boolean)
+  if (items.length === 1 && /ingredient|item|material|supplies|list|tools|needs/i.test(label) && text.split(',').length >= 3) items = text.split(',').map((i) => i.trim()).filter(Boolean)
+  if (items.length < 2) return <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-fg-secondary">{text}</p>
+  const List = steps ? 'ol' : 'ul'
+  return (
+    <List className={`mt-2 flex flex-col gap-1.5 pl-5 text-sm leading-relaxed text-fg-secondary ${steps ? 'list-decimal' : 'list-disc'} marker:text-fg-muted`}>
+      {items.map((item, i) => (
+        <li key={i}>{item}</li>
+      ))}
+    </List>
+  )
+}
+
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** A new entry starts on each select's first option, and a date that records when (Added, Joined) on today. */
+const EMPTY: RecordData = Object.fromEntries([
+  ...SPEC.fields.filter((field) => field.kind === 'select').map((field) => [field.key, optionsOf(field)[0]?.value ?? '']),
+  ...SPEC.fields.filter((field) => field.kind === 'date' && /added|created|logged|joined|since|recorded/i.test(field.label)).map((field) => [field.key, iso(new Date())]),
+])

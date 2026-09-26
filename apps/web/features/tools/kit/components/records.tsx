@@ -16,6 +16,7 @@ import { DatePicker } from './DatePicker';
 import { DataTable } from './DataTable';
 import type { DataTableColumn } from './DataTable';
 import { Field } from './Field';
+import { Icon } from './Icon';
 import { Input } from './Input';
 import { KanbanBoard, KanbanCard, KanbanColumn } from './Kanban';
 import type { KanbanMove } from './Kanban';
@@ -141,15 +142,38 @@ function optionFor(field: FieldDef, value: unknown): Required<FieldOption> | nul
 export function formatMoney(value: unknown, currency = 'USD'): string {
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n)) return '';
-  // One notation for everything a person compares: whole units below a
-  // million ("$120,000" beside "$18,000", never "$120K"), compact above.
-  const compact = Math.abs(n) >= 1_000_000;
+  // One notation for everything a person compares: whole units ("$1,200,000"
+  // beside "$300,000", never "$1.2M" beside "$300,000"), compact only for
+  // sums too long to read.
+  const compact = Math.abs(n) >= 100_000_000;
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency,
     notation: compact ? 'compact' : 'standard',
     maximumFractionDigits: compact ? 1 : 0,
   }).format(n);
+}
+
+/** A hue as a CSS colour, for what a class cannot paint — a chart's slices in the same colours as their chips. */
+export function hueColor(hue: Hue): string {
+  return `var(--color-hue-${hue})`;
+}
+
+/** A word for `count` of it: "1 status", "3 statuses", "2 categories". */
+export function plural(word: string, count = 2): string {
+  if (count === 1 || !word) return word;
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
+  if (/(?:s|x|z|ch|sh)$/i.test(word)) return `${word}es`;
+  return `${word}s`;
+}
+
+/** The symbol a currency is written with ("$", "€", "NZ$"). */
+function currencySymbol(currency = 'USD'): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).formatToParts(0).find((p) => p.type === 'currency')?.value ?? currency;
+  } catch {
+    return currency;
+  }
 }
 
 /** A person's own hue, the same everywhere their name is drawn. */
@@ -213,7 +237,7 @@ function hostOf(url: string): string {
 export interface FieldValueProps {
   field: FieldDef;
   value: unknown;
-  /** Tighter: dates short. For a card. */
+  /** Tighter, for a card: a percentage's bar is short. */
   compact?: boolean;
   /** A date that is due and not done: drawn in the danger colour once past. A date is only ever red when this says so. */
   due?: boolean;
@@ -251,7 +275,7 @@ export function FieldValue({ field, value, compact = false, due = false }: Field
       const n = Math.max(0, Math.min(100, Number(value) || 0));
       return (
         <span className="inline-flex items-center gap-2">
-          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-muted">
+          <span className={clsx('h-1.5 overflow-hidden rounded-full bg-surface-muted', compact ? 'w-10' : 'w-16')}>
             <span className={clsx('block h-full rounded-full', n >= 100 ? 'bg-success' : 'bg-accent')} style={{ width: `${n}%` }} />
           </span>
           <span className="tabular-nums">{formatNumber(value)}%</span>
@@ -261,7 +285,8 @@ export function FieldValue({ field, value, compact = false, due = false }: Field
     case 'date': {
       const days = daysFrom(value);
       const late = due && days !== null && days < 0;
-      return <span className={clsx('tabular-nums', late && 'font-medium text-danger')}>{compact ? formatDate(value) : relativeDate(value)}</span>;
+      // One date format in every list, so a column never mixes "Sep 20" with "5 days ago"; the relative reading is the tooltip.
+      return <span title={relativeDate(value)} className={clsx('tabular-nums', late && 'font-medium text-danger')}>{formatDate(value)}</span>;
     }
     case 'person':
       return (
@@ -308,26 +333,108 @@ export interface FieldInputProps {
   onChange: (value: unknown) => void;
   id?: string;
   autoFocus?: boolean;
+  /** Names a person field offers as it is typed into — the team already in the records. */
+  people?: string[];
+  /** A filled-in record whose value shows as this field's "e.g." placeholder. */
+  example?: RecordData;
+}
+
+/** "e.g. Northwind" from an example record, for a field that has no placeholder of its own. */
+function exampleFor(field: FieldDef, example?: RecordData): string | undefined {
+  if (field.placeholder) return field.placeholder;
+  const v = example?.[field.key];
+  if (v === undefined || v === null || v === '' || typeof v === 'object' || typeof v === 'boolean') return undefined;
+  if (field.kind === 'date') return undefined;
+  const text = field.kind === 'money' || field.kind === 'number' ? formatNumber(v) : String(v);
+  return `e.g. ${text.length > 48 ? `${text.slice(0, 45)}…` : text}`;
+}
+
+/** A name typed or picked from the people already in the records, drawn with their avatar. */
+function PersonInput({ id, value, onChange, people, placeholder }: { id?: string; value: unknown; onChange: (v: unknown) => void; people: string[]; placeholder?: string }) {
+  const [open, setOpen] = useState(false);
+  const name = String(value ?? '');
+  const q = name.trim().toLowerCase();
+  const matches = people.filter((p) => p !== name && p.toLowerCase().includes(q)).slice(0, 6);
+  return (
+    <div className="relative">
+      <span aria-hidden className="pointer-events-none absolute inset-y-0 left-2.5 z-10 flex items-center">
+        {name.trim() ? <PersonAvatar name={name.trim()} /> : <Icon name="user" size={16} className="text-fg-subtle" />}
+      </span>
+      <Input
+        id={id}
+        role="combobox"
+        aria-expanded={open && matches.length > 0}
+        autoComplete="off"
+        className="pl-9 pr-8"
+        value={name}
+        placeholder={placeholder ?? (people.length ? 'Choose or type a name' : 'Name')}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onChange={(e) => {
+          onChange(e.currentTarget.value);
+          setOpen(true);
+        }}
+      />
+      {people.length > 0 && (
+        <span aria-hidden className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-fg-muted">
+          <Icon name="chevron-down" size={14} />
+        </span>
+      )}
+      {open && matches.length > 0 && (
+        <ul role="listbox" className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-auto rounded-lg border border-line-subtle bg-surface py-1 shadow-lg">
+          {matches.map((p) => (
+            <li key={p} role="option" aria-selected={false}>
+              <button
+                type="button"
+                // Before the input's blur closes the list.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(p);
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-subtle"
+              >
+                <PersonAvatar name={p} />
+                {p}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 /** One field's control, chosen by its kind. */
-export function FieldInput({ field, value, onChange, id, autoFocus }: FieldInputProps) {
+export function FieldInput({ field, value, onChange, id, autoFocus, people = [], example }: FieldInputProps) {
+  const hint = exampleFor(field, example);
   switch (field.kind) {
     case 'longtext':
-      return <Textarea id={id} aria-required={field.required} rows={3} value={String(value ?? '')} placeholder={field.placeholder} onChange={(e) => onChange(e.currentTarget.value)} />;
+      return <Textarea id={id} aria-required={field.required} rows={3} value={String(value ?? '')} placeholder={hint} onChange={(e) => onChange(e.currentTarget.value)} />;
     case 'number':
     case 'money':
-    case 'percent':
+    case 'percent': {
+      // The unit sits inside the box, so the number typed is just the number.
+      const prefix = field.kind === 'money' ? currencySymbol(field.currency) : null;
+      const suffix = field.kind === 'percent' ? '%' : null;
       return (
-        <Input
-          id={id}
-          type="number"
-          inputMode="decimal"
-          value={value === null || value === undefined ? '' : String(value)}
-          placeholder={field.placeholder ?? (field.kind === 'money' ? '0' : undefined)}
-          onChange={(e) => onChange(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
-        />
+        <div className="relative">
+          {prefix && <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-fg-muted">{prefix}</span>}
+          <Input
+            id={id}
+            type="number"
+            inputMode="decimal"
+            className={clsx(prefix && (prefix.length > 1 ? 'pl-10' : 'pl-7'), suffix && 'pr-8')}
+            value={value === null || value === undefined ? '' : String(value)}
+            placeholder={hint}
+            onChange={(e) => onChange(e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
+          />
+          {suffix && <span aria-hidden className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-fg-muted">{suffix}</span>}
+        </div>
       );
+    }
+    case 'person':
+      return <PersonInput id={id} value={value} onChange={onChange} people={people} placeholder={field.placeholder} />;
     case 'date':
       return <DatePicker id={id} value={value ? String(value).slice(0, 10) : null} onChange={onChange} />;
     case 'select':
@@ -396,7 +503,7 @@ export function FieldInput({ field, value, onChange, id, autoFocus }: FieldInput
           aria-required={field.required}
           type={field.kind === 'email' ? 'email' : field.kind === 'url' ? 'url' : 'text'}
           value={String(value ?? '')}
-          placeholder={field.placeholder}
+          placeholder={hint}
           onChange={(e) => onChange(e.currentTarget.value)}
         />
       );
@@ -411,6 +518,10 @@ export interface RecordFormProps {
   onChange: (next: RecordData) => void;
   /** Keys whose `required` is unmet, after a submit — each says so under its input. */
   errors?: string[];
+  /** Names a person field offers — the people already in the records. */
+  people?: string[];
+  /** A filled-in record, shown as each empty field's "e.g." placeholder. */
+  example?: RecordData;
 }
 
 const WIDE: ReadonlySet<FieldKind> = new Set(['longtext', 'tags', 'url']);
@@ -420,22 +531,36 @@ const WIDE: ReadonlySet<FieldKind> = new Set(['longtext', 'tags', 'url']);
  * take a row of their own. Nothing is focused on open: a focused field draws
  * differently from its neighbours and reads as the odd one out.
  */
-export function RecordForm({ fields, value, onChange, errors = [] }: RecordFormProps) {
+export function RecordForm({ fields, value, onChange, errors = [], people, example }: RecordFormProps) {
   const firstText = fields.find((f) => f.kind === 'text')?.key;
+  const wide = (f: FieldDef) => WIDE.has(f.kind) || f.key === firstText;
+  // Narrow fields pair up; one left without a partner takes the row, so the grid never has a hole.
+  const spans = new Set<string>();
+  for (let i = 0; i < fields.length; i++) {
+    if (wide(fields[i])) spans.add(fields[i].key);
+    else if (fields[i + 1] && !wide(fields[i + 1])) i++;
+    else spans.add(fields[i].key);
+  }
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {fields.map((field) => {
         const id = `vv-field-${field.key}`;
         return (
-          <div key={field.key} className={clsx(WIDE.has(field.kind) || field.key === firstText ? 'sm:col-span-2' : undefined)}>
+          <div key={field.key} className={clsx(spans.has(field.key) && 'sm:col-span-2')}>
             <Field label={<>{field.label}{field.required && <span className="ml-1 text-fg-muted" aria-label="required">*</span>}</>} htmlFor={id} error={errors.includes(field.key) ? `${field.label} is needed` : undefined}>
-              <FieldInput id={id} field={field} value={value[field.key]} onChange={(v) => onChange({ ...value, [field.key]: v })} />
+              <FieldInput id={id} field={field} value={value[field.key]} onChange={(v) => onChange({ ...value, [field.key]: v })} people={people} example={example} />
             </Field>
           </div>
         );
       })}
     </div>
   );
+}
+
+/** Everyone named in the records' person fields, for a form's person picker. */
+export function peopleOf(fields: FieldDef[], rows: Array<{ data: RecordData }>): string[] {
+  const keys = fields.filter((f) => f.kind === 'person').map((f) => f.key);
+  return [...new Set(rows.flatMap((r) => keys.map((k) => r.data[k])).filter((v): v is string => typeof v === 'string' && v.trim() !== ''))];
 }
 
 /** The keys a record leaves empty that its fields require. */
@@ -458,10 +583,16 @@ export interface RecordDialogProps {
   /** Present on an existing record: a Delete button on the left of the footer. */
   onDelete?: () => Promise<void> | void;
   saveLabel?: string;
+  /** Names a person field offers; the viewer is always among them. */
+  people?: string[];
+  /** A filled-in record, shown as each empty field's "e.g." placeholder on a new one. */
+  example?: RecordData;
 }
 
 /** A record's form in the app's dialog, with Save, Cancel and (for an existing one) Delete. */
-export function RecordDialog({ open, title, fields, initial, onClose, onSave, onDelete, saveLabel = 'Save' }: RecordDialogProps) {
+export function RecordDialog({ open, title, fields, initial, onClose, onSave, onDelete, saveLabel = 'Save', people = [], example }: RecordDialogProps) {
+  const viewer = useVisvine().viewer.name;
+  const team = useMemo(() => [...new Set([...people, viewer].filter((p) => p && p.trim()))].sort((a, b) => a.localeCompare(b)), [people, viewer]);
   const [value, setValue] = useState<RecordData>(initial);
   const [errors, setErrors] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
@@ -531,7 +662,7 @@ export function RecordDialog({ open, title, fields, initial, onClose, onSave, on
           void save();
         }}
       >
-        <RecordForm fields={fields} value={value} onChange={setValue} errors={errors} />
+        <RecordForm fields={fields} value={value} onChange={setValue} errors={errors} people={team} example={onDelete ? undefined : example} />
         {failure && <p role="alert" className="mt-4 text-sm text-danger">{failure}</p>}
       </form>
     </Modal>
@@ -628,8 +759,13 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
   );
   const sum = sumField ? fields.find((f) => f.key === sumField) : undefined;
   const headline = sum ?? onCard.find((f) => NUMBER_KINDS.has(f.kind));
-  const chips = onCard.filter((f) => CHIP_KINDS.has(f.kind));
-  const meta = onCard.filter((f) => f !== headline && !CHIP_KINDS.has(f.kind)).slice(0, 3);
+  const chips = onCard.filter((f) => CHIP_KINDS.has(f.kind)).slice(0, 2);
+  const rest = onCard.filter((f) => f !== headline && !CHIP_KINDS.has(f.kind));
+  // A card reads as: title and number; one muted line of text; chips; then a
+  // footer with who on the left and when on the right — no separators to strand.
+  const person = rest.find((f) => f.kind === 'person');
+  const when = rest.find((f) => f.kind === 'date');
+  const line = rest.filter((f) => f !== person && f !== when && f.kind !== 'boolean').slice(0, 1);
   const done = new Set(doneValues ?? []);
 
   if (!group) return null;
@@ -639,78 +775,90 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
     const row = byId.get(m.cardId);
     if (row && m.toColumnId !== m.fromColumnId) onMove(row, m.toColumnId);
   };
+  const has = (row: T, f: FieldDef | undefined) => f !== undefined && row.data[f.key] !== undefined && row.data[f.key] !== null && row.data[f.key] !== '';
+  // Up to six stages share the width and never scroll; a card narrows to fit.
   const fill = columns.length <= 6;
-  return (
-        <KanbanBoard onMove={move}>
-          {columns.map((col) => {
-            const inCol = rows.filter((r) => String(r.data[groupBy] ?? '') === col.value);
-            const values = sum ? inCol.map((r) => r.data[sum.key]).filter((v) => v !== null && v !== undefined && v !== '').map(Number).filter(Number.isFinite) : [];
-            const averaged = sum?.kind === 'percent' || sum?.kind === 'rating';
-            const total = values.length ? values.reduce((a, b) => a + b, 0) / (averaged ? values.length : 1) : null;
-            const colDone = done.has(col.value);
-            return (
-              <KanbanColumn
-                key={col.value}
-                id={col.value}
-                fill={fill}
-                className="min-h-96"
-                title={
-                  <>
-                    <HueDot hue={col.hue} />
-                    {col.label}
-                  </>
-                }
-                count={inCol.length}
-                actions={
-                  total !== null && total > 0 ? (
-                    <span className="text-xs text-fg-muted tabular-nums">{sum!.kind === 'money' ? formatMoney(total, sum!.currency) : `${formatNumber(Math.round(total * 10) / 10)}${sum!.kind === 'percent' ? '%' : ''}${averaged ? ' avg' : ''}`}</span>
-                  ) : undefined
-                }
-              >
-                {inCol.map((row) => (
-                  <KanbanCard key={row.id} id={row.id} onClick={onOpen ? () => onOpen(row) : undefined}>
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 text-sm font-medium leading-snug text-fg">{String(row.data[titleKey] ?? '') || 'Untitled'}</span>
-                        {headline && row.data[headline.key] !== undefined && row.data[headline.key] !== null && row.data[headline.key] !== '' && (
-                          <span className="shrink-0 text-sm font-semibold tabular-nums text-fg">
-                            <FieldValue field={headline} value={row.data[headline.key]} compact />
-                          </span>
-                        )}
-                      </div>
-                      {chips.some((f) => row.data[f.key]) && (
-                        <div className="flex flex-wrap gap-1">
-                          {chips.map((f) => (row.data[f.key] ? <FieldValue key={f.key} field={f} value={row.data[f.key]} /> : null))}
-                        </div>
-                      )}
-                      {meta.some((f) => row.data[f.key] !== undefined && row.data[f.key] !== null && row.data[f.key] !== '') && (
-                        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-fg-muted">
-                          {meta
-                            .filter((f) => row.data[f.key] !== undefined && row.data[f.key] !== null && row.data[f.key] !== '')
-                            .map((f, i) => (
-                              <span key={f.key} className="inline-flex min-w-0 items-center gap-1.5">
-                                {i > 0 && <span aria-hidden>·</span>}
-                                <FieldValue field={f} value={row.data[f.key]} compact due={f.key === dueField && !colDone} />
-                              </span>
-                            ))}
-                        </div>
-                      )}
-                    </div>
-                  </KanbanCard>
-                ))}
-                {onAdd && (
-                  <button
-                    type="button"
-                    onClick={() => onAdd(col.value)}
-                    className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
-                  >
-                    <span aria-hidden className="text-base leading-none">+</span> Add
-                  </button>
+
+  const column = (col: (typeof columns)[number]) => {
+    const inCol = rows.filter((r) => String(r.data[groupBy] ?? '') === col.value);
+    const values = sum ? inCol.map((r) => r.data[sum.key]).filter((v) => v !== null && v !== undefined && v !== '').map(Number).filter(Number.isFinite) : [];
+    const averaged = sum?.kind === 'percent' || sum?.kind === 'rating';
+    const total = values.length ? values.reduce((a, b) => a + b, 0) / (averaged ? values.length : 1) : null;
+    const colDone = done.has(col.value);
+    return (
+      <KanbanColumn
+        key={col.value}
+        id={col.value}
+        fill={fill}
+        title={
+          <>
+            <HueDot hue={col.hue} />
+            {col.label}
+          </>
+        }
+        count={inCol.length}
+        subtitle={
+          sum ? (total !== null && total > 0 ? (sum.kind === 'money' ? formatMoney(total, sum.currency) : `${formatNumber(Math.round(total * 10) / 10)}${sum.kind === 'percent' ? '%' : ''}${averaged ? ' avg' : ''}`) : '') : undefined
+        }
+      >
+        {inCol.map((row) => (
+          <KanbanCard key={row.id} id={row.id} onClick={onOpen ? () => onOpen(row) : undefined} className={clsx('@container', colDone && 'opacity-80')}>
+            <div className="flex flex-col gap-1.5">
+              {/* The number beside the title in a wide column, under it in a narrow one — never squeezing the title into two lines. */}
+              <div className="flex flex-col gap-0.5 @[15rem]:flex-row @[15rem]:items-start @[15rem]:justify-between @[15rem]:gap-2">
+                <span className="min-w-0 text-sm font-medium leading-snug text-fg">{String(row.data[titleKey] ?? '') || 'Untitled'}</span>
+                {has(row, headline) && (
+                  <span className="shrink-0 text-sm font-semibold tabular-nums text-fg">
+                    <FieldValue field={headline!} value={row.data[headline!.key]} compact />
+                  </span>
                 )}
-              </KanbanColumn>
-            );
-          })}
-        </KanbanBoard>
+              </div>
+              {line.filter((f) => has(row, f)).map((f) => (
+                <span key={f.key} className="truncate text-xs text-fg-muted">
+                  <FieldValue field={f} value={row.data[f.key]} compact />
+                </span>
+              ))}
+              {chips.some((f) => has(row, f)) && (
+                <div className="flex flex-wrap gap-1">
+                  {chips.map((f) => (has(row, f) ? <FieldValue key={f.key} field={f} value={row.data[f.key]} /> : null))}
+                </div>
+              )}
+              {(has(row, person) || has(row, when)) && (
+                <div className="mt-0.5 flex min-w-0 items-center justify-between gap-2 text-xs text-fg-muted">
+                  {has(row, person) ? (
+                    <span className="inline-flex min-w-0 items-center gap-1.5" title={String(row.data[person!.key])}>
+                      <PersonAvatar name={String(row.data[person!.key])} />
+                      {/* The name only where there is room for it; the avatar says who either way. */}
+                      <span className="hidden truncate @[12rem]:inline">{String(row.data[person!.key])}</span>
+                    </span>
+                  ) : (
+                    <span />
+                  )}
+                  {has(row, when) && (
+                    <span className="shrink-0">
+                      <FieldValue field={when!} value={row.data[when!.key]} compact due={when!.key === dueField && !colDone} />
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </KanbanCard>
+        ))}
+        {onAdd && !colDone && (
+          <button
+            type="button"
+            onClick={() => onAdd(col.value)}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
+          >
+            <span aria-hidden className="text-base leading-none">+</span> Add
+          </button>
+        )}
+      </KanbanColumn>
+    );
+  };
+
+  return (
+    <KanbanBoard onMove={move}>{columns.map(column)}</KanbanBoard>
   );
 }
 
@@ -780,9 +928,11 @@ export function SampleData({ state }: { state: ReturnType<typeof useSampleRows> 
     catch (err) { void visvine.ui.toast(err instanceof Error ? err.message : 'Could not clear sample data', 'error'); }
     finally { setClearing(false); }
   };
+  // Last on the page whatever its place in the code (`order-last` in Page's
+  // column): it names what is shown without pushing it down or covering it.
   return (
-    <div className="flex items-center justify-end gap-2 text-xs text-fg-muted">
-      <span>Sample data</span>
+    <div className="order-last -mt-3 flex items-center gap-1 text-xs text-fg-muted">
+      <span>Showing sample data</span>
       <Button size="sm" variant="ghost" disabled={clearing || state.seeding} onClick={() => void clear()}>{clearing ? 'Clearing…' : 'Clear'}</Button>
     </div>
   );

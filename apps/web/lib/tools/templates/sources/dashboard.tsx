@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import {
-  AreaChart,
+  BarChart,
   Card,
   formatMoney,
   formatNumber,
+  hueColor,
   optionsOf,
   Page,
+  peopleOf,
   PieChart,
   Progress,
   RecordDialog,
@@ -124,7 +126,8 @@ export default function App() {
   const [section] = useSection()
   const sampleRows = useSampleRows('items', useMemo(() => resolveDates(SPEC.sample), []))
   const { data, loading } = useCollection<RecordData>('items', { limit: 200, order: 'desc' })
-  const rows: Row[] = data ?? []
+  // Newest first by the date each entry falls on, not by when it was typed in.
+  const rows: Row[] = useMemo(() => [...((data ?? []) as Row[])].sort((a, b) => String(b.data[SPEC.dateField] ?? '').localeCompare(String(a.data[SPEC.dateField] ?? ''))), [data])
   const [editing, setEditing] = useState<Row | 'new' | null>(null)
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState<RecordData>({})
@@ -151,19 +154,29 @@ export default function App() {
   const byCategory = useMemo(() => {
     if (!category) return []
     return optionsOf(category)
-      .map((o) => ({ name: o.label, total: rows.filter((r) => r.data[category.key] === o.value).reduce((a, r) => a + valueOf(r), 0) }))
+      .map((o) => ({ name: o.label, hue: o.hue, total: rows.filter((r) => r.data[category.key] === o.value).reduce((a, r) => a + valueOf(r), 0) }))
       .filter((d) => d.total > 0)
       .sort((a, b) => b.total - a.total)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, category])
 
+  // The last ten weeks, each one present — a quiet week is a zero bar, not a gap a line would smooth over.
   const byWeek = useMemo(() => {
     const map = new Map<string, number>()
     for (const r of rows) {
       const w = weekOf(r.data[SPEC.dateField])
       if (w) map.set(w, (map.get(w) ?? 0) + valueOf(r))
     }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-12).map(([week, total]) => ({ week, total }))
+    const weeks: Array<{ week: string; total: number }> = []
+    const d = new Date(`${weekOf(iso(new Date()))}T00:00:00`)
+    for (let i = 0; i < 10; i++) {
+      const w = iso(d)
+      weeks.unshift({ week: w, total: map.get(w) ?? 0 })
+      d.setDate(d.getDate() - 7)
+    }
+    // Starting at the first week with anything in it.
+    const firstFull = weeks.findIndex((w) => w.total > 0)
+    return firstFull > 0 ? weeks.slice(Math.min(firstFull, weeks.length - 4)) : weeks
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows])
 
@@ -194,6 +207,8 @@ export default function App() {
       onSave={save}
       onDelete={editing && editing !== 'new' ? remove : undefined}
       saveLabel={editing === 'new' ? `Add ${SPEC.noun}` : 'Save'}
+      people={peopleOf(SPEC.fields, rows)}
+      example={resolveDates(SPEC.sample)[0]}
     />
   )
 
@@ -225,57 +240,75 @@ export default function App() {
     )
   }
 
-  const top = byCategory[0]
+  const monthCategories = category
+    ? optionsOf(category)
+        .map((o) => ({ name: o.label, total: sum(inThis.filter((r) => r.data[category.key] === o.value)) }))
+        .filter((d) => d.total > 0)
+        .sort((a, b) => b.total - a.total)
+    : []
+  const top = monthCategories[0]
   const categoryTotal = byCategory.reduce((acc, d) => acc + d.total, 0)
-  const used = SPEC.monthlyTarget ? sum(inThis) / SPEC.monthlyTarget : 0
+  // A category's slice, dot and chip are one colour: its option's hue.
+  const sliceColors = byCategory.map((d) => hueColor(d.hue))
+  const spent = sum(inThis)
+  const used = SPEC.monthlyTarget ? spent / SPEC.monthlyTarget : 0
+  const diff = spent - sum(inLast)
+  // A swing too big to read as a percentage says how much instead.
+  const deltaLabel = change === undefined ? undefined : Math.abs(change) > 150 ? fmt(Math.abs(diff)) : `${Math.abs(change)}%`
+  const monthName = now.toLocaleDateString(undefined, { month: 'long' })
   return (
     <Page>
       <SampleData state={sampleRows} />
       <StatRow>
-        <Stat
-          lead
-          label="This month"
-          value={fmt(sum(inThis))}
-          delta={change}
-          deltaLabel={change !== undefined ? `${Math.abs(change)}%` : undefined}
-          invert={SPEC.lowerIsBetter}
-          hint="vs last month"
-        />
         {SPEC.monthlyTarget ? (
-          <div className="flex min-w-0 flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">{SPEC.lowerIsBetter ? 'Budget' : 'Target'}</span>
-            <span className="text-2xl font-semibold tabular-nums text-fg">{fmt(SPEC.monthlyTarget)}</span>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">{monthName}</span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-semibold tabular-nums text-fg">{fmt(spent)}</span>
+              <span className="text-sm text-fg-muted">of {fmt(SPEC.monthlyTarget)}</span>
+            </span>
             <Progress value={used} hue={SPEC.lowerIsBetter ? (used > 1 ? 'red' : used > 0.85 ? 'amber' : 'green') : used >= 1 ? 'green' : 'blue'} />
-            <span className="text-xs text-fg-muted">
-              {Math.round(used * 100)}% {SPEC.lowerIsBetter ? 'used' : 'reached'}
+            <span className={`text-xs ${SPEC.lowerIsBetter && used > 1 ? 'font-medium text-danger' : 'text-fg-muted'}`}>
+              {SPEC.lowerIsBetter
+                ? used > 1
+                  ? `${fmt(spent - SPEC.monthlyTarget)} over budget`
+                  : `${fmt(SPEC.monthlyTarget - spent)} left · ${Math.round(used * 100)}% used`
+                : `${Math.round(used * 100)}% of target`}
             </span>
           </div>
         ) : (
+          <Stat lead label={monthName} value={fmt(spent)} delta={change} deltaLabel={deltaLabel} invert={SPEC.lowerIsBetter} hint="vs last month" />
+        )}
+        {SPEC.monthlyTarget ? (
+          <Stat label="Last month" value={fmt(sum(inLast))} hint={change === undefined ? undefined : `${monthName} is ${diff >= 0 ? 'up' : 'down'} ${deltaLabel}`} />
+        ) : (
           <Stat label="Last month" value={fmt(sum(inLast))} />
         )}
-        <Stat label={title(SPEC.plural)} value={rows.length} hint={`${inThis.length} this month`} />
-        {top && <Stat label={`Top ${category?.label.toLowerCase() ?? ''}`} value={top.name} hint={`${fmt(top.total)} · all time`} />}
+        <Stat label={title(SPEC.plural)} value={inThis.length} hint={`this month · ${rows.length} in all`} />
+        {top && <Stat label={`Top ${category?.label.toLowerCase() ?? ''}`} value={top.name} hint={`${fmt(top.total)} this month`} />}
       </StatRow>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
-        <Card title={`By week · last ${byWeek.length} weeks`} className="lg:col-span-3">
-          <AreaChart data={byWeek} x="week" series={[{ key: 'total', label: valueField?.label ?? 'Total' }]} height={240} formatValue={fmt} legend={false} formatX={(w) => new Date(`${String(w)}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} />
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-5">
+        <Card title={`By week · last ${byWeek.length} weeks`} className="md:col-span-3">
+          <BarChart data={byWeek} x="week" series={[{ key: 'total', label: valueField?.label ?? 'Total', color: colors[0] }]} height={300} formatValue={fmt} legend={false} formatX={(w) => new Date(`${String(w)}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} />
         </Card>
         {category && (
-          <Card title={`By ${category.label.toLowerCase()} · all time`} className="lg:col-span-2">
-            <div className="flex flex-col gap-4">
-              <div className="mx-auto w-40">
-                <PieChart data={byCategory} nameKey="name" valueKey="total" height={160} donut legend={false} formatValue={fmt} colors={colors} />
+          <Card title={`By ${category.label.toLowerCase()} · all time`} className="md:col-span-2">
+            <div className="flex flex-col gap-3">
+              <div className="relative mx-auto w-36">
+                <PieChart data={byCategory} nameKey="name" valueKey="total" height={144} donut legend={false} formatValue={fmt} colors={sliceColors} />
+                <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-sm font-semibold tabular-nums text-fg">{fmt(categoryTotal)}</span>
+                  <span className="text-[11px] text-fg-muted">all time</span>
+                </span>
               </div>
-              <ul className="flex flex-col gap-2.5 text-sm">
+              <ul className="flex flex-col gap-1.5 text-sm">
                 {byCategory.map((d, i) => (
-                  <li key={d.name} className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: colors[i % colors.length] }} />
-                      <span className="min-w-0 flex-1 truncate text-fg-secondary">{d.name}</span>
-                      <span className="tabular-nums text-fg">{fmt(d.total)}</span>
-                      <span className="w-10 text-right tabular-nums text-fg-muted">{categoryTotal ? Math.round((d.total / categoryTotal) * 100) : 0}%</span>
-                    </div>
+                  <li key={d.name} className="flex items-center gap-2">
+                    <span className="size-2.5 shrink-0 rounded-full" style={{ background: sliceColors[i] }} />
+                    <span className="min-w-0 flex-1 truncate text-fg-secondary">{d.name}</span>
+                    <span className="tabular-nums text-fg">{fmt(d.total)}</span>
+                    <span className="w-9 text-right tabular-nums text-fg-muted">{categoryTotal ? Math.round((d.total / categoryTotal) * 100) : 0}%</span>
                   </li>
                 ))}
               </ul>

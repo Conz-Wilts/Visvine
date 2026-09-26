@@ -554,10 +554,11 @@ function FrameScrim({ rect, corners }: { rect: DOMRect; corners: Corners }) {
   // to them: the sliver outside each curve is neither inside the frame nor
   // outside its rectangle, so it is dimmed here — a square masked to what the
   // curve leaves uncovered.
+  const box = corners.box ?? rect;
   const corner = (r: number, at: 'tl' | 'tr' | 'bl' | 'br') => {
     if (r <= 0) return null;
-    const x = at[1] === 'l' ? rect.left : rect.right - r;
-    const y = at[0] === 't' ? rect.top : rect.bottom - r;
+    const x = at[1] === 'l' ? box.left : box.right - r;
+    const y = at[0] === 't' ? box.top : box.bottom - r;
     const origin = `${at[1] === 'l' ? '100%' : '0%'} ${at[0] === 't' ? '100%' : '0%'}`;
     const mask = `radial-gradient(circle at ${origin}, transparent ${r - 0.5}px, black ${r}px)`;
     return <div key={at} className={pane} style={{ left: x, top: y, width: r, height: r, WebkitMaskImage: mask, maskImage: mask }} />;
@@ -581,11 +582,13 @@ interface Corners {
   tr: number;
   bl: number;
   br: number;
+  /** The rounded box, when it is an ancestor larger than the frame. */
+  box?: DOMRect;
 }
 
-/** The rounding the frame is clipped by: its own, or the nearest ancestor's that has any. */
+/** The rounding the frame is clipped by — its own, or the nearest rounded ancestor's — and where that box is. */
 function clippingCorners(el: HTMLElement | null): Corners {
-  for (let node = el, depth = 0; node && depth < 6; node = node.parentElement, depth++) {
+  for (let node = el; node && node !== document.body; node = node.parentElement) {
     const style = getComputedStyle(node);
     const c = {
       tl: parseFloat(style.borderTopLeftRadius) || 0,
@@ -593,7 +596,7 @@ function clippingCorners(el: HTMLElement | null): Corners {
       bl: parseFloat(style.borderBottomLeftRadius) || 0,
       br: parseFloat(style.borderBottomRightRadius) || 0,
     };
-    if (c.tl || c.tr || c.bl || c.br) return c;
+    if (c.tl || c.tr || c.bl || c.br) return { ...c, box: node.getBoundingClientRect() };
   }
   return { tl: 0, tr: 0, bl: 0, br: 0 };
 }

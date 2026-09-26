@@ -119,7 +119,7 @@ export function Stat({ label, value, delta, deltaLabel, invert = false, icon, hi
           </span>
         )}
       </span>
-      {hint && <span className="truncate text-xs text-fg-muted">{hint}</span>}
+      {hint && <span className={clsx('truncate text-xs', onClick ? 'font-medium text-fg-link' : 'text-fg-muted')}>{hint}{onClick && !active ? ' →' : ''}</span>}
     </>
   );
   if (onClick) {

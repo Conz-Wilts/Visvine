@@ -393,7 +393,7 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     kind: 'component',
     what: 'Every field of a record, two to a row, from the schema.',
     when: 'Inside your own dialog or page. RecordDialog is this in a Modal with Save.',
-    props: 'fields: FieldDef[] · value · onChange · errors?',
+    props: 'fields: FieldDef[] · value · onChange · errors? · people? · example?',
     snippet: `<RecordForm fields={[{ key: 'name', label: 'Name', kind: 'text' }, { key: 'value', label: 'Value', kind: 'money' }]} value={{}} onChange={() => {}} />`,
   },
   {
@@ -401,7 +401,7 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     kind: 'component',
     what: "A record's form in the app's dialog with Save, Cancel and Delete.",
     when: 'Adding or editing one record — the band action opens it empty, a row opens it filled.',
-    props: 'open · title · fields · initial · onClose · onSave(value) · onDelete? · saveLabel?',
+    props: 'open · title · fields · initial · onClose · onSave(value) · onDelete? · saveLabel? · people? (peopleOf(fields, rows): a picker for person fields) · example? (a sample row: "e.g." placeholders)',
     snippet: `<RecordDialog open={false} title="New deal" fields={[{ key: 'name', label: 'Name', kind: 'text', required: true }]} initial={{}} onClose={() => {}} onSave={() => {}} />`,
   },
   {
@@ -424,7 +424,7 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     name: 'SampleData',
     kind: 'component',
     what: 'One Sample data label with a Clear action for seeded demonstration rows.',
-    when: 'Once at the top of each page while sample rows remain; never prefix each record title.',
+    when: 'Once per page while sample rows remain — it draws itself at the foot; never prefix each record title.',
     props: 'state: the return value of useSampleRows(collection, rows)',
     snippet: `<SampleData state={{ seeding: false, hasSamples: true, clear: async () => {} }} />`,
   },

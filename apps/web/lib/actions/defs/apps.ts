@@ -51,6 +51,8 @@ import {
   type CheckReport,
 } from '@/lib/tools/checks/findings'
 import { recordReport } from '@/lib/tools/checks/runs'
+import { snapshotPreviewRows } from '@/lib/tools/collections'
+import { snapshotPreviewToolState } from '@/lib/tools/state'
 import { advisoriesFor } from '@/lib/tools/advisories'
 import { BRIDGE_METHODS } from '@/lib/tools/protocol'
 import { TOOL_PHONE_REFUSAL } from '@/lib/tools/clientClass'
@@ -219,6 +221,11 @@ export interface AppToolDeps {
    * fall back to links.
    */
   capturePreview(req: ScreenshotRequest): Promise<ScreenshotResult>
+  /**
+   * What a working copy's preview holds (collection rows and state), and a
+   * way to put it back — try_tool's rehearsal. Absent, a try keeps its writes.
+   */
+  rehearse?(spaceId: string, name: string): Promise<() => Promise<{ added: number; changed: number; removed: number }>>
 }
 
 const liveDeps: AppToolDeps = {
@@ -260,6 +267,14 @@ const liveDeps: AppToolDeps = {
   spaceFacts: spaceFactsService,
   appOrigin: liveAppOrigin,
   capturePreview: captureToolPreview,
+  rehearse: async (spaceId, name) => {
+    const rows = await snapshotPreviewRows(spaceId, name)
+    const state = snapshotPreviewToolState(spaceId, name)
+    return async () => {
+      state()
+      return rows()
+    }
+  },
 }
 
 // ── shared shapes ─────────────────────────────────────────────────────────────
@@ -511,7 +526,7 @@ async function createTool(ctx: ActionCaller, args: CreateToolArgs, deps: AppTool
         sections: facts.surfaces.nav?.sections.map((s) => s.id) ?? [],
         band_actions: facts.surfaces.actions.map((a) => a.id),
         next: [
-          `It is built from the ${started.template.title} template with your spec, and opens with the spec's sample rows. Before hand-over, inspect every section and band action with preview_tool { screenshot: true }, fix the concrete problems you see with write_tool, and capture again. Exercise the main action with try_tool, then remove only your temporary test records. Preserve the labelled sample rows; SampleData offers the person Clear. check_tool { review: true } adds a scored review when a judge is available; aim for 9/10 and report any unverified behaviour.`,
+          `It is built from the ${started.template.title} template with your spec, and opens with the spec's sample rows. Before hand-over, inspect every section and band action with preview_tool { screenshot: true }, fix the concrete problems you see with write_tool, and capture again. Exercise the main action with try_tool — a try is a rehearsal, so whatever it saves is put back and there is nothing to clean up. Keep the sample rows: they are the first look, and SampleData offers the person Clear. check_tool { review: true } adds a scored review when a judge is available; aim for 9/10 and report any unverified behaviour.`,
           'To change what it is about, edit the SPEC block in ui.tsx with read_tool and write_tool. To change how it looks or add behaviour, read_tool then write_tool ui.tsx — the SPEC block at the top holds the fields, and the kit\'s blocks (RecordBoard, RecordTable, RecordDialog, StatRow, Toolbar) draw everything else.',
         ],
       }
@@ -909,15 +924,27 @@ async function tryTool(ctx: ActionCaller, args: TryToolArgs, deps: AppToolDeps =
   const { target, detail } = await requireTool(ctx, args.space_id, args.name, deps)
   if (ctx.client === 'mobile') throw new ActionError(403, TOOL_PHONE_REFUSAL)
   if (args.steps.length > MAX_TOOL_STEPS) throw new ActionError(400, `At most ${MAX_TOOL_STEPS} steps per try.`)
-  const result = await deps.capturePreview({
-    ...previewRequest(ctx, target, detail.name, deps, { image: true }),
-    budgetMs: TRY_BUDGET_MS,
-    steps: args.steps,
-    outline: true,
-    ...(args.section ? { section: args.section } : {}),
-    ...(args.full_page ? { fullPage: true } : {}),
-  })
-  return { name: detail.name, ...screenshotReport(result) }
+  const putBack = await deps.rehearse?.(target.context.spaceId, detail.name)
+  let result: ScreenshotResult
+  let undone: { added: number; changed: number; removed: number } | undefined
+  try {
+    result = await deps.capturePreview({
+      ...previewRequest(ctx, target, detail.name, deps, { image: true }),
+      budgetMs: TRY_BUDGET_MS,
+      steps: args.steps,
+      outline: true,
+      ...(args.section ? { section: args.section } : {}),
+      ...(args.full_page ? { fullPage: true } : {}),
+    })
+  } finally {
+    undone = await putBack?.()
+  }
+  const touched = undone && undone.added + undone.changed + undone.removed > 0
+  return {
+    name: detail.name,
+    ...screenshotReport(result),
+    ...(touched ? { rehearsal: { ...undone, note: 'The rows this try added, changed or removed have been put back; the preview is as it was.' } } : {}),
+  }
 }
 
 /** What both render-capable tools hand `capturePreview`: the caller, as themselves. */
@@ -1590,9 +1617,10 @@ export const APP_ACTIONS = [
       '`{ role: "button", name: "Submit vote" }`, `{ label: "Company" }`, `{ text: "Azonic" }`, ' +
       '`{ placeholder: "Search companies" }`. Steps: `click`, `hover`, `fill` (value), `choose` (a Select by its ' +
       'label, then the option named `value`), `press` (key, optional target), `scroll` (pixels, or a target to ' +
-      'bring into view), `wait` (ms), `band` (press a band button by its `action` id — the main act, e.g. New deal, lives there). The Tool runs against the space\'s REAL data under your own access: a ' +
-      'step that saves, saves — try on something you can put back, and say what you changed. Where headless ' +
-      'rendering is unavailable `available` is false with a reason.',
+      'bring into view), `wait` (ms), `band` (press a band button by its `action` id — the main act, e.g. New deal, lives there). A try is a ' +
+      'REHEARSAL for the Tool\'s own collections and state: whatever its steps add, change or delete there is put back after the ' +
+      'capture (`rehearsal` counts it), so test freely — there is nothing to clean up, and the sample rows stay. Notes and records ' +
+      'the Tool writes through the space are real and stay. Where headless rendering is unavailable `available` is false with a reason.',
     input: {
       space_id: spaceArg,
       name: nameArg,

@@ -44,8 +44,9 @@ export function useToolSections(nav: ToolNav | null | undefined, isAdmin: boolea
   return { sections, style, active, select, onBand: drawn && style === 'tabs', onSide: drawn && style === 'side' };
 }
 
+/** The sections as band tabs; a Tool with one screen names itself there instead, so the band never stands empty. */
 export function ToolSectionTabs({ nav, title }: { nav: ToolSections; title: string }) {
-  if (!nav.onBand) return null;
+  if (!nav.onBand) return nav.onSide ? null : <span className="truncate px-1 text-sm font-semibold text-fg">{title}</span>;
   return (
     <BandTabList
       tabs={nav.sections}

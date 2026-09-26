@@ -661,7 +661,9 @@ declare module '@visvine/tool-kit' {
     count?: number
     actions?: ReactNode
     empty?: ReactNode
-    /** Share the board's width (four columns or fewer) instead of a fixed 18rem. */
+    /** A second header line under the title — a column's total. */
+    subtitle?: ReactNode
+    /** Share the board's width (six columns or fewer, never scrolling) instead of a fixed 16rem. */
     fill?: boolean
     className?: string
     children?: ReactNode
@@ -717,6 +719,10 @@ declare module '@visvine/tool-kit' {
   export type RecordData = Record<string, unknown>
   export function optionsOf(field: FieldDef): Required<FieldOption>[]
   export function missingRequired(fields: FieldDef[], value: RecordData): string[]
+  /** Everyone named in the rows' person fields — pass to RecordDialog's \`people\`. */
+  export function peopleOf(fields: FieldDef[], rows: Array<{ data: RecordData }>): string[]
+  /** "1 status", "3 statuses": the word for \`count\` of it (default: many). */
+  export function plural(word: string, count?: number): string
   export function formatMoney(value: unknown, currency?: string): string
   export function formatNumber(value: unknown): string
   export function formatDate(value: unknown): string
@@ -730,9 +736,13 @@ declare module '@visvine/tool-kit' {
   /** A person's initials on their own hue. */
   export function PersonAvatar(props: { name: string; size?: 'xs' | 'sm' | 'md' }): JSX.Element
   export function hueOf(name: string): Hue
-  export function FieldInput(props: { field: FieldDef; value: unknown; onChange: (value: unknown) => void; id?: string; autoFocus?: boolean }): JSX.Element
-  export function RecordForm(props: { fields: FieldDef[]; value: RecordData; onChange: (next: RecordData) => void; errors?: string[] }): JSX.Element
-  export function RecordDialog(props: { open: boolean; title: ReactNode; fields: FieldDef[]; initial: RecordData; onClose: () => void; onSave: (value: RecordData) => Promise<void> | void; onDelete?: () => Promise<void> | void; saveLabel?: string }): JSX.Element
+  /** A hue as a CSS colour — chart slices in the same colours as the chips of their options. */
+  export function hueColor(hue: Hue): string
+  /** people: names a person field offers as it is typed. example: a filled record, shown as "e.g." placeholders. */
+  export function FieldInput(props: { field: FieldDef; value: unknown; onChange: (value: unknown) => void; id?: string; autoFocus?: boolean; people?: string[]; example?: RecordData }): JSX.Element
+  export function RecordForm(props: { fields: FieldDef[]; value: RecordData; onChange: (next: RecordData) => void; errors?: string[]; people?: string[]; example?: RecordData }): JSX.Element
+  /** people: the team a person field offers (the viewer is always added) — usually peopleOf(fields, rows). example: a sample row, shown as "e.g." placeholders on a new record. */
+  export function RecordDialog(props: { open: boolean; title: ReactNode; fields: FieldDef[]; initial: RecordData; onClose: () => void; onSave: (value: RecordData) => Promise<void> | void; onDelete?: () => Promise<void> | void; saveLabel?: string; people?: string[]; example?: RecordData }): JSX.Element
   export function RecordTable<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; rows: T[]; onOpen?: (row: T) => void; empty?: ReactNode; trailing?: (row: T) => ReactNode; maxHeight?: number; dueField?: string; isDone?: (row: T) => boolean }): JSX.Element
   export function RecordBoard<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; groupBy: string; rows: T[]; onMove: (row: T, toValue: string) => void; onOpen?: (row: T) => void; cardFields?: string[]; sumField?: string; dueField?: string; doneValues?: string[]; onAdd?: (columnValue: string) => void }): JSX.Element | null
   export function RecordsEmpty(props: { noun: string; onAdd?: () => void }): JSX.Element

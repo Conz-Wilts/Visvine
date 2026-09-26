@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react'
 import {
   Button,
   FieldValue,
-  formatDate,
   HueChip,
   Page,
   PersonAvatar,
+  Progress,
   RecordDialog,
   Spinner,
   Stat,
@@ -56,45 +56,68 @@ const SPEC: Spec = {
 type Entry = { id: string; mine: boolean; data: RecordData & { name: string; date: string } }
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const daysAgo = (n: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return iso(d)
+}
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const hasFlag = (v: unknown) => v !== false && v !== 0 && filled(v)
 const filled = (v: unknown) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
+const dayLabel = (date: string) => {
+  const d = new Date(`${date}T00:00:00`)
+  if (date === daysAgo(0)) return 'Today'
+  if (date === daysAgo(1)) return 'Yesterday'
+  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+}
 
+const checks = SPEC.fields.filter((f) => f.kind === 'boolean')
+const prose = SPEC.fields.filter((f) => f.kind === 'longtext' || f.kind === 'text')
+const flagLabel = SPEC.fields.find((f) => f.key === SPEC.flagField)?.label ?? 'Flagged'
+const rating = SPEC.fields.find((f) => f.kind === 'rating')
+const flagCount = (n: number) => `${n} ${n === 1 ? flagLabel.toLowerCase().replace(/s$/, '') : flagLabel.toLowerCase()}`
+
+/** One person's post: who, then each answer under its own label. The day is the group's heading, never repeated here. */
 function EntryView({ entry, onEdit }: { entry: Entry; onEdit?: () => void }) {
-  const checks = SPEC.fields.filter((f) => f.kind === 'boolean')
-  const prose = SPEC.fields.filter((f) => f.kind === 'longtext' || f.kind === 'text')
   const facts = SPEC.fields.filter((f) => f.kind !== 'boolean' && f.kind !== 'longtext' && f.kind !== 'text' && filled(entry.data[f.key]))
   const flagged = SPEC.flagField && hasFlag(entry.data[SPEC.flagField])
   return (
-    <article className="flex gap-3 border-b border-line-subtle py-4">
+    <article className="relative flex gap-3 border-b border-line-subtle py-4">
+      {flagged && <span aria-hidden className="absolute -left-3 bottom-4 top-4 w-0.5 rounded-full bg-danger" />}
       <PersonAvatar name={entry.data.name} size="sm" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="font-medium text-fg">{entry.data.name}</span>
-          <span className="text-xs text-fg-muted">{formatDate(entry.data.date)}</span>
-          {flagged && <HueChip hue="red">{SPEC.fields.find((f) => f.key === SPEC.flagField)?.label ?? 'Flagged'}</HueChip>}
+          {flagged && <HueChip hue="red">{flagLabel.replace(/s$/, '')}</HueChip>}
           {facts.map((f) => (
-            <span key={f.key} className="text-xs text-fg-muted">
+            <span key={f.key} className="inline-flex items-center gap-1 text-xs text-fg-muted">
+              {f.label}
               <FieldValue field={f} value={entry.data[f.key]} compact />
             </span>
           ))}
           {onEdit && (
             <Button size="sm" variant="ghost" onClick={onEdit} className="ml-auto">
-              Edit update
+              Edit
             </Button>
           )}
         </div>
         {checks.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {checks.map((f) => (entry.data[f.key] ? <HueChip key={f.key} hue="green">✓ {f.label}</HueChip> : <HueChip key={f.key}>{f.label}</HueChip>))}
+            {checks.map((f) =>
+              entry.data[f.key] ? (
+                <HueChip key={f.key} hue="green">✓ {f.label}</HueChip>
+              ) : (
+                <span key={f.key} className="rounded-md border border-dashed border-line px-2 py-0.5 text-xs text-fg-subtle line-through">{f.label}</span>
+              ),
+            )}
           </div>
         )}
         {prose.some((f) => filled(entry.data[f.key])) && (
           <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {prose.map((f) =>
               filled(entry.data[f.key]) ? (
-                <div key={f.key} className="min-w-0">
-                  <dt className="text-xs font-medium uppercase tracking-wide text-fg-muted">{f.label}</dt>
+                <div key={f.key} className={`min-w-0 ${f.key === SPEC.flagField ? 'sm:col-span-2' : ''}`}>
+                  <dt className="text-xs font-medium text-fg-muted">{f.label}</dt>
                   <dd className={`mt-0.5 whitespace-pre-wrap text-sm ${f.key === SPEC.flagField ? 'font-medium text-danger' : 'text-fg'}`}>{String(entry.data[f.key])}</dd>
                 </div>
               ) : null,
@@ -106,19 +129,79 @@ function EntryView({ entry, onEdit }: { entry: Entry; onEdit?: () => void }) {
   )
 }
 
+/** People down, the last seven days across: how much of each day's list each person did. */
+function HabitGrid({ entries, me }: { entries: Entry[]; me: string }) {
+  // From the first day anyone logged, at most a week: a new Tool is not a wall of empty days.
+  const first = entries.reduce((min, e) => (e.data.date < min ? e.data.date : min), daysAgo(0))
+  const span = Math.min(7, Math.max(3, Math.round((Date.parse(daysAgo(0)) - Date.parse(first)) / 86_400_000) + 1))
+  const days = Array.from({ length: span }, (_, i) => daysAgo(span - 1 - i))
+  const streak = (name: string) => {
+    let n = 0
+    for (let i = 0; entries.some((e) => e.data.name === name && e.data.date === daysAgo(i)); i++) n++
+    return n
+  }
+  const people = [...new Set([...entries.map((e) => e.data.name), me])].sort((a, b) => a.localeCompare(b))
+  const cell = (name: string, date: string) => entries.find((e) => e.data.name === name && e.data.date === date)
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-sm font-semibold text-fg">Last {span} days</h2>
+        <span className="flex items-center gap-1.5 text-xs text-fg-muted">
+          None
+          <span className="size-3 rounded-sm bg-surface-muted" />
+          <span className="size-3 rounded-sm bg-success-line" />
+          <span className="size-3 rounded-sm bg-success" />
+          All {checks.length}
+          <span className="ml-2 size-3 rounded-sm border border-dashed border-line" />
+          Not logged
+        </span>
+      </div>
+      <div className="grid items-center gap-1.5" style={{ gridTemplateColumns: `minmax(8rem, 12rem) repeat(${span}, minmax(2rem, 1fr)) 4rem 4rem` }}>
+        <span />
+        {days.map((d) => (
+          <span key={d} className="text-center text-xs text-fg-muted">{d === daysAgo(0) ? 'Today' : new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' })}</span>
+        ))}
+        <span className="text-right text-xs text-fg-muted">Done</span>
+        <span className="text-right text-xs text-fg-muted">Streak</span>
+        {people.map((name) => {
+          const shares = days.map((d) => {
+            const e = cell(name, d)
+            return e ? checks.filter((f) => e.data[f.key]).length / checks.length : null
+          })
+          const logged = shares.filter((v): v is number => v !== null)
+          const done = logged.reduce((a, b) => a + b, 0) * checks.length
+          const run = streak(name)
+          return [
+            <span key={`${name}-n`} className="flex min-w-0 items-center gap-2 text-sm text-fg">
+              <PersonAvatar name={name} />
+              <span className="truncate">{name}</span>
+            </span>,
+            ...shares.map((v, i) => (
+              <span
+                key={`${name}-${i}`}
+                title={v === null ? 'Not logged' : `${Math.round(v * checks.length)} of ${checks.length}`}
+                className={`h-7 rounded-md ${v === null ? 'border border-dashed border-line' : v >= 1 ? 'bg-success' : v > 0 ? 'bg-success-line' : 'bg-surface-muted'}`}
+              />
+            )),
+            <span key={`${name}-r`} className="text-right text-sm tabular-nums text-fg" title={`${Math.round(done)} of ${span * checks.length} done`}>
+              {Math.round(done)}
+              <span className="text-fg-muted">/{span * checks.length}</span>
+            </span>,
+            <span key={`${name}-s`} className={`text-right text-sm font-medium tabular-nums ${run >= 3 ? 'text-warning' : 'text-fg-muted'}`}>
+              {run > 0 ? `${run} ${run === 1 ? 'day' : 'days'}` : '—'}
+            </span>,
+          ]
+        })}
+      </div>
+    </section>
+  )
+}
+
 export default function App() {
   const visvine = useVisvine()
   const [section] = useSection()
-  const today = iso(new Date())
-  const samples = useMemo(
-    () =>
-      SPEC.sample.map(({ daysAgo, ...rest }) => {
-        const d = new Date()
-        d.setDate(d.getDate() - daysAgo)
-        return { ...rest, date: iso(d) }
-      }),
-    [],
-  )
+  const today = daysAgo(0)
+  const samples = useMemo(() => SPEC.sample.map(({ daysAgo: n, ...rest }) => ({ ...rest, date: daysAgo(n) })), [])
   const sampleRows = useSampleRows('entries', samples)
   const { data, loading } = useCollection<Entry['data']>('entries', { order: 'desc', limit: 200 })
   const entries = (data ?? []) as Entry[]
@@ -131,21 +214,15 @@ export default function App() {
   const flag = (e: Entry) => Boolean(SPEC.flagField && hasFlag(e.data[SPEC.flagField]))
   const todays = entries.filter((e) => e.data.date === today && e !== mineToday).sort((a, b) => Number(flag(b)) - Number(flag(a)))
   const people = [...new Set(entries.map((e) => e.data.name))]
+  if (!people.includes(me)) people.push(me)
   const posted = new Set(entries.filter((e) => e.data.date === today).map((e) => e.data.name))
   const waiting = people.filter((p) => !posted.has(p) && p !== me)
   const flagged = entries.filter((e) => e.data.date === today && flag(e)).length
-
-  const streak = useMemo(() => {
-    const days = new Set(entries.filter((e) => e.mine && e.data.name === me).map((e) => e.data.date))
-    let n = 0
-    const d = new Date()
-    if (!days.has(iso(d))) d.setDate(d.getDate() - 1)
-    while (days.has(iso(d))) {
-      n++
-      d.setDate(d.getDate() - 1)
-    }
-    return n
-  }, [entries, me])
+  const week = entries.filter((e) => e.data.date >= daysAgo(6))
+  const todaysAll = entries.filter((e) => e.data.date === today)
+  const ratings = (todaysAll.length ? todaysAll : week).map((e) => Number(rating ? e.data[rating.key] : NaN)).filter((n) => Number.isFinite(n) && n > 0)
+  const avgRating = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null
+  const todayChecks = checks.map((f) => ({ field: f, done: entries.filter((e) => e.data.date === today && e.data[f.key]).length }))
 
   const history = useMemo(() => {
     const map = new Map<string, Entry[]>()
@@ -183,16 +260,20 @@ export default function App() {
   if (section === 'history') {
     return (
       <Page width="normal">
-      <SampleData state={sampleRows} />
+        <SampleData state={sampleRows} />
+        {checks.length > 0 && entries.length > 0 && <HabitGrid entries={entries} me={me} />}
         {history.length === 0 ? (
           <p className="py-8 text-center text-sm text-fg-muted">Earlier days show here.</p>
         ) : (
           history.map(([day, list]) => (
             <section key={day}>
-              <h2 className="border-b border-line-subtle pb-2 text-sm font-semibold text-fg">
-                {formatDate(day)} <span className="font-normal text-fg-muted">· {list.length}</span>
+              <h2 className="flex items-baseline gap-2 border-b border-line-subtle pb-2 text-sm font-semibold text-fg">
+                {dayLabel(day)}
+                <span className="font-normal text-fg-muted">
+                  {[`${list.length} posted`, SPEC.flagField && list.some(flag) ? flagCount(list.filter(flag).length) : null].filter(Boolean).join(' · ')}
+                </span>
               </h2>
-              {list.map((e) => (
+              {[...list].sort((a, b) => Number(flag(b)) - Number(flag(a))).map((e) => (
                 <EntryView key={e.id} entry={e} />
               ))}
             </section>
@@ -207,41 +288,54 @@ export default function App() {
     <Page width="normal">
       <SampleData state={sampleRows} />
       <StatRow>
-        <Stat lead label="Posted today" value={posted.size} hint={`of ${Math.max(people.length, posted.size)} people`} />
-        <Stat label="Your streak" value={streak} hint={streak === 1 ? 'day' : 'days'} />
+        <div className="flex flex-col gap-2">
+          <Stat lead label="Posted today" value={`${posted.size} of ${people.length}`} />
+          <Progress value={posted.size} max={people.length} hue="green" />
+        </div>
         {SPEC.flagField && (
-          <Stat label={SPEC.fields.find((f) => f.key === SPEC.flagField)?.label ?? 'Flagged'} value={flagged} tone={flagged > 0 ? 'danger' : undefined} hint={flagged ? 'today' : undefined} />
+          <Stat label={flagLabel} value={flagged} tone={flagged > 0 ? 'danger' : undefined} hint={flagged ? 'need a hand today' : 'none today'} />
         )}
+        {rating && avgRating !== null && <Stat label={`${rating.label} ${todaysAll.length ? 'today' : 'this week'}`} value={`${avgRating.toFixed(1)} / 5`} hint="team average" />}
+        {!rating && <Stat label="This week" value={week.length} hint={week.length === 1 ? 'post' : 'posts'} />}
       </StatRow>
 
-      {mineToday ? (
-        <EntryView entry={mineToday} onEdit={() => setPosting(true)} />
-      ) : (
-        <div className="flex items-center justify-between gap-4 rounded-lg bg-surface-subtle px-4 py-3">
-          <span className="text-sm text-fg">You have not posted today.</span>
-          <Button variant="primary" onClick={() => setPosting(true)}>
-            Post {SPEC.noun}
-          </Button>
-        </div>
+      {todayChecks.length > 0 && posted.size > 0 && (
+        <section className={`grid grid-cols-2 gap-x-6 gap-y-3 ${todayChecks.length === 3 ? 'sm:grid-cols-3' : todayChecks.length >= 4 ? 'sm:grid-cols-4' : ''}`}>
+          {todayChecks.map(({ field, done }) => (
+            <Progress key={field.key} value={done} max={posted.size} hue="green" label={`${field.label} · ${done}/${posted.size}`} />
+          ))}
+        </section>
       )}
 
-      <section>
-        {todays.map((e) => (
-          <EntryView key={e.id} entry={e} />
-        ))}
-      </section>
-
-      {waiting.length > 0 && (
-        <section className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
-          <span>Not posted yet</span>
+      {(waiting.length > 0 || !mineToday) && (
+        <section className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-fg-muted">Not posted yet</span>
+          {!mineToday && (
+            <button
+              type="button"
+              onClick={() => setPosting(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-accent bg-accent-soft py-0.5 pl-0.5 pr-2.5 font-medium text-fg hover:opacity-90"
+            >
+              <PersonAvatar name={me} />
+              You
+            </button>
+          )}
           {waiting.map((p) => (
-            <span key={p} className="inline-flex items-center gap-1.5 rounded-full bg-surface-subtle py-0.5 pl-0.5 pr-2.5">
+            <span key={p} className="inline-flex items-center gap-1.5 rounded-full border border-line-subtle py-0.5 pl-0.5 pr-2.5">
               <PersonAvatar name={p} />
               <span className="text-fg-secondary">{p}</span>
             </span>
           ))}
         </section>
       )}
+
+      <section>
+        {mineToday && <EntryView entry={mineToday} onEdit={() => setPosting(true)} />}
+        {todays.map((e) => (
+          <EntryView key={e.id} entry={e} />
+        ))}
+      </section>
+
       {dialog}
     </Page>
   )

@@ -168,7 +168,7 @@ export function KanbanBoard({ onMove, className, children }: KanbanBoardProps) {
           </div>
         )}
         <div className="relative">
-          <div ref={scroller} className={cx('flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1', drag && 'cursor-grabbing select-none', className)}>
+          <div ref={scroller} className={cx('flex snap-x snap-proximity items-start gap-3 overflow-x-auto pb-1', drag && 'cursor-grabbing select-none', className)}>
             {children}
           </div>
           {more > 0 && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-linear-to-l from-surface to-transparent" />}
@@ -185,15 +185,17 @@ export interface KanbanColumnProps {
   count?: number;
   /** Rendered in the column header, opposite the title. */
   actions?: ReactNode;
+  /** A second header line under the title — a column's total. */
+  subtitle?: ReactNode;
   /** Shown when the column has no cards. */
   empty?: ReactNode;
-  /** Share the board's width with the other columns instead of a fixed 18rem — for a board of four or fewer. */
+  /** Share the board's width with the other columns instead of a fixed 16rem — for a board of six or fewer, which then never scrolls. */
   fill?: boolean;
   className?: string;
   children?: ReactNode;
 }
 
-export function KanbanColumn({ id, title, count, actions, empty, fill = false, className, children }: KanbanColumnProps) {
+export function KanbanColumn({ id, title, count, actions, subtitle, empty, fill = false, className, children }: KanbanColumnProps) {
   const board = useContext(BoardContext);
   const isOver = board?.drag?.over?.columnId === id;
   const hasCards = Array.isArray(children) ? children.length > 0 : Boolean(children);
@@ -204,20 +206,21 @@ export function KanbanColumn({ id, title, count, actions, empty, fill = false, c
         {...attrs}
         className={cx(
           'flex snap-start flex-col rounded-lg border',
-          fill ? 'min-w-52 flex-1' : 'w-64 shrink-0',
+          fill ? 'min-w-0 flex-1 basis-0' : 'w-64 shrink-0',
           isOver ? 'border-accent bg-accent-soft' : 'border-transparent bg-surface-subtle',
           className,
         )}
       >
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+        <div className="flex min-h-9 items-center justify-between gap-2 px-3 py-2">
+          <span className="inline-flex min-w-0 items-center gap-1.5 truncate text-[13px] font-semibold text-fg-secondary">
             {title}
             {count !== undefined && (
-              <span className="rounded-full bg-surface-muted px-1.5 text-[11px] font-semibold normal-case tracking-normal">{count}</span>
+              <span className="rounded-full bg-surface-muted px-1.5 text-[11px] font-semibold text-fg-muted">{count}</span>
             )}
           </span>
-          {actions}
+          {actions && <span className="shrink-0">{actions}</span>}
         </div>
+        {subtitle !== undefined && <div className="-mt-1.5 min-h-5 truncate px-3 pb-1.5 text-xs tabular-nums text-fg-muted">{subtitle}</div>}
         <div className="flex min-h-10 flex-col gap-2 px-2 pb-2">
           {children}
           {!hasCards && empty !== undefined && (

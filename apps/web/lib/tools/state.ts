@@ -21,7 +21,7 @@
  */
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
-import { targetKey, type ResolvedTarget } from './target'
+import { previewTargetKey, targetKey, type ResolvedTarget } from './target'
 
 /** Largest single value, serialized. Small on purpose — see the file comment. */
 export const STATE_MAX_BYTES = 64 * 1024
@@ -42,8 +42,11 @@ export type StateSetResult =
 
 export type StateScope = 'user' | 'install'
 
-/** Preview state, keyed by `targetKey` and scope owner, then by the Tool's own key. */
-const previewState = new Map<string, Map<string, unknown>>()
+/**
+ * Preview state, keyed by `targetKey` and scope owner, then by the Tool's own
+ * key. On `globalThis` so every route bundle of one process sees one map.
+ */
+const previewState: Map<string, Map<string, unknown>> = ((globalThis as { __vvPreviewToolState?: Map<string, Map<string, unknown>> }).__vvPreviewToolState ??= new Map())
 
 /** Whose value a scope names: the viewer for `user`, '' — everyone — for `install`. */
 function ownerOf(t: ResolvedTarget, scope: StateScope): string {
@@ -144,6 +147,19 @@ export async function setToolState(
     })
   }
   return { ok: true }
+}
+
+/**
+ * What a working copy's preview state holds now, and a way to put it back —
+ * `try_tool` rehearses, so what its steps store is undone after the capture.
+ */
+export function snapshotPreviewToolState(spaceId: string, name: string): () => void {
+  const prefix = `${previewTargetKey(spaceId, name)}\u0000`
+  const saved = [...previewState].filter(([key]) => key.startsWith(prefix)).map(([key, bucket]) => [key, new Map(bucket)] as const)
+  return () => {
+    for (const key of [...previewState.keys()]) if (key.startsWith(prefix)) previewState.delete(key)
+    for (const [key, bucket] of saved) previewState.set(key, bucket)
+  }
 }
 
 /** Drop every preview's state. Tests only. */

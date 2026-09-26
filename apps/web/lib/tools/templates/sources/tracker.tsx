@@ -6,6 +6,8 @@ import {
   MonthCalendar,
   optionsOf,
   Page,
+  peopleOf,
+  plural,
   RecordBoard,
   RecordDialog,
   RecordsEmpty,
@@ -20,6 +22,7 @@ import {
   useCollection,
   useSampleRows,
   SampleData,
+  useSection,
   useVisvine,
   type FieldDef,
   type RecordData,
@@ -101,7 +104,8 @@ const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function App() {
   const visvine = useVisvine()
-  const sampleRows = useSampleRows('items', useMemo(() => resolveDates(SPEC.sample), []))
+  const samples = useMemo(() => resolveDates(SPEC.sample), [])
+  const sampleRows = useSampleRows('items', samples)
   const { data, loading } = useCollection<RecordData>('items', { limit: 200 })
   const rows: Row[] = data ?? []
 
@@ -113,7 +117,9 @@ export default function App() {
     { value: 'table', label: 'Table' },
     ...(dateField ? [{ value: 'calendar', label: 'Calendar' }] : []),
   ]
-  const [view, setView] = useState(views[0].value)
+  // The view is the band's section; a Tool with one view has none.
+  const [section] = useSection()
+  const view = views.some((v) => v.value === section) ? section! : views[0].value
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
   const [onlyOverdue, setOnlyOverdue] = useState(false)
@@ -154,6 +160,11 @@ export default function App() {
   const fmt = (n: number) => (sumField?.kind === 'money' ? formatMoney(n, sumField.currency) : averaged ? `${Math.round(n)}${sumField?.kind === 'percent' ? '%' : ''}` : formatNumber(n))
   const firstDone = group && SPEC.doneValues?.[0]
   const doneCount = firstDone ? rows.filter((r) => String(r.data[group.key] ?? '') === firstDone).length : 0
+  const closedCount = rows.filter(isDone).length
+  // The first finish (Won, Fixed) out of everything closed, when there is more than one way to finish.
+  const rate = (SPEC.doneValues?.length ?? 0) > 1 && closedCount ? Math.round((doneCount / closedCount) * 100) : null
+  const openTotal = total(open)
+  const openCount = open.filter((r) => Number.isFinite(Number(r.data[sumField?.key ?? '']))).length
 
   const save = async (value: RecordData) => {
     if (editing === 'new') {
@@ -187,18 +198,18 @@ export default function App() {
             lead
             label={averaged ? `Average ${sumField.label.toLowerCase()}` : SPEC.doneValues?.length ? `Open ${sumField.label.toLowerCase()}` : `Total ${sumField.label.toLowerCase()}`}
             value={fmt(total(SPEC.doneValues?.length ? open : rows))}
-            hint={`${open.length} open ${open.length === 1 ? SPEC.noun : SPEC.plural}`}
+            hint={!averaged && openCount > 0 ? `avg ${fmt(openTotal / openCount)} per ${SPEC.noun}` : `across ${open.length} open`}
           />
         ) : (
           <Stat lead label={`Open ${SPEC.plural}`} value={open.length} hint={`of ${rows.length}`} />
         )}
-        {sumField && <Stat label={title(SPEC.plural)} value={rows.length} hint={`${open.length} open`} />}
+        {sumField && <Stat label={`Open ${SPEC.plural}`} value={open.length} hint={`of ${rows.length} in all`} />}
         {firstDone && (
           <Stat
             label={firstDone}
             value={doneCount}
             tone={doneCount > 0 ? 'success' : undefined}
-            hint={sumField && !averaged ? fmt(total(rows.filter((r) => String(r.data[group!.key] ?? '') === firstDone))) : `${rows.length ? Math.round((doneCount / rows.length) * 100) : 0}% of all`}
+            hint={[sumField && !averaged ? fmt(total(rows.filter((r) => String(r.data[group!.key] ?? '') === firstDone))) : null, rate !== null ? `${rate}% of closed` : `${rows.length ? Math.round((doneCount / rows.length) * 100) : 0}% of all`].filter(Boolean).join(' · ')}
           />
         )}
         {dateField && (
@@ -206,7 +217,7 @@ export default function App() {
             label="Overdue"
             value={overdue}
             tone={overdue > 0 ? 'danger' : undefined}
-            hint={overdue ? (onlyOverdue ? 'Showing only these' : 'Show them') : `past ${dateField.label.toLowerCase()}`}
+            hint={overdue ? (onlyOverdue ? 'Show all' : 'Show them') : 'none'}
             onClick={overdue ? () => setOnlyOverdue(!onlyOverdue) : undefined}
             active={onlyOverdue}
           />
@@ -217,9 +228,6 @@ export default function App() {
         search={search}
         onSearch={setSearch}
         searchPlaceholder={`Search ${SPEC.plural}`}
-        views={views}
-        view={view}
-        onView={setView}
         filters={
           group ? (
             <div className="w-44">
@@ -228,7 +236,7 @@ export default function App() {
                 aria-label={group.label}
                 value={filter}
                 onValueChange={setFilter}
-                options={[{ value: '', label: `All ${group.label.toLowerCase()}s` }, ...optionsOf(group).map((o) => ({ value: o.value, label: o.label }))]}
+                options={[{ value: '', label: `All ${plural(group.label.toLowerCase())}` }, ...optionsOf(group).map((o) => ({ value: o.value, label: o.label }))]}
               />
             </div>
           ) : undefined
@@ -300,6 +308,8 @@ export default function App() {
         onSave={save}
         onDelete={editing && editing !== 'new' ? remove : undefined}
         saveLabel={editing === 'new' ? `Add ${SPEC.noun}` : 'Save'}
+        people={peopleOf(SPEC.fields, rows)}
+        example={samples[0]}
       />
     </Page>
   )

@@ -34,7 +34,8 @@ interface Spec {
   reasons?: string[]
   /** The people who start on the board. */
   people: string[]
-  sample: Array<{ person: string; amount: number; reason?: string; note?: string; daysAgo: number }>
+  /** `from` is who gave it; left out, it is someone else on the board. */
+  sample: Array<{ person: string; amount: number; reason?: string; note?: string; daysAgo: number; from?: string }>
 }
 
 // @spec
@@ -72,10 +73,11 @@ export default function App() {
   const [section] = useSection()
   const samples = useMemo(
     () =>
-      SPEC.sample.map(({ daysAgo, ...rest }) => {
+      SPEC.sample.map(({ daysAgo, ...rest }, i) => {
         const d = new Date()
         d.setDate(d.getDate() - daysAgo)
-        return { ...rest, date: iso(d) } as RecordData
+        const others = SPEC.people.filter((p) => p !== rest.person)
+        return { ...rest, from: rest.from ?? others[i % Math.max(1, others.length)], date: iso(d) } as RecordData
       }),
     [],
   )
@@ -171,21 +173,7 @@ export default function App() {
       <SampleData state={sampleRows} />
         <ul className="flex flex-col">
           {entries.map((e) => (
-            <li key={e.id} className="flex items-start gap-3 border-b border-line-subtle py-3">
-              <PersonAvatar name={e.data.person} size="sm" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-fg">
-                  <span className="font-medium">{e.data.person}</span>
-                  <span className="text-fg-muted"> got </span>
-                  <span className="font-medium tabular-nums">
-                    {e.data.amount} {unitFor(e.data.amount)}
-                  </span>
-                  {e.data.reason && <span className="text-fg-muted"> · {e.data.reason}</span>}
-                </p>
-                {e.data.note && <p className="mt-0.5 text-sm text-fg-secondary">{e.data.note}</p>}
-              </div>
-              <span className="shrink-0 text-xs text-fg-muted">{formatDate(e.data.date)}</span>
-            </li>
+            <EntryRow key={e.id} entry={e} />
           ))}
         </ul>
         {dialog}
@@ -193,36 +181,75 @@ export default function App() {
     )
   }
 
+  const leader = ranking[0]?.total ? ranking[0] : null
+  const periodLabel = PERIODS.find((p) => p.value === period)?.label.toLowerCase() ?? ''
+  const inPeriod = entries.filter((e) => !since || e.data.date >= since)
+  const reasonCounts = (SPEC.reasons ?? []).map((r) => ({ reason: r, n: inPeriod.filter((e) => e.data.reason === r).length })).filter((r) => r.n > 0).sort((a, b) => b.n - a.n)
   return (
-    <Page width="normal">
+    <Page>
       <SampleData state={sampleRows} />
       <StatRow>
-        <Stat label="Leader" value={ranking[0]?.total ? ranking[0].person : '—'} hint={ranking[0]?.total ? `${ranking[0].total} ${SPEC.unit}` : undefined} />
-        <Stat label={`${SPEC.unit.charAt(0).toUpperCase() + SPEC.unit.slice(1)} given`} value={periodTotal} />
-        <Stat label="People" value={people.length} />
+        <Stat lead label={`Leader · ${period === 'all' ? 'all time' : `this ${periodLabel}`}`} value={leader ? leader.person : '—'} hint={leader ? `${leader.total} ${unitFor(leader.total)}` : undefined} />
+        <Stat label={`${SPEC.unit.charAt(0).toUpperCase() + SPEC.unit.slice(1)} given`} value={periodTotal} hint={`${inPeriod.length} ${inPeriod.length === 1 ? 'time' : 'times'}`} />
+        <Stat label="People on the board" value={ranking.filter((r) => r.total > 0).length} hint={`of ${people.length}`} />
+        {reasonCounts[0] && <Stat label="Most given for" value={reasonCounts[0].reason} hint={`${reasonCounts[0].n} ${reasonCounts[0].n === 1 ? 'time' : 'times'}`} />}
       </StatRow>
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-fg">Ranking</h2>
-        <Segmented label="Period" options={PERIODS} value={period} onChange={setPeriod} />
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-5">
+        <section className="flex flex-col gap-2 md:col-span-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-fg">Ranking</h2>
+            <Segmented label="Period" options={PERIODS} value={period} onChange={setPeriod} />
+          </div>
+          <ol className="flex flex-col">
+            {ranking.map((r) => {
+              const first = r.place === 1 && r.total > 0
+              return (
+                <li key={r.person} className={`flex items-center gap-3 border-b border-line-subtle px-2 py-2.5 ${first ? 'rounded-lg border-transparent bg-accent-soft' : ''}`}>
+                  <span className={`w-5 text-center text-sm font-semibold tabular-nums ${first ? 'text-accent-strong' : 'text-fg-muted'}`}>{r.place}</span>
+                  <PersonAvatar name={r.person} size={first ? 'md' : 'sm'} />
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <span className={`truncate text-fg ${first ? 'text-base font-semibold' : 'text-sm font-medium'}`}>{r.person}</span>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+                      <div className={`h-full rounded-full transition-all ${first ? 'bg-accent-strong' : 'bg-fg-subtle'}`} style={{ width: `${(r.total / top) * 100}%` }} />
+                    </div>
+                  </div>
+                  <span className="w-20 text-right text-sm font-semibold tabular-nums text-fg">
+                    {r.total} <span className="font-normal text-fg-muted">{unitFor(r.total)}</span>
+                  </span>
+                </li>
+              )
+            })}
+          </ol>
+        </section>
+        <section className="flex flex-col gap-2 md:col-span-2">
+          <h2 className="text-sm font-semibold text-fg">Recent</h2>
+          <ul className="flex flex-col">
+            {entries.slice(0, 6).map((e) => (
+              <EntryRow key={e.id} entry={e} />
+            ))}
+          </ul>
+        </section>
       </div>
-      <ol className="flex flex-col">
-        {ranking.map((r) => (
-          <li key={r.person} className="flex items-center gap-4 border-b border-line-subtle py-3">
-            <span className={`w-6 text-center text-sm font-semibold tabular-nums ${r.place === 1 && r.total > 0 ? 'text-accent' : 'text-fg-muted'}`}>{r.place}</span>
-            <PersonAvatar name={r.person} size="sm" />
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span className="truncate text-sm font-medium text-fg">{r.person}</span>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
-                <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(r.total / top) * 100}%` }} />
-              </div>
-            </div>
-            <span className="w-20 text-right text-sm tabular-nums text-fg">
-              {r.total} <span className="text-fg-muted">{unitFor(r.total)}</span>
-            </span>
-          </li>
-        ))}
-      </ol>
       {dialog}
     </Page>
+  )
+}
+
+/** Who got how much, from whom and why — one line, the note under it. */
+function EntryRow({ entry: e }: { entry: Entry }) {
+  return (
+    <li className="flex items-start gap-3 border-b border-line-subtle py-3">
+      <PersonAvatar name={e.data.person} size="sm" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-fg">
+          <span className="font-medium">{e.data.person}</span>
+          <span className="font-semibold tabular-nums text-accent-strong"> +{e.data.amount}</span>
+          {e.data.from && <span className="text-fg-muted"> from {e.data.from}</span>}
+        </p>
+        {e.data.reason && <span className="mt-1 inline-flex rounded-md bg-surface-muted px-1.5 py-0.5 text-xs text-fg-secondary">{e.data.reason}</span>}
+        {e.data.note && <p className="mt-1 text-sm text-fg-secondary">{e.data.note}</p>}
+      </div>
+      <span className="shrink-0 text-xs text-fg-muted">{formatDate(e.data.date)}</span>
+    </li>
   )
 }

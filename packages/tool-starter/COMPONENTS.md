@@ -486,7 +486,7 @@ Props: field: FieldDef · value · onChange(value)
 
 Every field of a record, two to a row, from the schema. Inside your own dialog or page. RecordDialog is this in a Modal with Save.
 
-Props: fields: FieldDef[] · value · onChange · errors?
+Props: fields: FieldDef[] · value · onChange · errors? · people? · example?
 
 ```tsx
 <RecordForm fields={[{ key: 'name', label: 'Name', kind: 'text' }, { key: 'value', label: 'Value', kind: 'money' }]} value={{}} onChange={() => {}} />
@@ -496,7 +496,7 @@ Props: fields: FieldDef[] · value · onChange · errors?
 
 A record's form in the app's dialog with Save, Cancel and Delete. Adding or editing one record — the band action opens it empty, a row opens it filled.
 
-Props: open · title · fields · initial · onClose · onSave(value) · onDelete? · saveLabel?
+Props: open · title · fields · initial · onClose · onSave(value) · onDelete? · saveLabel? · people? (peopleOf(fields, rows): a picker for person fields) · example? (a sample row: "e.g." placeholders)
 
 ```tsx
 <RecordDialog open={false} title="New deal" fields={[{ key: 'name', label: 'Name', kind: 'text', required: true }]} initial={{}} onClose={() => {}} onSave={() => {}} />
@@ -524,7 +524,7 @@ Props: fields · groupBy · rows · onMove(row, value) · onOpen? · cardFields?
 
 ### SampleData
 
-One Sample data label with a Clear action for seeded demonstration rows. Once at the top of each page while sample rows remain; never prefix each record title.
+One Sample data label with a Clear action for seeded demonstration rows. Once per page while sample rows remain — it draws itself at the foot; never prefix each record title.
 
 Props: state: the return value of useSampleRows(collection, rows)
 

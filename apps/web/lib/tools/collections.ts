@@ -320,6 +320,31 @@ export async function dropPreviewRows(spaceId: string, name: string): Promise<nu
   return result.count
 }
 
+/**
+ * A working copy's preview rows as they stand, and a way to put them back:
+ * rows added since are deleted, rows changed get their data back, rows
+ * deleted come back with their ids. `try_tool` rehearses — a test record
+ * never outlives the capture it was made for.
+ */
+export async function snapshotPreviewRows(spaceId: string, name: string): Promise<() => Promise<{ added: number; changed: number; removed: number }>> {
+  const where = { spaceId, targetKey: previewTargetKey(spaceId, name) }
+  const before = await prisma.appToolRecord.findMany({ where })
+  const was = new Map(before.map((r) => [r.id, r]))
+  return async () => {
+    const after = await prisma.appToolRecord.findMany({ where, select: { id: true, updatedAt: true } })
+    const now = new Set(after.map((r) => r.id))
+    const added = after.filter((r) => !was.has(r.id)).map((r) => r.id)
+    const changed = after.filter((r) => was.has(r.id) && was.get(r.id)!.updatedAt.getTime() !== r.updatedAt.getTime()).map((r) => was.get(r.id)!)
+    const removed = before.filter((r) => !now.has(r.id))
+    await prisma.$transaction([
+      prisma.appToolRecord.deleteMany({ where: { id: { in: added } } }),
+      ...changed.map((r) => prisma.appToolRecord.update({ where: { id: r.id }, data: { data: r.data as Prisma.InputJsonValue } })),
+      prisma.appToolRecord.createMany({ data: removed.map((r) => ({ ...r, data: r.data as Prisma.InputJsonValue })) }),
+    ])
+    return { added: added.length, changed: changed.length, removed: removed.length }
+  }
+}
+
 /** What stayed detached past its time goes. */
 export async function purgeDetachedRows(now: Date = new Date()): Promise<number> {
   const before = new Date(now.getTime() - DETACHED_DAYS * 86_400_000)

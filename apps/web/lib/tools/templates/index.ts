@@ -105,6 +105,7 @@ function fieldProblems(fields: TemplateField[]): string[] {
     if (keys.has(f.key)) problems.push(`field key "${f.key}" is used twice`)
     keys.add(f.key)
     if ((f.kind === 'select' || f.kind === 'tags') && !(f.options && f.options.length >= 2)) problems.push(`${f.key} is a ${f.kind} and needs at least two options`)
+    if (f.kind === 'number' && /%|percent|progress|completion/i.test(f.label)) problems.push(`${f.key} ("${f.label}") is a share — make it kind "percent" (0–100), which draws a bar`)
   }
   if (fields[0] && fields[0].kind !== 'text') problems.push('the first field is the title, so its kind is text')
   return problems
@@ -167,8 +168,15 @@ const tracker: ToolTemplate = {
   railIcon: 'kanban',
   facts: (spec) => {
     const s = spec as z.infer<typeof recordsSpec>
+    const kind = (key?: string) => s.fields.find((f) => f.key === key)?.kind
+    // Each way of looking at the rows is a section on the band, as every page in the app has its tabs there.
+    const sections = [
+      ...(kind(s.groupBy) === 'select' ? [{ id: 'board', label: 'Board' }] : []),
+      { id: 'table', label: 'Table' },
+      ...(kind(s.dateField) === 'date' ? [{ id: 'calendar', label: 'Calendar' }] : []),
+    ]
     return {
-      surfaces: { nav: null, actions: [{ id: 'new', label: `New ${s.noun}` }] },
+      surfaces: { nav: sections.length > 1 ? { style: 'tabs', sections } : null, actions: [{ id: 'new', label: `New ${s.noun}` }] },
       collections: { items: { schema: schemaForFields(s.fields), read: 'all', write: 'all', maxRows: 5000 } },
     }
   },
@@ -300,20 +308,20 @@ const checkinSpec = z.object({
   noun,
   fields: z.array(fieldSchema).min(1).max(6),
   flagField: z.string().optional(),
-  sample: z.array(row).min(3).max(16),
+  sample: z.array(row).min(3).max(28),
 })
 
 const checkin: ToolTemplate = {
   id: 'checkin',
   title: 'Check-ins',
-  summary: "A short form each person fills in each day — standup, mood, habit — with today's posts, a streak and the history by day.",
+  summary: "A short form each person fills in each day — standup, mood, habit — with today's posts, who has not posted, and the history by day (a person × day grid when the answers are habits).",
   keywords: ['standup', 'standups', 'checkin', 'check-in', 'check-ins', 'daily', 'update', 'updates', 'status', 'mood', 'habit', 'habits', 'journal', 'retro', 'retrospective', 'reflection', 'weekly', 'pulse', 'wellbeing', 'async', 'progress', 'diary'],
   spec: checkinSpec as unknown as z.ZodType<Record<string, unknown>>,
   specGuide: [
     'noun: one post ("check-in", "update", "entry").',
     'fields: what each person answers, 2–5 of them — longtext for prose answers, rating for a 1–5 score, select for a fixed set, boolean for a did-you (a habit is a boolean: "Exercised", "Read 20 min"). Labels are short names, never instructions. No name or date fields: those are added.',
     'flagField: a field whose being filled deserves attention (blockers), if one exists.',
-    'sample: 6–10 posts by 3–4 different people over the last three days. Each row has `name` (a person), `daysAgo` (0, 1, 2) and a value per field.',
+    'sample: 8–12 posts by 3–4 different people over the last three days (habits: 16–24 posts over the last seven days, so the grid fills). Each row has `name` (a person), `daysAgo` (0–6) and a value per field; three of the people post today.',
   ].join('\n'),
   railIcon: 'note',
   facts: (spec) => {
@@ -366,9 +374,9 @@ const directory: ToolTemplate = {
   spec: directorySpec as unknown as z.ZodType<Record<string, unknown>>,
   specGuide: [
     'noun / plural: one entry ("vendor" / "vendors").',
-    'fields: 5–9; the FIRST is the name (kind text, required). Use email, url, person, date, rating and select where they fit, and one longtext for notes or the body.',
+    'fields: 5–9; the FIRST is the name (kind text, required). Use email, url, person, date, rating and select where they fit, and one or two longtext fields for the body a person opens an entry to read (ingredients and method, notes, what they do) — the detail page is built from them.',
     'groupBy: a select field to filter by (category, team, cuisine). subtitleField: what shows under the name in the list. avatar: true for people and organisations.',
-    `sample: 7–10 realistic entries across every group. ${DATE_OFFSET_NOTE}`,
+    `sample: 8–12 realistic entries across every group, EVERY field filled — each longtext real content, never a stub: a list (ingredients, steps, what they offer) one item per line, prose two to four sentences. ${DATE_OFFSET_NOTE}`,
   ].join('\n'),
   railIcon: 'people',
   facts: (spec) => {
@@ -394,7 +402,7 @@ const leaderboardSpec = z.object({
   amounts: z.array(z.number()).min(1).max(5),
   reasons: z.array(z.string().max(40)).max(8).optional(),
   people: z.array(z.string().min(1).max(60)).min(3).max(30),
-  sample: z.array(z.object({ person: z.string(), amount: z.number(), reason: z.string().optional(), note: z.string().max(200).optional(), daysAgo: z.number().int().min(0).max(90) })).min(4).max(20),
+  sample: z.array(z.object({ person: z.string(), amount: z.number(), reason: z.string().optional(), note: z.string().max(200).optional(), daysAgo: z.number().int().min(0).max(90), from: z.string().min(1).max(60).optional() })).min(4).max(20),
 })
 
 const leaderboard: ToolTemplate = {
@@ -407,7 +415,7 @@ const leaderboard: ToolTemplate = {
     'unit: what is counted, plural ("kudos", "points", "km"); unitOne: the singular when it differs ("point"). actionLabel: the button ("Give kudos", "Log a run").',
     'amounts: 1–4 quick amounts. reasons: optional kinds of entry.',
     'people: 4–8 realistic names who start on the board.',
-    'sample: 6–10 entries for those people with amounts, reasons, short notes and daysAgo 0–20.',
+    'sample: 8–12 entries for those people with amounts, reasons, a short note on most, `from` (who gave it — another of the people) and daysAgo 0–20.',
   ].join('\n'),
   railIcon: 'sparkle',
   facts: (spec) => {
