@@ -81,8 +81,33 @@ export interface ToolExtra {
   http?: { authInfo?: AuthInfo }
 }
 
-function toText(value: unknown): string {
-  return typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+const IMAGE_KEYS = { png_base64: 'image/png', jpeg_base64: 'image/jpeg' } as const
+
+/**
+ * An action's answer as MCP content. A screenshot (`png_base64` /
+ * `jpeg_base64`, preview_tool and try_tool) goes out as an IMAGE block the
+ * client's model can look at — as JSON text it is a wall of base64 no model
+ * can see and most clients cut off — and the JSON keeps a pointer to it.
+ */
+export function toContent(value: unknown): CallToolResult['content'] {
+  if (typeof value === 'string') return [{ type: 'text', text: value }]
+  const images: Array<{ type: 'image'; data: string; mimeType: string }> = []
+  const strip = (node: unknown, depth: number): unknown => {
+    if (depth > 4 || node === null || typeof node !== 'object') return node
+    if (Array.isArray(node)) return node.map((n) => strip(n, depth + 1))
+    const out: Record<string, unknown> = {}
+    for (const [key, v] of Object.entries(node)) {
+      if (key in IMAGE_KEYS && typeof v === 'string' && v.length > 0) {
+        images.push({ type: 'image', data: v, mimeType: IMAGE_KEYS[key as keyof typeof IMAGE_KEYS] })
+        out[key] = `[image ${images.length}, attached]`
+      } else {
+        out[key] = strip(v, depth + 1)
+      }
+    }
+    return out
+  }
+  const text = JSON.stringify(strip(value, 0), null, 2)
+  return [{ type: 'text', text }, ...images]
 }
 
 /**
@@ -98,7 +123,7 @@ export async function withCaller(
   const caller = callerFromAuthInfo(extra.http?.authInfo)
   if (!caller) return err('Unauthorized: no valid MCP access token')
   try {
-    return { content: [{ type: 'text', text: toText(await fn(caller)) }] }
+    return { content: toContent(await fn(caller)) }
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e))
   }
