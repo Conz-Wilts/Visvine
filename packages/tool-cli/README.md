@@ -5,7 +5,7 @@ coding agent: run it offline against fixtures, check it with Visvine's own
 rules, and push and publish it to a space.
 
 ```sh
-npx visvine-tool init my-tool     # or start from the tool-starter template
+npx @visvine/tool-cli init my-tool # or start from the tool-starter template
 cd my-tool && npm install
 npx visvine-tool dev              # offline, in the frame Visvine runs it in
 npx visvine-tool check            # Visvine's compiler and checks, locally

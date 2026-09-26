@@ -1,6 +1,6 @@
 {
   "name": "@visvine/tool-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "visvine-tool: build a Visvine Tool in your own editor — dev against fixtures, check, push, publish",
   "license": "MIT",
   "type": "module",
