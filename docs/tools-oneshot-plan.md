@@ -343,9 +343,28 @@ of `ef7f5704`.
 | fundraising investors | 5.4 |
 | event planning | 5.8 |
 
-### Paused for later continuation
+### Claude subscription rounds — 2026-09-27
 
-The user paused after the full checks passed and the updated-system retest began.
-No updated-system score is complete. Both evaluators and the task's dev server
-were stopped. The full restart instructions, exact artifact paths, remaining
-runner fixes and retest commands are in [tools-restart-handoff.md](tools-restart-handoff.md).
+Builder Sonnet, judge Opus, both on the Claude subscription (`pnpm eval:tools`,
+default provider), `screens-v2`, a fresh space per run, every section and band
+action judged. Runs in `apps/web/.eval/tools/`.
+
+| Run | Mean | Min | What changed before it |
+|---|---:|---:|---|
+| `claude-smoke` (4 prompts) | 6.4 | 6.1 | starting point |
+| `claude-r1` | 6.96 | 6.3 | board fits its stages, card footer, person picker, "e.g." placeholders, check-in and poll rework, icon aliases |
+| `claude-r3` | 7.32 | 6.7 | `try_tool` rehearses (no test records ship), sample seeding in one round trip behind a claim (fixed 4-of-12 and tripled rows), views as band tabs, scrim corner |
+| `claude-r4` | 7.32 | 6.7 | rolling calendar, inline yes/no rows, poll and leaderboard polish |
+| `claude-r5` | 7.38* | 6.9 | Schedule tab replaces the month grid, rating input, header alignment |
+
+\* 18 of 20: two rows failed in the harness (the subscription session ended
+mid-build and mid-judge), not in the Tool. `claude-r2` was stopped and marked
+`INTERRUPTED.json` (seeding race, templates changed mid-run).
+
+Per-prompt noise between identical runs is about ±0.4. Dialogs now score ~8,
+tables ~7.7, boards ~7.5; the weakest screens are Schedule (~6.9), check-in
+History and the poll page (~7). Every remaining judge note is a per-domain
+refinement (inventory quantities, OKR key results, nudges, reactions) rather
+than a shared defect, and the judge's 10 is "indistinguishable from Linear".
+**Target 9 not reached; measured 7.4.** Further gains need per-archetype
+templates (inventory, OKRs, content calendar) rather than kit fixes.

@@ -247,8 +247,16 @@ that looks designed and works on first open. Three pieces do that:
   `ListDetail`, `MonthCalendar`, `Icon`, and records by schema — describe a
   record's fields once and `FieldValue`, `FieldInput`, `RecordForm`,
   `RecordDialog`, `RecordTable` and `RecordBoard` draw it. `useSampleRows` seeds
-  an empty collection once per install, so the first look is never empty. A
+  an empty collection once per install, so the first look is never empty — in
+  one round trip, behind a claim in the install's state, so two frames opening
+  at once never seed twice. A form's person fields offer the people already in
+  the records (`peopleOf`), and a sample row becomes its "e.g." placeholders. A
   Tool the templates do not cover is built from these rather than from divs.
+- **`try_tool` rehearses.** What its steps add, change or delete in the Tool's
+  own collections and preview state is put back after the capture
+  (`snapshotPreviewRows`, `snapshotPreviewToolState`), so a builder's test
+  record never ships beside the sample rows. Notes and records written through
+  the space are real and stay.
 - **The review by eye** (`lib/tools/visualReview.ts`,
   `shared/visualRubric.ts`). Each section and each band action is captured and
   a vision model on the deployment's key (`TOOL_REVIEW_MODEL`, off with
