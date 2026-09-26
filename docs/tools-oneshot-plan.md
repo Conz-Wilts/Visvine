@@ -139,18 +139,126 @@ button; the headless capture waits for the Tool to settle (it was shooting a
 loading page); the vendor bundle no longer uses a dynamic `import()` Turbopack
 refuses; the kit `.d.ts` was missing `Select`'s `onValueChange`/`placeholder`.
 
-## Results
+## Results — 2026-09-26, measured through the MCP
 
-| Run | Builder | Mean | Notes |
+**How:** each of the 20 prompts in `scripts/eval/tool-prompts.ts` went, verbatim,
+to a fresh headless Claude Code session (`claude -p`, Sonnet, local subscription)
+whose only tools were the local `/api/mcp` — no repo, no hints. Every section and
+band action of the Tool it made was screenshotted and scored by a separate
+Claude session (Opus) on six criteria, 0–10. **Before** = the server at
+`e8e2e50e` (before templates); **after** = `41f30a26`. Both sets were
+re-captured and judged on the same (current) renderer, one Tool at a time, so
+capture timing under load cannot move a score. `pnpm eval:tools`, then
+`--rejudge <run>`.
+
+**Rating: 4.2 → 6.0 out of 10.** Templates were chosen for 20/20 prompts and won
+18 of 20; none reached the 8.5 bar. The judge is strict (5 = "competent but plain
+prototype"); the target is 9.
+
+| Criterion | Before | After |
+|---|---|---|
+| Hierarchy | 4.3 | 5.9 |
+| Spacing | 5.3 | 6.4 |
+| Density | 3.3 | 5.4 |
+| Realistic data | 2.6 | 5.7 |
+| Main action | 4.4 | 5.9 |
+| Polish | 4.2 | 5.3 |
+| **Mean** | **4.2** | **6.0** |
+
+| Prompt | Before | After | Built |
 |---|---|---|---|
-| 3 prompts, first kit | sonnet-5 via build_tool, no polish | 6.8 | crm 6.8 · expenses 6.9 · kudos 6.6; fixes were mostly platform-level (band button, control heights, board overflow) — fixed since |
-| 20 prompts | — | not measured | the local OpenRouter key hit its $5 limit after the first build |
+| crm | 4.1 | **5.9** | CRM |
+| track stuff for my team | 4.5 | **6.4** | Team Tracker |
+| make me a sales pipeline thing | 4.1 | **6.1** | Sales Pipeline |
+| hiring | 3.2 | **6.2** | Hiring |
+| bug tracker | 4.6 | **6.2** | Bug Tracker |
+| expenses | 4.5 | **6.5** | Expenses |
+| where should we go for lunch poll | 4.3 | **4.6** | Lunch Poll |
+| daily standup | 2.9 | **5.5** | Daily Standup |
+| vendor list | 4.7 | **6.3** | Vendor List |
+| kudos | 4.4 | **6.4** | Kudos |
+| content calendar for our blog | 4.2 | **6.5** | Content Calendar |
+| inventory | 4.3 | **6.1** | Inventory |
+| okrs | 4.9 | **5.8** | OKRs |
+| reading list | 4.7 | **6.1** | Reading List |
+| team budget dashboard | 4.5 | **6.4** | Team Budget Dashboard |
+| customer feedback | 3.1 | **5.9** | Customer Feedback |
+| habit tracker | 4.4 | **4.2** | Habit Tracker |
+| recipes we like | 4.5 | **5.8** | Recipes We Like |
+| fundraising investors | 3.6 | **6.3** | Fundraising Investors |
+| event planning | 4.5 | **6** | Event Planning |
 
-A hand-built check through the local MCP (`plan_tool` → `create_tool
-{ template: tracker, spec }` for "something to track our hiring") produced a
-finished board with stages, roles as coloured chips, ratings, overdue dates and
-nine candidates on first open.
+Build: about 2 minutes and 14 MCP calls per Tool after; the baseline spent much
+of its time fighting `get_tool_sdk`.
 
-To finish the measurement: raise the key's limit (or set
-`EVAL_BUILDER_MODEL` / `EVAL_JUDGE_MODEL` to cheaper models), then
-`pnpm --filter @visvine/web eval:tools` and `--mode freeform` for the baseline.
+## Errors found
+
+**Product bugs (fixed already)**
+- `preview_tool` screenshots went to MCP clients as base64 text — no model could
+  see its own Tool. Now an image block (`lib/mcp/auth.ts#toContent`).
+- The headless capture shot the page before the Tool loaded; the vendor bundle
+  used a dynamic `import()` Turbopack rejects (500 on the frame); the kit `.d.ts`
+  lacked `Select`'s `onValueChange` / `placeholder`.
+
+**Product bugs (open)**
+1. The board clips its right-hand columns with no scroll cue — 14 of 20 Tools.
+2. The dialog scrim leaves a white notch at the content frame's top-left — every Tool with a dialog.
+3. Date fields are the raw browser control (`dd/mm/yyyy`) — every Tool with a date.
+4. The band's primary button, white on pale brand green, reads as disabled — flagged in 8 Tools (an app-wide colour).
+5. Dates render red whenever past — in tables, on Done cards, on logs — not only when overdue and open.
+6. Money mixes `$18,000` and `$120K` in one view.
+7. The first dialog field is autofocused, so it alone is white and outlined.
+8. The tracker template sums a percent field as a total (OKRs showed "292").
+9. `create_tool` with a template can leave a half-made Tool; the retry gets "already exists" (okrs, event planning).
+10. `try_tool` cannot press a band button, so no builder could test its main act.
+11. `get_tool_sdk` is 30–48k tokens — clients spill it to a file and grep it (every baseline build).
+12. `set_tool_icon` knows ten names; builders guessed star, book, heart, target, message-square.
+13. `configure_tool` refuses `description` / `tags` without saying where they go.
+14. Smaller: chart y-axis labels clipped (`$6,000` → `6,000`); the poll textarea pre-filled with "Yes/No" as values; "1 kudos"; the amount asked twice in the kudos dialog; Activity not sorted.
+
+**Harness notes:** one judge answer per run came back empty (the first judging
+was kept); screens caught mid-load under three builds at once were retried and
+re-judged one at a time.
+
+## Fix plan — to 9/10
+
+Ordered by points per hour.
+
+**P1 — kit and host; every Tool gains (est. +1.0)**
+1. Board: columns share the width up to six (`min-w-52`); beyond that a right-edge
+   fade, scroll snap and an "n more →" chip. Columns run to the viewport with an
+   "+ Add" row at the foot — fixes the clipping and the empty lower half.
+2. Cards: title and the primary number on line one, one muted meta line joined by
+   `·` with an owner avatar; a date is red only when overdue AND open
+   (`FieldValue` takes `done`).
+3. `DatePicker`: the app's own popover calendar, not the native control.
+4. Scrim: cover the pane's rounded corner.
+5. Band button: brand fill with strong text — contrast at least 4.5:1.
+6. `formatMoney`: one notation per view (standard under $1M, compact above, for the whole set).
+7. No autofocus in `RecordForm`; charts size their left gutter to the widest tick.
+
+**P2 — templates (est. +0.7)**
+8. Tracker: a lead stat, Overdue in danger and clickable to filter; average, not
+   sum, for percent and rating; percent fields as progress bars; owners as avatars.
+9. Poll: polls with results first, a radio affordance, "Voted 1 of 3", Closed
+   hidden while empty, placeholders not values, "Create poll".
+10. Check-in: a band action "Post update", your post inline, blockers first, a
+    "not posted yet" row, a realistic sample for the viewer too.
+11. Dashboard: a progress bar under Target, legend swatches beside amounts, period labels.
+12. Directory: a filled detail pane, avatars tinted per category, an urgency chip for near dates.
+13. Leaderboard: one bar colour, singular units, one amount control, Activity sorted.
+
+**P3 — the MCP loop: builders see and test what they make (est. +0.5)**
+14. `try_tool` step `{ do: 'band', action }`, with a screenshot after.
+15. `get_tool_sdk { section }` — an index under 3k tokens, sections on demand.
+16. `set_tool_icon` takes every kit `Icon` name and lucide names.
+17. `configure_tool` routes `title` / `description` / `tags` into index.md.
+18. A template create is atomic: a later failure removes the scaffold.
+19. `create_tool`'s `next` asks for one look-and-fix round per section before hand-over
+    — builders currently stop at "it compiles".
+
+**P4 — measure, repeat**
+20. `pnpm eval:tools` after P1 and after P2; keep a change only if the mean rises.
+    Then a polish pass per template on its judge fixes until every prompt is ≥ 8.
+
+Expected: 6.0 → about 7 (P1) → 7.7 (P2) → 8.2 (P3) → 9 with per-template polish.
