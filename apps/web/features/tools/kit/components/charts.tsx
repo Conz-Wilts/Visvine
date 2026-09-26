@@ -99,6 +99,25 @@ function tooltipFormatter(formatValue?: (value: number) => string) {
   return formatValue ? (value: unknown) => formatValue(Number(value)) : undefined;
 }
 
+/**
+ * The y-axis gutter, wide enough for the widest label the axis will draw: a
+ * fixed 40px cut `$12,000` to `2,000`.
+ */
+function yAxisWidth(data: ChartProps['data'], series: ChartProps['series'], formatValue?: (value: number) => string): number {
+  const keys = series.map((s) => (typeof s === 'string' ? s : s.key));
+  let widest = 0;
+  for (const row of data) {
+    for (const key of keys) {
+      const n = Number(row[key]);
+      if (!Number.isFinite(n)) continue;
+      // The axis rounds up past the largest value, so measure a little above it.
+      const label = formatValue ? formatValue(Math.ceil(n * 1.2)) : String(Math.ceil(n * 1.2));
+      widest = Math.max(widest, label.length);
+    }
+  }
+  return Math.min(96, Math.max(32, widest * 7 + 10));
+}
+
 function CommonParts({
   x,
   grid,
@@ -106,7 +125,9 @@ function CommonParts({
   legend,
   formatValue,
   formatX,
-}: Pick<ChartProps, 'x' | 'grid' | 'tooltip' | 'legend' | 'formatValue' | 'formatX'>) {
+  data,
+  series,
+}: Pick<ChartProps, 'x' | 'grid' | 'tooltip' | 'legend' | 'formatValue' | 'formatX' | 'data' | 'series'>) {
   return (
     <>
       {grid !== false && <Recharts.CartesianGrid strokeDasharray="3 3" stroke="var(--vv-border)" vertical={false} />}
@@ -117,7 +138,7 @@ function CommonParts({
         axisLine={{ stroke: 'var(--vv-border)' }}
         tickFormatter={formatX as ((value: unknown) => string) | undefined}
       />
-      <Recharts.YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} width={40} tickFormatter={formatValue} />
+      <Recharts.YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} width={yAxisWidth(data, series, formatValue)} tickFormatter={formatValue} />
       {tooltip !== false && <Recharts.Tooltip contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter(formatValue)} />}
       {legend && <Recharts.Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />}
     </>

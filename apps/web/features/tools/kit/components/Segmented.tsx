@@ -35,7 +35,7 @@ export function Segmented({ options, value, onChange, label, disabled, className
             onClick={() => onChange(o.value)}
             className={clsx(
               'h-8 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors disabled:opacity-50',
-              on ? 'bg-accent text-white' : 'text-fg-secondary hover:bg-surface-subtle hover:text-fg',
+              on ? 'bg-accent-strong text-fg-inverse' : 'text-fg-secondary hover:bg-surface-subtle hover:text-fg',
             )}
           >
             {o.label}

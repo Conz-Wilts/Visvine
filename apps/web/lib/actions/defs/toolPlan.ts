@@ -16,6 +16,11 @@ import { requireVisibleResource } from '@/lib/resources/visibility'
 import { downloadResourceFile } from '@/lib/gcs'
 import { sanitizeToolIcon } from '@/lib/tools/iconSvg'
 import { TOOL_RAIL_ICONS } from '@/lib/tools/config'
+// A Tool may name any lucide icon for its rail (a curated Tool dependency);
+// the app's own icons stay ours.
+// eslint-disable-next-line no-restricted-imports
+import * as Lucide from 'lucide-react'
+import { ICON_NAMES, ICON_PATHS } from '@/features/tools/kit/components/Icon'
 import { buildPlanBrief, type SpaceTypeFact } from '@/lib/tools/shared/planBrief'
 import { buildTool, DEFAULT_BUILD_BUDGET_S } from '@/lib/tools/builder'
 import { TOOL_TEMPLATES } from '@/lib/tools/templates'
@@ -82,6 +87,29 @@ async function iconSource(ctx: ActionCaller, args: SetIconArgs): Promise<string>
   return (await downloadResourceFile(row.gcsPath)).toString('utf8')
 }
 
+/** A kit icon's or a lucide icon's SVG by name ("target", "message-square", "MessageSquare"), or null. */
+export function namedIconSvg(name: string): string | null {
+  const kit = (ICON_PATHS as Record<string, string>)[name] ?? (ICON_PATHS as Record<string, string>)[name.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase())]
+  if (kit) {
+    const paths = kit.split(' M').map((d, i) => `<path d="${i === 0 ? d : `M${d}`}"/>`).join('')
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
+  }
+  const pascal = name
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join('')
+  // A lucide icon is a forwardRef whose render hands its drawing (`icon.node`,
+  // a list of [tag, attributes]) to the shared Icon — read it from there.
+  const component = (Lucide as unknown as Record<string, { render?: (props: object, ref: null) => { props?: { icon?: { node?: Array<[string, Record<string, string>]> } } } }>)[pascal]
+  const node = component?.render?.({}, null)?.props?.icon?.node
+  if (!Array.isArray(node)) return null
+  const shapes = node
+    .map(([tag, attrs]) => `<${tag} ${Object.entries(attrs).filter(([k]) => k !== 'key').map(([k, v]) => `${k}="${String(v).replace(/"/g, '')}"`).join(' ')}/>`)
+    .join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${shapes}</svg>`
+}
+
 async function setToolIcon(ctx: ActionCaller, args: SetIconArgs) {
   const given = [args.icon, args.svg, args.resource_id].filter(Boolean).length
   if (given !== 1) throw new ActionError(400, 'Give exactly one of `icon` (a built-in name), `svg` or `resource_id`.')
@@ -90,10 +118,15 @@ async function setToolIcon(ctx: ActionCaller, args: SetIconArgs) {
   const surfaces = (current.config?.surfaces ?? { rail: null, types: [] }) as { rail: { label: string; icon: string } | null } & Record<string, unknown>
   const label = surfaces.rail?.label ?? current.config?.title ?? args.name
 
+  // A name that is not a rail glyph but is an icon the kit or lucide draws
+  // becomes that icon's SVG — a model reaching for "star" or "target" gets it.
+  if (args.icon && !(TOOL_RAIL_ICONS as readonly string[]).includes(args.icon)) {
+    const svg = namedIconSvg(args.icon)
+    if (!svg) throw new ActionError(400, `Unknown icon "${args.icon}" — a built-in (${TOOL_RAIL_ICONS.join(', ')}), a kit icon (${ICON_NAMES.join(', ')}), a lucide name, or your own svg.`)
+    return setToolIcon(ctx, { space_id: args.space_id, name: args.name, svg })
+  }
+
   if (args.icon) {
-    if (!(TOOL_RAIL_ICONS as readonly string[]).includes(args.icon)) {
-      throw new ActionError(400, `Unknown icon "${args.icon}" — pick one of ${TOOL_RAIL_ICONS.join(', ')}, or pass your own svg.`)
-    }
     const configured = await appToolHandlers.configureTool(ctx, {
       space_id: args.space_id,
       name: args.name,
@@ -174,14 +207,14 @@ export const TOOL_PLAN_ACTIONS = [
     summary: "Give a Tool its rail icon — a built-in name, SVG text, or an SVG uploaded with upload_file.",
     description:
       'Set the icon on a Tool\'s rail row. Give exactly one of: `icon`, a built-in name (' +
-      `${TOOL_RAIL_ICONS.join(', ')}); \`svg\`, the markup; or \`resource_id\`, an SVG the person attached (upload_file or ` +
+      `${TOOL_RAIL_ICONS.join(', ')}) or any kit or lucide icon name ("star", "target", "message-square"); \`svg\`, the markup; or \`resource_id\`, an SVG the person attached (upload_file or ` +
       'request_upload first). A custom icon is drawn on a 24×24 viewBox in strokes only — path, circle, rect, line, polyline — ' +
       'and the rail paints it in the theme: colour, text, images, gradients and filters are stripped, and the answer says which ' +
       'were. `drawn` is exactly what will render. Gives the Tool a rail row if it had none.',
     input: {
       space_id: spaceArg,
       name: nameArg,
-      icon: z.string().optional().describe('A built-in rail icon name'),
+      icon: z.string().optional().describe('A built-in rail icon, or any kit or lucide icon name'),
       svg: z.string().max(64_000).optional().describe('Your own SVG — viewBox="0 0 24 24", strokes only'),
       resource_id: z.string().optional().describe('An uploaded SVG, from upload_file / request_upload'),
     },

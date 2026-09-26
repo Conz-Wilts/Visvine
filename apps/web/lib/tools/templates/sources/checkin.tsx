@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react'
 import {
-  Avatar,
   Button,
   FieldValue,
   formatDate,
+  HueChip,
   Page,
-  RecordForm,
+  PersonAvatar,
+  RecordDialog,
   Spinner,
   Stat,
   StatRow,
-  missingRequired,
+  useBandAction,
   useCollection,
   useSampleRows,
   useSection,
@@ -55,28 +56,49 @@ type Entry = { id: string; mine: boolean; data: RecordData & { name: string; dat
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const filled = (v: unknown) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
 
-function EntryView({ entry }: { entry: Entry }) {
+function EntryView({ entry, onEdit }: { entry: Entry; onEdit?: () => void }) {
+  const checks = SPEC.fields.filter((f) => f.kind === 'boolean')
+  const prose = SPEC.fields.filter((f) => f.kind === 'longtext' || f.kind === 'text')
+  const facts = SPEC.fields.filter((f) => f.kind !== 'boolean' && f.kind !== 'longtext' && f.kind !== 'text' && filled(entry.data[f.key]))
+  const flagged = SPEC.flagField && filled(entry.data[SPEC.flagField])
   return (
     <article className="flex gap-3 border-b border-line-subtle py-4">
-      <Avatar name={entry.data.name} size="sm" fallback="initials" />
+      <PersonAvatar name={entry.data.name} size="sm" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center gap-2">
           <span className="font-medium text-fg">{entry.data.name}</span>
           <span className="text-xs text-fg-muted">{formatDate(entry.data.date)}</span>
-        </div>
-        <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {SPEC.fields.map((f) =>
-            entry.data[f.key] === undefined || entry.data[f.key] === '' || entry.data[f.key] === null ? null : (
-              <div key={f.key} className={f.kind === 'longtext' ? 'min-w-0' : 'min-w-0 sm:col-span-2'}>
-                <dt className="text-xs font-medium uppercase tracking-wide text-fg-muted">{f.label}</dt>
-                <dd className={`mt-0.5 text-sm ${f.key === SPEC.flagField ? 'text-danger' : 'text-fg'}`}>
-                  {f.kind === 'longtext' ? <span className="whitespace-pre-wrap">{String(entry.data[f.key])}</span> : <FieldValue field={f} value={entry.data[f.key]} />}
-                </dd>
-              </div>
-            ),
+          {flagged && <HueChip hue="red">{SPEC.fields.find((f) => f.key === SPEC.flagField)?.label ?? 'Flagged'}</HueChip>}
+          {facts.map((f) => (
+            <span key={f.key} className="text-xs text-fg-muted">
+              <FieldValue field={f} value={entry.data[f.key]} compact />
+            </span>
+          ))}
+          {onEdit && (
+            <Button size="sm" variant="ghost" onClick={onEdit} className="ml-auto">
+              Edit
+            </Button>
           )}
-        </dl>
+        </div>
+        {checks.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {checks.map((f) => (entry.data[f.key] ? <HueChip key={f.key} hue="green">✓ {f.label}</HueChip> : <HueChip key={f.key}>{f.label}</HueChip>))}
+          </div>
+        )}
+        {prose.some((f) => filled(entry.data[f.key])) && (
+          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {prose.map((f) =>
+              filled(entry.data[f.key]) ? (
+                <div key={f.key} className="min-w-0">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-fg-muted">{f.label}</dt>
+                  <dd className={`mt-0.5 whitespace-pre-wrap text-sm ${f.key === SPEC.flagField ? 'font-medium text-danger' : 'text-fg'}`}>{String(entry.data[f.key])}</dd>
+                </div>
+              ) : null,
+            )}
+          </dl>
+        )}
       </div>
     </article>
   )
@@ -98,16 +120,18 @@ export default function App() {
   useSampleRows('entries', samples)
   const { data, loading } = useCollection<Entry['data']>('entries', { order: 'desc', limit: 200 })
   const entries = (data ?? []) as Entry[]
-  const [draft, setDraft] = useState<RecordData>({})
-  const [errors, setErrors] = useState<string[]>([])
-  const [busy, setBusy] = useState(false)
-  const [editing, setEditing] = useState(false)
+  const [posting, setPosting] = useState(false)
 
   const me = visvine.viewer.name
   const mineToday = entries.find((e) => e.mine && e.data.date === today && e.data.name === me)
-  const todays = entries.filter((e) => e.data.date === today)
-  const people = new Set(entries.map((e) => e.data.name))
-  const flagged = SPEC.flagField ? todays.filter((e) => String(e.data[SPEC.flagField!] ?? '').trim()).length : 0
+  useBandAction('post', () => setPosting(true))
+
+  const flag = (e: Entry) => Boolean(SPEC.flagField && filled(e.data[SPEC.flagField]))
+  const todays = entries.filter((e) => e.data.date === today && e !== mineToday).sort((a, b) => Number(flag(b)) - Number(flag(a)))
+  const people = [...new Set(entries.map((e) => e.data.name))]
+  const posted = new Set(entries.filter((e) => e.data.date === today).map((e) => e.data.name))
+  const waiting = people.filter((p) => !posted.has(p) && p !== me)
+  const flagged = entries.filter((e) => e.data.date === today && flag(e)).length
 
   const streak = useMemo(() => {
     const days = new Set(entries.filter((e) => e.mine && e.data.name === me).map((e) => e.data.date))
@@ -121,27 +145,30 @@ export default function App() {
     return n
   }, [entries, me])
 
-  const byDay = useMemo(() => {
+  const history = useMemo(() => {
     const map = new Map<string, Entry[]>()
-    for (const e of entries) map.set(e.data.date, [...(map.get(e.data.date) ?? []), e])
+    for (const e of entries) if (e.data.date !== today) map.set(e.data.date, [...(map.get(e.data.date) ?? []), e])
     return [...map.entries()].sort(([a], [b]) => b.localeCompare(a))
-  }, [entries])
+  }, [entries, today])
 
-  const submit = async () => {
-    const missing = missingRequired(SPEC.fields, draft)
-    setErrors(missing)
-    if (missing.length) return
-    setBusy(true)
-    try {
-      if (mineToday) await visvine.collections.update('entries', mineToday.id, { ...mineToday.data, ...draft })
-      else await visvine.collections.insert('entries', { ...draft, name: me, date: today })
-      setDraft({})
-      setEditing(false)
-      void visvine.ui.toast(`${title(SPEC.noun)} posted`, 'success')
-    } finally {
-      setBusy(false)
-    }
+  const save = async (value: RecordData) => {
+    if (mineToday) await visvine.collections.update('entries', mineToday.id, { ...mineToday.data, ...value })
+    else await visvine.collections.insert('entries', { ...value, name: me, date: today })
+    setPosting(false)
+    void visvine.ui.toast(`${title(SPEC.noun)} posted`, 'success')
   }
+
+  const dialog = (
+    <RecordDialog
+      open={posting}
+      title={mineToday ? `Your ${SPEC.noun}` : `Post your ${SPEC.noun}`}
+      fields={SPEC.fields}
+      initial={mineToday ? mineToday.data : EMPTY}
+      onClose={() => setPosting(false)}
+      onSave={save}
+      saveLabel={mineToday ? 'Save' : 'Post'}
+    />
+  )
 
   if (loading && entries.length === 0) {
     return (
@@ -154,16 +181,21 @@ export default function App() {
   if (section === 'history') {
     return (
       <Page width="normal">
-        {byDay.map(([day, list]) => (
-          <section key={day}>
-            <h2 className="border-b border-line-subtle pb-2 text-sm font-semibold text-fg">
-              {day === today ? 'Today' : formatDate(day)} <span className="font-normal text-fg-muted">· {list.length}</span>
-            </h2>
-            {list.map((e) => (
-              <EntryView key={e.id} entry={e} />
-            ))}
-          </section>
-        ))}
+        {history.length === 0 ? (
+          <p className="py-8 text-center text-sm text-fg-muted">Earlier days show here.</p>
+        ) : (
+          history.map(([day, list]) => (
+            <section key={day}>
+              <h2 className="border-b border-line-subtle pb-2 text-sm font-semibold text-fg">
+                {formatDate(day)} <span className="font-normal text-fg-muted">· {list.length}</span>
+              </h2>
+              {list.map((e) => (
+                <EntryView key={e.id} entry={e} />
+              ))}
+            </section>
+          ))
+        )}
+        {dialog}
       </Page>
     )
   }
@@ -171,34 +203,20 @@ export default function App() {
   return (
     <Page width="normal">
       <StatRow>
-        <Stat label="Today" value={`${todays.length}`} hint={`of ${people.size} people`} />
+        <Stat lead label="Posted today" value={posted.size} hint={`of ${Math.max(people.length, posted.size)} people`} />
         <Stat label="Your streak" value={streak} hint={streak === 1 ? 'day' : 'days'} />
-        {SPEC.flagField && <Stat label={SPEC.fields.find((f) => f.key === SPEC.flagField)?.label ?? 'Flagged'} value={flagged} />}
+        {SPEC.flagField && (
+          <Stat label={SPEC.fields.find((f) => f.key === SPEC.flagField)?.label ?? 'Flagged'} value={flagged} tone={flagged > 0 ? 'danger' : undefined} hint={flagged ? 'today' : 'none today'} />
+        )}
       </StatRow>
 
-      {!mineToday || editing ? (
-        <section className="flex flex-col gap-4 border-b border-line-subtle pb-6">
-          <h2 className="text-base font-semibold text-fg">Your {SPEC.noun}</h2>
-          <RecordForm fields={SPEC.fields} value={draft} onChange={setDraft} errors={errors} />
-          <div className="flex justify-end gap-2">
-            {editing && <Button onClick={() => setEditing(false)}>Cancel</Button>}
-            <Button variant="primary" loading={busy} onClick={() => void submit()}>
-              Post
-            </Button>
-          </div>
-        </section>
+      {mineToday ? (
+        <EntryView entry={mineToday} onEdit={() => setPosting(true)} />
       ) : (
-        <div className="flex items-center justify-between text-sm text-fg-muted">
-          <span>You posted today.</span>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setDraft(mineToday.data)
-              setEditing(true)
-            }}
-          >
-            Edit
+        <div className="flex items-center justify-between gap-4 rounded-lg bg-surface-subtle px-4 py-3">
+          <span className="text-sm text-fg">You have not posted today.</span>
+          <Button variant="primary" onClick={() => setPosting(true)}>
+            Post {SPEC.noun}
           </Button>
         </div>
       )}
@@ -208,6 +226,21 @@ export default function App() {
           <EntryView key={e.id} entry={e} />
         ))}
       </section>
+
+      {waiting.length > 0 && (
+        <section className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
+          <span>Not posted yet</span>
+          {waiting.map((p) => (
+            <span key={p} className="inline-flex items-center gap-1.5 rounded-full bg-surface-subtle py-0.5 pl-0.5 pr-2.5">
+              <PersonAvatar name={p} />
+              <span className="text-fg-secondary">{p}</span>
+            </span>
+          ))}
+        </section>
+      )}
+      {dialog}
     </Page>
   )
 }
+
+const EMPTY: RecordData = {}

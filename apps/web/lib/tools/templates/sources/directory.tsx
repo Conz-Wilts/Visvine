@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react'
 import {
-  Avatar,
   Button,
   FieldValue,
+  Icon,
   ListDetail,
   optionsOf,
   Page,
+  PersonAvatar,
   RecordDialog,
   RecordsEmpty,
-  SearchInput,
   Select,
   Spinner,
   useBandAction,
@@ -144,13 +144,24 @@ export default function App() {
           onSelect={setSelected}
           listHeader={
             <div className="flex flex-col gap-2">
-              <SearchInput value={search} onChange={setSearch} placeholder={`Search ${SPEC.plural}`} size="sm" />
+              <label className="flex h-9 items-center gap-2 rounded-lg bg-surface-subtle px-3 text-fg-muted focus-within:bg-surface focus-within:ring-1 focus-within:ring-line">
+                <Icon name="search" size={15} />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.currentTarget.value)}
+                  placeholder={`Search ${SPEC.plural}`}
+                  aria-label={`Search ${SPEC.plural}`}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted"
+                />
+              </label>
               {group && (
                 <Select
+                  size="sm"
                   aria-label={group.label}
                   value={filter}
                   onValueChange={setFilter}
-                  options={[{ value: '', label: `All ${group.label.toLowerCase()}` }, ...optionsOf(group).map((o) => ({ value: o.value, label: o.label }))]}
+                  options={[{ value: '', label: `Every ${group.label.toLowerCase()}` }, ...optionsOf(group).map((o) => ({ value: o.value, label: o.label }))]}
                 />
               )}
               <span className="text-xs text-fg-muted">
@@ -160,7 +171,7 @@ export default function App() {
           }
           renderItem={(r) => (
             <span className="flex min-w-0 items-center gap-3">
-              {SPEC.avatar && <Avatar name={String(r.data[nameKey] ?? '?')} size="sm" fallback="initials" />}
+              {SPEC.avatar && <PersonAvatar name={String(r.data[nameKey] ?? '?')} size="sm" />}
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-medium text-fg">{String(r.data[nameKey] ?? 'Untitled')}</span>
                 {subtitle && r.data[subtitle.key] ? (
@@ -174,7 +185,7 @@ export default function App() {
             current && (
               <div className="flex flex-col gap-6">
                 <div className="flex items-center gap-4">
-                  {SPEC.avatar && <Avatar name={String(current.data[nameKey] ?? '?')} size="xl" fallback="initials" />}
+                  {SPEC.avatar && <PersonAvatar name={String(current.data[nameKey] ?? '?')} size="md" />}
                   <div className="min-w-0 flex-1">
                     <h1 className="truncate text-xl font-semibold text-fg">{String(current.data[nameKey] ?? 'Untitled')}</h1>
                     {group && current.data[group.key] ? (
@@ -190,7 +201,7 @@ export default function App() {
                     <div key={f.key} className="min-w-0">
                       <dt className="text-xs font-medium uppercase tracking-wide text-fg-muted">{f.label}</dt>
                       <dd className="mt-1 text-sm text-fg">
-                        <FieldValue field={f} value={current.data[f.key]} />
+                        <FieldValue field={f} value={current.data[f.key]} due={f.kind === 'date'} />
                       </dd>
                     </div>
                   ))}

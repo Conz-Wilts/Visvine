@@ -89,19 +89,29 @@ export interface StatProps {
   icon?: IconName;
   /** A line under the value — "of 40 seats", "3 overdue". */
   hint?: ReactNode;
+  /** The number that matters most on the page: drawn larger. One per row. */
+  lead?: boolean;
+  /** `danger` when the number is a problem (overdue, blocked) and above zero. */
+  tone?: 'danger' | 'success';
+  /** Pressing it filters to what it counts. */
+  onClick?: () => void;
+  /** The filter it applies is on. */
+  active?: boolean;
 }
 
+const STAT_TONE = { danger: 'text-danger', success: 'text-success' } as const;
+
 /** One number over its label. */
-export function Stat({ label, value, delta, deltaLabel, invert = false, icon, hint }: StatProps) {
+export function Stat({ label, value, delta, deltaLabel, invert = false, icon, hint, lead = false, tone, onClick, active = false }: StatProps) {
   const good = delta === undefined ? null : invert ? delta < 0 : delta > 0;
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
+  const body = (
+    <>
       <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-fg-muted">
         {icon && <Icon name={icon} size={14} />}
         <span className="truncate">{label}</span>
       </span>
       <span className="flex items-baseline gap-2">
-        <span className="text-2xl font-semibold tabular-nums text-fg">{value}</span>
+        <span className={clsx('font-semibold tabular-nums', lead ? 'text-3xl' : 'text-2xl', tone ? STAT_TONE[tone] : 'text-fg')}>{value}</span>
         {delta !== undefined && delta !== 0 && (
           <span className={clsx('inline-flex items-center gap-0.5 text-xs font-medium tabular-nums', good ? 'text-success' : 'text-danger')}>
             <Icon name={delta > 0 ? 'arrowUp' : 'arrowDown'} size={12} />
@@ -110,8 +120,21 @@ export function Stat({ label, value, delta, deltaLabel, invert = false, icon, hi
         )}
       </span>
       {hint && <span className="truncate text-xs text-fg-muted">{hint}</span>}
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={clsx('-m-2 flex min-w-0 flex-col gap-1 rounded-lg p-2 text-left transition-colors hover:bg-surface-subtle', active && 'bg-surface-subtle ring-1 ring-line')}
+      >
+        {body}
+      </button>
+    );
+  }
+  return <div className="flex min-w-0 flex-col gap-1">{body}</div>;
 }
 
 /** Literal classes, one per count (the stylesheet is compiled from this file). */

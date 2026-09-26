@@ -15,7 +15,7 @@
  *     </KanbanColumn>
  *   </KanbanBoard>
  */
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { clsx as cx } from 'clsx';
 
@@ -135,10 +135,31 @@ export function KanbanBoard({ onMove, className, children }: KanbanBoardProps) {
 
   const value = useMemo(() => ({ drag, beginDrag }), [drag, beginDrag]);
 
+  // A board wider than the page scrolls sideways; a fade on the right edge
+  // says there is more, so a clipped column never reads as the last one.
+  const scroller = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const check = () => setMore(el.scrollWidth - el.scrollLeft - el.clientWidth > 4);
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(check);
+    observer?.observe(el);
+    return () => {
+      el.removeEventListener('scroll', check);
+      observer?.disconnect();
+    };
+  }, []);
+
   return (
     <BoardContext.Provider value={value}>
-      <div className={cx('flex items-start gap-3 overflow-x-auto pb-1', drag && 'cursor-grabbing select-none', className)}>
-        {children}
+      <div className="relative">
+        <div ref={scroller} className={cx('flex items-stretch gap-3 overflow-x-auto pb-1', drag && 'cursor-grabbing select-none', className)}>
+          {children}
+        </div>
+        {more && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-linear-to-l from-surface to-transparent" />}
       </div>
     </BoardContext.Provider>
   );
@@ -170,7 +191,7 @@ export function KanbanColumn({ id, title, count, actions, empty, fill = false, c
         {...attrs}
         className={cx(
           'flex flex-col rounded-lg border',
-          fill ? 'min-w-60 flex-1' : 'w-72 shrink-0',
+          fill ? 'min-w-52 flex-1' : 'w-64 shrink-0',
           isOver ? 'border-accent bg-accent-soft' : 'border-transparent bg-surface-subtle',
           className,
         )}

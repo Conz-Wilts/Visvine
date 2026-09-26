@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react'
 import {
-  Avatar,
   Button,
   Field,
   formatDate,
-  Input,
   Modal,
   Page,
+  PersonAvatar,
   Segmented,
   Select,
   Spinner,
@@ -24,6 +23,8 @@ import {
 interface Spec {
   /** What is counted: "points", "kudos", "km", "sales". */
   unit: string
+  /** One of it, when that is a different word: "point", "sale". Same as `unit` when omitted. */
+  unitOne?: string
   /** The act of adding some: "Give kudos", "Log a run". */
   actionLabel: string
   /** Quick amounts offered in the dialog. */
@@ -58,6 +59,7 @@ const SPEC: Spec = {
 type Entry = { id: string; data: { person: string; amount: number; reason?: string; note?: string; date: string; from?: string } }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10)
+const unitFor = (n: number) => (n === 1 ? (SPEC.unitOne ?? SPEC.unit) : SPEC.unit)
 const PERIODS = [
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
@@ -78,7 +80,8 @@ export default function App() {
   )
   useSampleRows('entries', samples)
   const { data, loading } = useCollection<Entry['data']>('entries', { order: 'desc', limit: 200 })
-  const entries = (data ?? []) as Entry[]
+  // Newest first by the day it happened, not the order the rows were written.
+  const entries = useMemo(() => [...((data ?? []) as Entry[])].sort((a, b) => b.data.date.localeCompare(a.data.date)), [data])
   const [period, setPeriod] = useState('month')
   const [giving, setGiving] = useState(false)
   const [form, setForm] = useState<{ person: string; amount: number; reason: string; note: string }>({ person: '', amount: SPEC.amounts[0] ?? 1, reason: '', note: '' })
@@ -116,7 +119,7 @@ export default function App() {
       await visvine.collections.insert('entries', { ...form, amount: Number(form.amount) || 0, date: iso(new Date()), from: visvine.viewer.name })
       setGiving(false)
       setForm({ person: '', amount: SPEC.amounts[0] ?? 1, reason: '', note: '' })
-      void visvine.ui.toast(`${form.amount} ${SPEC.unit} to ${form.person}`, 'success')
+      void visvine.ui.toast(`${form.amount} ${unitFor(form.amount)} to ${form.person}`, 'success')
     } finally {
       setBusy(false)
     }
@@ -148,10 +151,7 @@ export default function App() {
         <Select id="to" value={form.person} placeholder="Choose someone" options={people.map((p) => ({ value: p, label: p }))} onValueChange={(person) => setForm({ ...form, person })} />
       </Field>
       <Field label={SPEC.unit.charAt(0).toUpperCase() + SPEC.unit.slice(1)} htmlFor="amount">
-        <div className="flex items-center gap-2">
-          <Segmented label="Amount" options={SPEC.amounts.map((a) => ({ value: String(a), label: String(a) }))} value={String(form.amount)} onChange={(v) => setForm({ ...form, amount: Number(v) })} />
-          <Input id="amount" type="number" className="w-24" value={String(form.amount)} onChange={(e) => setForm({ ...form, amount: Number(e.currentTarget.value) })} />
-        </div>
+        <Segmented label="Amount" options={SPEC.amounts.map((a) => ({ value: String(a), label: String(a) }))} value={String(form.amount)} onChange={(v) => setForm({ ...form, amount: Number(v) })} />
       </Field>
       {SPEC.reasons && SPEC.reasons.length > 0 && (
         <Field label="For" htmlFor="reason">
@@ -170,13 +170,13 @@ export default function App() {
         <ul className="flex flex-col">
           {entries.map((e) => (
             <li key={e.id} className="flex items-start gap-3 border-b border-line-subtle py-3">
-              <Avatar name={e.data.person} size="sm" fallback="initials" />
+              <PersonAvatar name={e.data.person} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-fg">
                   <span className="font-medium">{e.data.person}</span>
                   <span className="text-fg-muted"> got </span>
                   <span className="font-medium tabular-nums">
-                    {e.data.amount} {SPEC.unit}
+                    {e.data.amount} {unitFor(e.data.amount)}
                   </span>
                   {e.data.reason && <span className="text-fg-muted"> · {e.data.reason}</span>}
                 </p>
@@ -206,15 +206,15 @@ export default function App() {
         {ranking.map((r) => (
           <li key={r.person} className="flex items-center gap-4 border-b border-line-subtle py-3">
             <span className={`w-6 text-center text-sm font-semibold tabular-nums ${r.place === 1 && r.total > 0 ? 'text-accent' : 'text-fg-muted'}`}>{r.place}</span>
-            <Avatar name={r.person} size="sm" fallback="initials" />
+            <PersonAvatar name={r.person} size="sm" />
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <span className="truncate text-sm font-medium text-fg">{r.person}</span>
               <div className="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
-                <div className={`h-full rounded-full transition-all ${r.place === 1 && r.total > 0 ? 'bg-accent' : 'bg-hue-blue'}`} style={{ width: `${(r.total / top) * 100}%` }} />
+                <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(r.total / top) * 100}%` }} />
               </div>
             </div>
             <span className="w-20 text-right text-sm tabular-nums text-fg">
-              {r.total} <span className="text-fg-muted">{SPEC.unit}</span>
+              {r.total} <span className="text-fg-muted">{unitFor(r.total)}</span>
             </span>
           </li>
         ))}

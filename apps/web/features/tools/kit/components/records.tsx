@@ -140,13 +140,27 @@ function optionFor(field: FieldDef, value: unknown): Required<FieldOption> | nul
 export function formatMoney(value: unknown, currency = 'USD'): string {
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n)) return '';
-  const compact = Math.abs(n) >= 100_000;
+  // One notation for everything a person compares: whole units below a
+  // million ("$120,000" beside "$18,000", never "$120K"), compact above.
+  const compact = Math.abs(n) >= 1_000_000;
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency,
     notation: compact ? 'compact' : 'standard',
     maximumFractionDigits: compact ? 1 : 0,
   }).format(n);
+}
+
+/** A person's own hue, the same everywhere their name is drawn. */
+export function hueOf(name: string): Hue {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return HUES[h % (HUES.length - 1)];
+}
+
+/** A person's initials on their own hue. */
+export function PersonAvatar({ name, size = 'xs' }: { name: string; size?: 'xs' | 'sm' | 'md' }) {
+  return <Avatar name={name} size={size} fallback="initials" accentColor={`var(--vv-color-hue-${hueOf(name)})`} />;
 }
 
 export function formatNumber(value: unknown): string {
@@ -197,12 +211,14 @@ function hostOf(url: string): string {
 export interface FieldValueProps {
   field: FieldDef;
   value: unknown;
-  /** Tighter: no avatar, dates short. For a card. */
+  /** Tighter: dates short. For a card. */
   compact?: boolean;
+  /** A date that is due and not done: drawn in the danger colour once past. A date is only ever red when this says so. */
+  due?: boolean;
 }
 
 /** One field's value, drawn for reading. Empty is a muted dash. */
-export function FieldValue({ field, value, compact = false }: FieldValueProps) {
+export function FieldValue({ field, value, compact = false, due = false }: FieldValueProps) {
   const empty = value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
   if (empty && field.kind !== 'boolean') return <span className="text-fg-subtle">—</span>;
   switch (field.kind) {
@@ -229,16 +245,26 @@ export function FieldValue({ field, value, compact = false }: FieldValueProps) {
       return <span className="tabular-nums">{formatMoney(value, field.currency)}</span>;
     case 'number':
       return <span className="tabular-nums">{formatNumber(value)}</span>;
-    case 'percent':
-      return <span className="tabular-nums">{formatNumber(value)}%</span>;
+    case 'percent': {
+      const n = Math.max(0, Math.min(100, Number(value) || 0));
+      return (
+        <span className="inline-flex items-center gap-2">
+          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-muted">
+            <span className={clsx('block h-full rounded-full', n >= 100 ? 'bg-success' : 'bg-accent')} style={{ width: `${n}%` }} />
+          </span>
+          <span className="tabular-nums">{formatNumber(value)}%</span>
+        </span>
+      );
+    }
     case 'date': {
       const days = daysFrom(value);
-      return <span className={clsx('tabular-nums', days !== null && days < 0 && 'text-danger')}>{compact ? formatDate(value) : relativeDate(value)}</span>;
+      const late = due && days !== null && days < 0;
+      return <span className={clsx('tabular-nums', late && 'font-medium text-danger')}>{compact ? formatDate(value) : relativeDate(value)}</span>;
     }
     case 'person':
       return (
-        <span className="inline-flex min-w-0 items-center gap-2">
-          {!compact && <Avatar name={String(value)} size="xs" fallback="initials" />}
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <PersonAvatar name={String(value)} />
           <span className="truncate">{String(value)}</span>
         </span>
       );
@@ -259,7 +285,7 @@ export function FieldValue({ field, value, compact = false }: FieldValueProps) {
     case 'rating': {
       const n = Math.max(0, Math.min(5, Math.round(Number(value) || 0)));
       return (
-        <span className="tracking-wide text-warning" aria-label={`${n} of 5`}>
+        <span className="tracking-wide text-hue-amber" aria-label={`${n} of 5`}>
           {'★'.repeat(n)}
           <span className="text-fg-subtle">{'★'.repeat(5 - n)}</span>
         </span>
@@ -387,8 +413,9 @@ export interface RecordFormProps {
 const WIDE: ReadonlySet<FieldKind> = new Set(['longtext', 'tags']);
 
 /**
- * Every field, two to a row on a wide frame; long text and tags take a row of
- * their own. The first text field is focused.
+ * Every field, two to a row on a wide frame; long text, tags and the title
+ * take a row of their own. Nothing is focused on open: a focused field draws
+ * differently from its neighbours and reads as the odd one out.
  */
 export function RecordForm({ fields, value, onChange, errors = [] }: RecordFormProps) {
   const firstText = fields.find((f) => f.kind === 'text')?.key;
@@ -399,7 +426,7 @@ export function RecordForm({ fields, value, onChange, errors = [] }: RecordFormP
         return (
           <div key={field.key} className={clsx(WIDE.has(field.kind) || field.key === firstText ? 'sm:col-span-2' : undefined)}>
             <Field label={field.label} htmlFor={id} error={errors.includes(field.key) ? `${field.label} is needed` : undefined}>
-              <FieldInput id={id} autoFocus={field.key === firstText} field={field} value={value[field.key]} onChange={(v) => onChange({ ...value, [field.key]: v })} />
+              <FieldInput id={id} field={field} value={value[field.key]} onChange={(v) => onChange({ ...value, [field.key]: v })} />
             </Field>
           </div>
         );
@@ -501,12 +528,16 @@ export interface RecordTableProps<T extends { id: string; data: RecordData }> {
   /** A last column of the Tool's own (an action, a menu). */
   trailing?: (row: T) => ReactNode;
   maxHeight?: number;
+  /** The date field that falls due; it turns red once past on a row that is not done. */
+  dueField?: string;
+  /** A row that is finished — its due date is never late. */
+  isDone?: (row: T) => boolean;
 }
 
-const RIGHT_KINDS: ReadonlySet<FieldKind> = new Set(['number', 'money', 'percent']);
+const RIGHT_KINDS: ReadonlySet<FieldKind> = new Set(['number', 'money']);
 
 /** A sortable table of records: one column per field, the first one bold. */
-export function RecordTable<T extends { id: string; data: RecordData }>({ fields, rows, onOpen, empty, trailing, maxHeight }: RecordTableProps<T>) {
+export function RecordTable<T extends { id: string; data: RecordData }>({ fields, rows, onOpen, empty, trailing, maxHeight, dueField, isDone }: RecordTableProps<T>) {
   const shown = fields.filter((f) => !f.hideInTable);
   const columns: DataTableColumn<T>[] = shown.map((field, i) => ({
     key: field.key,
@@ -515,7 +546,11 @@ export function RecordTable<T extends { id: string; data: RecordData }>({ fields
     sortable: true,
     value: (row: T) => row.data[field.key] as unknown,
     render: (row: T) =>
-      i === 0 ? <span className="font-medium text-fg">{String(row.data[field.key] ?? '') || 'Untitled'}</span> : <FieldValue field={field} value={row.data[field.key]} />,
+      i === 0 ? (
+        <span className="font-medium text-fg">{String(row.data[field.key] ?? '') || 'Untitled'}</span>
+      ) : (
+        <FieldValue field={field} value={row.data[field.key]} due={field.key === dueField && !(isDone?.(row) ?? false)} />
+      ),
   }));
   if (trailing) columns.push({ key: '__trailing', header: '', align: 'right', render: trailing });
   return (
@@ -539,24 +574,43 @@ export interface RecordBoardProps<T extends { id: string; data: RecordData }> {
   rows: T[];
   onMove: (row: T, toValue: string) => void;
   onOpen?: (row: T) => void;
-  /** Fields shown on a card under its title, by key — default: up to three that are not the column. */
+  /** Fields on a card besides its title, by key — default: every field shown in the table that is not the column. */
   cardFields?: string[];
   /** A number summed at the top of each column (a money or number field's key). */
   sumField?: string;
+  /** The date field that falls due: late on an open card turns red. */
+  dueField?: string;
+  /** Column values that mean finished — a card there is never late. */
+  doneValues?: string[];
+  /** "+ Add" at the foot of each column, with that column's value. */
+  onAdd?: (columnValue: string) => void;
 }
 
-/** A board with one column per option of a select field; dragging a card sets it. */
-export function RecordBoard<T extends { id: string; data: RecordData }>({ fields, groupBy, rows, onMove, onOpen, cardFields, sumField }: RecordBoardProps<T>) {
+const NUMBER_KINDS: ReadonlySet<FieldKind> = new Set(['money', 'number']);
+const CHIP_KINDS: ReadonlySet<FieldKind> = new Set(['select', 'tags']);
+
+/**
+ * A board with one column per option of a select field; dragging a card sets
+ * it. Up to six columns share the width; more scroll sideways behind a fade
+ * that says so. A card is its title and its number on one line, its chips
+ * under them, and one muted line of the rest joined by `·`.
+ */
+export function RecordBoard<T extends { id: string; data: RecordData }>({ fields, groupBy, rows, onMove, onOpen, cardFields, sumField, dueField, doneValues, onAdd }: RecordBoardProps<T>) {
   const group = fields.find((f) => f.key === groupBy);
   const titleKey = fields[0]?.key;
-  const shownOnCard = useMemo(
+  const onCard = useMemo(
     () =>
-      (cardFields ?? fields.filter((f) => f.key !== groupBy && f.key !== titleKey && f.kind !== 'longtext').slice(0, 3).map((f) => f.key))
+      (cardFields ?? fields.filter((f) => f.key !== groupBy && f.key !== titleKey && f.kind !== 'longtext' && !f.hideInTable).map((f) => f.key))
         .map((key) => fields.find((f) => f.key === key))
         .filter((f): f is FieldDef => Boolean(f)),
     [cardFields, fields, groupBy, titleKey],
   );
   const sum = sumField ? fields.find((f) => f.key === sumField) : undefined;
+  const headline = sum ?? onCard.find((f) => NUMBER_KINDS.has(f.kind));
+  const chips = onCard.filter((f) => CHIP_KINDS.has(f.kind));
+  const meta = onCard.filter((f) => f !== headline && !CHIP_KINDS.has(f.kind)).slice(0, 3);
+  const done = new Set(doneValues ?? []);
+
   if (!group) return null;
   const columns = optionsOf(group);
   const byId = new Map(rows.map((r) => [r.id, r]));
@@ -564,47 +618,76 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
     const row = byId.get(m.cardId);
     if (row && m.toColumnId !== m.fromColumnId) onMove(row, m.toColumnId);
   };
+  const fill = columns.length <= 6;
   return (
-    <KanbanBoard onMove={move}>
-      {columns.map((col) => {
-        const inCol = rows.filter((r) => String(r.data[groupBy] ?? '') === col.value);
-        const total = sum ? inCol.reduce((acc, r) => acc + (Number(r.data[sum.key]) || 0), 0) : null;
-        return (
-          <KanbanColumn
-            key={col.value}
-            id={col.value}
-            fill={columns.length <= 4}
-            title={
-              <>
-                <HueDot hue={col.hue} />
-                {col.label}
-              </>
-            }
-            count={inCol.length}
-            actions={
-              total !== null && total > 0 ? (
-                <span className="text-xs text-fg-muted tabular-nums">{sum!.kind === 'money' ? formatMoney(total, sum!.currency) : formatNumber(total)}</span>
-              ) : undefined
-            }
-          >
-            {inCol.map((row) => (
-              <KanbanCard key={row.id} id={row.id} onClick={onOpen ? () => onOpen(row) : undefined}>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-fg">{String(row.data[titleKey] ?? '') || 'Untitled'}</span>
-                  {shownOnCard.map((f) =>
-                    row.data[f.key] === undefined || row.data[f.key] === null || row.data[f.key] === '' ? null : (
-                      <span key={f.key} className="flex min-w-0 items-center text-xs text-fg-muted">
-                        <FieldValue field={f} value={row.data[f.key]} compact />
-                      </span>
-                    ),
-                  )}
-                </div>
-              </KanbanCard>
-            ))}
-          </KanbanColumn>
-        );
-      })}
-    </KanbanBoard>
+        <KanbanBoard onMove={move}>
+          {columns.map((col) => {
+            const inCol = rows.filter((r) => String(r.data[groupBy] ?? '') === col.value);
+            const total = sum ? inCol.reduce((acc, r) => acc + (Number(r.data[sum.key]) || 0), 0) : null;
+            const colDone = done.has(col.value);
+            return (
+              <KanbanColumn
+                key={col.value}
+                id={col.value}
+                fill={fill}
+                className="min-h-96"
+                title={
+                  <>
+                    <HueDot hue={col.hue} />
+                    {col.label}
+                  </>
+                }
+                count={inCol.length}
+                actions={
+                  total !== null && total > 0 ? (
+                    <span className="text-xs text-fg-muted tabular-nums">{sum!.kind === 'money' ? formatMoney(total, sum!.currency) : formatNumber(total)}</span>
+                  ) : undefined
+                }
+              >
+                {inCol.map((row) => (
+                  <KanbanCard key={row.id} id={row.id} onClick={onOpen ? () => onOpen(row) : undefined}>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="min-w-0 text-sm font-medium leading-snug text-fg">{String(row.data[titleKey] ?? '') || 'Untitled'}</span>
+                        {headline && row.data[headline.key] !== undefined && row.data[headline.key] !== null && row.data[headline.key] !== '' && (
+                          <span className="shrink-0 text-sm font-semibold tabular-nums text-fg">
+                            {headline.kind === 'money' ? formatMoney(row.data[headline.key], headline.currency) : formatNumber(row.data[headline.key])}
+                          </span>
+                        )}
+                      </div>
+                      {chips.some((f) => row.data[f.key]) && (
+                        <div className="flex flex-wrap gap-1">
+                          {chips.map((f) => (row.data[f.key] ? <FieldValue key={f.key} field={f} value={row.data[f.key]} /> : null))}
+                        </div>
+                      )}
+                      {meta.some((f) => row.data[f.key] !== undefined && row.data[f.key] !== null && row.data[f.key] !== '') && (
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-fg-muted">
+                          {meta
+                            .filter((f) => row.data[f.key] !== undefined && row.data[f.key] !== null && row.data[f.key] !== '')
+                            .map((f, i) => (
+                              <span key={f.key} className="inline-flex min-w-0 items-center gap-1.5">
+                                {i > 0 && <span aria-hidden>·</span>}
+                                <FieldValue field={f} value={row.data[f.key]} compact due={f.key === dueField && !colDone} />
+                              </span>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </KanbanCard>
+                ))}
+                {onAdd && (
+                  <button
+                    type="button"
+                    onClick={() => onAdd(col.value)}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
+                  >
+                    <span aria-hidden className="text-base leading-none">+</span> Add
+                  </button>
+                )}
+              </KanbanColumn>
+            );
+          })}
+        </KanbanBoard>
   );
 }
 

@@ -542,6 +542,16 @@ Props: hue?: 'blue' | 'green' | 'amber' | 'red' | 'violet' | … · children
 <HueChip hue="green">Won</HueChip>
 ```
 
+### PersonAvatar
+
+A person's initials on their own hue, the same everywhere their name is drawn. Beside a name in a list, a card or a ranking. FieldValue draws one for a person field on its own.
+
+Props: name · size?: 'xs' | 'sm' | 'md'
+
+```tsx
+<PersonAvatar name="Ana Silva" size="sm" />
+```
+
 ### HueDot
 
 A small round swatch of a hue. Beside a column title or a legend row.

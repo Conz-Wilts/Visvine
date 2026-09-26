@@ -56,7 +56,8 @@ import { BRIDGE_METHODS } from '@/lib/tools/protocol'
 import { TOOL_PHONE_REFUSAL } from '@/lib/tools/clientClass'
 import { describeRequirements, isDegraded, sourceRequirements } from '@/lib/tools/requirements'
 import { TOOL_AUTHOR_GUIDE, TOOL_KIT_DTS } from '@/lib/tools/sdkDocs'
-import { renderCatalog } from '@/lib/tools/catalog'
+import { renderCatalog, TOOL_CATALOG } from '@/lib/tools/catalog'
+import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { reviewModel, reviewScreens, visualReviewAvailable } from '@/lib/tools/visualReview'
 import { passes } from '@/lib/tools/shared/visualRubric'
 import { applySpec, checkSpec, templateById, TOOL_TEMPLATES, type ToolTemplate } from '@/lib/tools/templates'
@@ -773,24 +774,55 @@ async function pushToolAction(
   }
 }
 
-async function getToolSdk(_ctx: ActionCaller, _args: Record<string, never>) {
+/** The author guide cut at its `## ` headings, each keyed by a short slug. */
+function guideSections(): Array<{ id: string; title: string; body: string }> {
+  const parts = TOOL_AUTHOR_GUIDE.split(/\n(?=## )/)
+  return parts.slice(1).map((part) => {
+    const title = part.slice(3, part.indexOf('\n')).trim()
+    const id = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    return { id, title, body: part.trim() }
+  })
+}
+
+/** The first lines of the kit catalog: every component and hook in one line each. */
+function catalogIndex(): string[] {
+  return TOOL_CATALOG.map((e) => `${e.name} — ${e.what}`)
+}
+
+/**
+ * The manual, a section at a time. The whole of it is tens of thousands of
+ * tokens — more than a client will take in one answer, so a model saved it to
+ * a file and grepped it — so with no `section` this answers with the part
+ * every build needs (start from a template, the file layout) and the index of
+ * the rest, and each section is its own call.
+ */
+async function getToolSdk(_ctx: ActionCaller, args: { section?: string }) {
+  const sections = guideSections()
+  const section = args.section?.trim().toLowerCase()
+  if (section === 'all') {
+    return { guide: TOOL_AUTHOR_GUIDE, tool_kit_dts: TOOL_KIT_DTS, catalog: renderCatalog(), bridge_methods: [...BRIDGE_METHODS] }
+  }
+  if (section === 'types') return { section: 'types', tool_kit_dts: TOOL_KIT_DTS }
+  if (section === 'catalog') return { section: 'catalog', catalog: renderCatalog() }
+  if (section === 'bridge') return { section: 'bridge', bridge_methods: [...BRIDGE_METHODS] }
+  if (section) {
+    const found = sections.find((s) => s.id === section || s.id.startsWith(section))
+    if (!found) throw new ActionError(400, `No section "${args.section}". Sections: ${[...sections.map((s) => s.id), 'types', 'catalog', 'bridge', 'all'].join(', ')}.`)
+    return { section: found.id, text: found.body }
+  }
+  const intro = TOOL_AUTHOR_GUIDE.split(/\n(?=## )/)[0].trim()
+  const start = sections.find((s) => s.id === 'start-from-a-template')
   return {
-    guide: TOOL_AUTHOR_GUIDE,
-    tool_kit_dts: TOOL_KIT_DTS,
-    // The kit's components and hooks with snippets, and the design rules — build
-    // from these and the Tool looks like the app (lib/tools/catalog.ts).
-    catalog: renderCatalog(),
-    // Everything a tool can ask the host for. `ui.tsx` reaches these through
-    // @visvine/tool-kit; `data.js` gets the same set as isolate capabilities.
-    bridge_methods: [...BRIDGE_METHODS],
-    files: {
-      'index.md':
-        'Frontmatter is the config (type, title, description, surfaces, perimeter); the body is documentation for humans.',
-      'ui.tsx':
-        'React/TSX, compiled on write. The default export is mounted. Only react, react-dom and @visvine/tool-kit are importable.',
-      'data.js':
-        'Optional server-side handlers. Assign one function per operation to `handlers.<name>`; the interface calls them by name through `data.call`.',
-    },
+    read_first: [intro, start?.body].filter(Boolean).join('\n\n'),
+    components: catalogIndex(),
+    sections: [
+      ...sections.filter((s) => s.id !== 'start-from-a-template').map((s) => ({ section: s.id, title: s.title })),
+      { section: 'catalog', title: 'Every component and hook with a snippet, and the design rules' },
+      { section: 'types', title: 'The @visvine/tool-kit type definitions' },
+      { section: 'bridge', title: 'Every bridge method a Tool may call' },
+      { section: 'all', title: 'Everything at once (large)' },
+    ],
+    next: 'Built from a template (plan_tool names one), you rarely need more. Otherwise read `ui-tsx`, `records`, `collections` and `catalog` — get_tool_sdk { section } — before writing code.',
   }
 }
 
@@ -834,6 +866,7 @@ function toStep(raw: {
   key?: string
   pixels?: number
   ms?: number
+  action?: string
 }): ToolStep {
   const need = (field: string) => {
     throw new ActionError(400, `A \`${raw.do}\` step needs \`${field}\`.`)
@@ -851,6 +884,8 @@ function toStep(raw: {
       return { do: 'scroll', ...(raw.pixels !== undefined ? { pixels: raw.pixels } : {}), ...(raw.target ? { target: raw.target } : {}) }
     case 'wait':
       return { do: 'wait', ms: raw.ms ?? need('ms') }
+    case 'band':
+      return { do: 'band', action: raw.action ?? need('action') }
   }
 }
 
@@ -1049,10 +1084,33 @@ interface ConfigureToolArgs {
  * surfaces, permissions, bindings, settings, platforms, the kit range,
  * dependencies, collections. Validated as it lands; the build comes back.
  */
+/** The keys that are the index note's prose, not facts — `configure_tool` writes them there rather than refusing them. */
+const NOTE_KEYS = ['title', 'description', 'tags'] as const
+
 async function configureTool(ctx: ActionCaller, args: ConfigureToolArgs, deps: AppToolDeps = liveDeps) {
   const target = await deps.resolveTarget(ctx, args.space_id)
   await requireToolsFeature(ctx, target, deps)
-  const result = await deps.configureTool(target.principal, target.context, args.name, args.facts)
+  const noteKeys = NOTE_KEYS.filter((k) => k in args.facts)
+  if (noteKeys.length) {
+    const detail = await deps.describeAuthoredTool(target.principal, target.context, args.name)
+    const index = detail?.sources['index.md']
+    if (!detail || !index) throw new ActionError(404, `No tool named "${args.name}".`)
+    const front = parseFrontmatter(index)
+    for (const k of noteKeys) {
+      const v = args.facts[k]
+      if (v === null) delete front[k]
+      else front[k] = v as never
+    }
+    const written = await deps.writeToolFile(target.principal, target.context, args.name, 'index.md', joinFrontmatter(front, splitFrontmatter(index).body))
+    if (!written.ok) refuse(written)
+  }
+  const facts = Object.fromEntries(Object.entries(args.facts).filter(([k]) => !(NOTE_KEYS as readonly string[]).includes(k)))
+  if (Object.keys(facts).length === 0) {
+    const build = await deps.rebuild(target.context.spaceId, args.name)
+    const config = build.config
+    return { name: args.name, changed: noteKeys, build: buildReport(build), perimeter: config ? describePerimeter(config.perimeter) : [], surfaces: describeSurfaces(config) }
+  }
+  const result = await deps.configureTool(target.principal, target.context, args.name, facts)
   if (!result.ok) refuse(result)
   const config = result.build.config
   return {
@@ -1376,8 +1434,8 @@ export const APP_ACTIONS = [
       'types, actions, ai, ui), `bindings` (slots the installing space fills: folder, type, connector, agent — referenced ' +
       'as `$name` in permissions), `settings` (install-time values an admin sets), `platforms` (web, desktop), `sdk`, ' +
       '`dependencies`, `collections`, `release`, `license`. Each key given replaces that key; null removes it. Checked ' +
-      "as it lands — a malformed value is refused with the reason — and the build comes back. Title, description and " +
-      "tags stay in index.md (write_tool). Setting a manifest-2 key on a Tool that still declares `perimeter` moves its " +
+      "as it lands — a malformed value is refused with the reason — and the build comes back. `title`, `description` and " +
+      "`tags` are the index note's, and are written into its frontmatter. Setting a manifest-2 key on a Tool that still declares `perimeter` moves its " +
       'reach into `permissions`.',
     input: {
       space_id: spaceArg,
@@ -1460,8 +1518,11 @@ export const APP_ACTIONS = [
       'the limits), the TypeScript definitions for `@visvine/tool-kit` (the components, hooks and the ' +
       'context/connector/agent client a tool imports), and the list of bridge methods a tool may call. ' +
       'Read this once before writing any tool code — the API is small and specific, and guessing it wastes ' +
-      'a compile round trip.',
-    input: {},
+      'a compile round trip. With no `section` it answers with what every build needs and the index of the rest; ' +
+      'ask for a section by its id (`ui-tsx`, `records`, `catalog`, `types`, …).',
+    input: {
+      section: z.string().max(60).optional().describe('One section of the manual, by id from the index — or `all` for everything (large)'),
+    },
     annotations: { readOnlyHint: true },
     run: (ctx, args) => getToolSdk(ctx, args),
   }),
@@ -1508,7 +1569,7 @@ export const APP_ACTIONS = [
       '`{ role: "button", name: "Submit vote" }`, `{ label: "Company" }`, `{ text: "Azonic" }`, ' +
       '`{ placeholder: "Search companies" }`. Steps: `click`, `hover`, `fill` (value), `choose` (a Select by its ' +
       'label, then the option named `value`), `press` (key, optional target), `scroll` (pixels, or a target to ' +
-      'bring into view), `wait` (ms). The Tool runs against the space\'s REAL data under your own access: a ' +
+      'bring into view), `wait` (ms), `band` (press a band button by its `action` id — the main act, e.g. New deal, lives there). The Tool runs against the space\'s REAL data under your own access: a ' +
       'step that saves, saves — try on something you can put back, and say what you changed. Where headless ' +
       'rendering is unavailable `available` is false with a reason.',
     input: {
@@ -1517,7 +1578,8 @@ export const APP_ACTIONS = [
       steps: z
         .array(
           z.object({
-            do: z.enum(['click', 'hover', 'fill', 'choose', 'press', 'scroll', 'wait']),
+            do: z.enum(['click', 'hover', 'fill', 'choose', 'press', 'scroll', 'wait', 'band']),
+            action: z.string().max(64).optional().describe("band: the id of the band button to press (surfaces.actions) — e.g. 'new'"),
             target: z
               .object({
                 role: z.string().max(40).optional().describe('ARIA role: button, link, combobox, textbox, checkbox, tab, option, radio…'),

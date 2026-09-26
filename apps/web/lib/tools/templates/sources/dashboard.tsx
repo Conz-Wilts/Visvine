@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react'
 import {
   AreaChart,
-  BarChart,
   Card,
   formatMoney,
   formatNumber,
   optionsOf,
   Page,
   PieChart,
+  Progress,
   RecordDialog,
   RecordsEmpty,
   RecordTable,
@@ -16,6 +16,7 @@ import {
   StatRow,
   Toolbar,
   useBandAction,
+  useChartColors,
   useCollection,
   useSampleRows,
   useSection,
@@ -131,6 +132,7 @@ export default function App() {
   }
   useBandAction('new', startNew)
 
+  const colors = useChartColors()
   const valueField = SPEC.fields.find((f) => f.key === SPEC.valueField)
   const category = SPEC.fields.find((f) => f.key === SPEC.categoryField)
   const fmt = (n: number) => (valueField?.kind === 'money' ? formatMoney(n, valueField.currency) : formatNumber(n))
@@ -220,10 +222,13 @@ export default function App() {
   }
 
   const top = byCategory[0]
+  const categoryTotal = byCategory.reduce((acc, d) => acc + d.total, 0)
+  const used = SPEC.monthlyTarget ? sum(inThis) / SPEC.monthlyTarget : 0
   return (
     <Page>
       <StatRow>
         <Stat
+          lead
           label="This month"
           value={fmt(sum(inThis))}
           delta={change}
@@ -232,29 +237,40 @@ export default function App() {
           hint="vs last month"
         />
         {SPEC.monthlyTarget ? (
-          <Stat label="Target" value={fmt(SPEC.monthlyTarget)} hint={`${Math.round((sum(inThis) / SPEC.monthlyTarget) * 100)}% used`} />
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-xs font-medium uppercase tracking-wide text-fg-muted">{SPEC.lowerIsBetter ? 'Budget' : 'Target'}</span>
+            <span className="text-2xl font-semibold tabular-nums text-fg">{fmt(SPEC.monthlyTarget)}</span>
+            <Progress value={used} hue={SPEC.lowerIsBetter ? (used > 1 ? 'red' : used > 0.85 ? 'amber' : 'green') : used >= 1 ? 'green' : 'blue'} />
+            <span className="text-xs text-fg-muted">
+              {Math.round(used * 100)}% {SPEC.lowerIsBetter ? 'used' : 'reached'}
+            </span>
+          </div>
         ) : (
           <Stat label="Last month" value={fmt(sum(inLast))} />
         )}
         <Stat label={title(SPEC.plural)} value={rows.length} hint={`${inThis.length} this month`} />
-        {top && <Stat label={`Top ${category?.label.toLowerCase() ?? ''}`} value={top.name} hint={fmt(top.total)} />}
+        {top && <Stat label={`Top ${category?.label.toLowerCase() ?? ''}`} value={top.name} hint={`${fmt(top.total)} · all time`} />}
       </StatRow>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <Card title="By week" className="lg:col-span-2">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+        <Card title={`By week · last ${byWeek.length} weeks`} className="lg:col-span-3">
           <AreaChart data={byWeek} x="week" series={[{ key: 'total', label: valueField?.label ?? 'Total' }]} height={240} formatValue={fmt} legend={false} formatX={(w) => new Date(`${String(w)}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} />
         </Card>
         {category && (
-          <Card title={`By ${category.label.toLowerCase()}`}>
-            <div className="flex items-center gap-4">
-              <div className="w-32 shrink-0">
-                <PieChart data={byCategory} nameKey="name" valueKey="total" height={128} donut legend={false} formatValue={fmt} />
+          <Card title={`By ${category.label.toLowerCase()} · all time`} className="lg:col-span-2">
+            <div className="flex flex-col gap-4">
+              <div className="mx-auto w-40">
+                <PieChart data={byCategory} nameKey="name" valueKey="total" height={160} donut legend={false} formatValue={fmt} colors={colors} />
               </div>
-              <ul className="flex min-w-0 flex-1 flex-col gap-1.5 text-sm">
-                {byCategory.map((d) => (
-                  <li key={d.name} className="flex justify-between gap-2">
-                    <span className="truncate text-fg-secondary">{d.name}</span>
-                    <span className="tabular-nums text-fg">{fmt(d.total)}</span>
+              <ul className="flex flex-col gap-2.5 text-sm">
+                {byCategory.map((d, i) => (
+                  <li key={d.name} className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: colors[i % colors.length] }} />
+                      <span className="min-w-0 flex-1 truncate text-fg-secondary">{d.name}</span>
+                      <span className="tabular-nums text-fg">{fmt(d.total)}</span>
+                      <span className="w-10 text-right tabular-nums text-fg-muted">{categoryTotal ? Math.round((d.total / categoryTotal) * 100) : 0}%</span>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -262,12 +278,6 @@ export default function App() {
           </Card>
         )}
       </div>
-
-      {category && byCategory.length > 1 && (
-        <Card title={`${category.label} ranking`}>
-          <BarChart data={byCategory} x="name" series={[{ key: 'total', label: valueField?.label ?? 'Total' }]} height={200} formatValue={fmt} legend={false} />
-        </Card>
-      )}
 
       <Card title="Latest" flush>
         <RecordTable fields={SPEC.fields} rows={rows.slice(0, 6)} onOpen={setEditing} />

@@ -588,13 +588,26 @@ test('preview_tool hands back both links and refuses to pretend a broken tool re
   assert.match(broken.renders, /error card/)
 })
 
-test('get_tool_sdk returns the guide, the type definitions and the bridge methods', async () => {
-  const sdk = await appToolHandlers.getToolSdk(CTX, {})
-  assert.match(sdk.guide, /Building a Visvine Tool/)
-  assert.match(sdk.tool_kit_dts, /declare module '@visvine\/tool-kit'/)
-  assert.ok(sdk.bridge_methods.includes('context.read'))
-  assert.ok(sdk.bridge_methods.includes('data.call'))
-  assert.deepEqual(Object.keys(sdk.files).sort(), ['data.js', 'index.md', 'ui.tsx'])
+test('get_tool_sdk answers small by default: what every build needs, and the index of the rest', async () => {
+  const sdk = (await appToolHandlers.getToolSdk(CTX, {})) as { read_first: string; components: string[]; sections: Array<{ section: string }> }
+  assert.match(sdk.read_first, /Building a Visvine Tool/)
+  assert.match(sdk.read_first, /Start from a template/)
+  assert.ok(sdk.components.some((line) => line.startsWith('RecordBoard')))
+  const ids = sdk.sections.map((s) => s.section)
+  for (const id of ['ui-tsx', 'records', 'catalog', 'types', 'bridge', 'all']) assert.ok(ids.includes(id), id)
+  assert.ok(JSON.stringify(sdk).length < 16_000, 'the default answer stays small')
+})
+
+test('get_tool_sdk answers one section at a time, and all of it on request', async () => {
+  const types = (await appToolHandlers.getToolSdk(CTX, { section: 'types' })) as { tool_kit_dts: string }
+  assert.match(types.tool_kit_dts, /declare module '@visvine\/tool-kit'/)
+  const bridge = (await appToolHandlers.getToolSdk(CTX, { section: 'bridge' })) as { bridge_methods: string[] }
+  assert.ok(bridge.bridge_methods.includes('context.read') && bridge.bridge_methods.includes('data.call'))
+  const uiSection = (await appToolHandlers.getToolSdk(CTX, { section: 'ui-tsx' })) as { text: string }
+  assert.match(uiSection.text, /^## ui\.tsx/)
+  const all = (await appToolHandlers.getToolSdk(CTX, { section: 'all' })) as { guide: string }
+  assert.match(all.guide, /Building a Visvine Tool/)
+  await assert.rejects(() => appToolHandlers.getToolSdk(CTX, { section: 'nope' }), /No section/)
 })
 
 // ── publish / install: the admin gates ───────────────────────────────────────

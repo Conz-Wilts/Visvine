@@ -230,7 +230,16 @@ const dashboard: ToolTemplate = {
 
 const pollSpec = z.object({
   noun,
-  sample: z.array(z.object({ question: z.string().min(3).max(200), options: z.array(z.string().min(1).max(60)).min(2).max(8) })).min(1).max(6),
+  sample: z
+    .array(
+      z.object({
+        question: z.string().min(3).max(200),
+        options: z.array(z.string().min(1).max(60)).min(2).max(8),
+        tally: z.array(z.number().int().min(0).max(500)).max(8).optional(),
+      }),
+    )
+    .min(1)
+    .max(6),
 })
 
 const poll: ToolTemplate = {
@@ -241,21 +250,23 @@ const poll: ToolTemplate = {
   spec: pollSpec as unknown as z.ZodType<Record<string, unknown>>,
   specGuide: [
     'noun: what one is called ("poll", "question", "decision").',
-    'sample: 2–4 questions this team would actually ask, each with 2–5 short answers, fitting the request.',
+    'sample: 2–4 questions this team would actually ask, each with 2–5 short answers, fitting the request, and `tally`: how many of a team of ~12 have voted for each answer so far (one count per answer, not all equal) — so the first look shows results.',
   ].join('\n'),
   railIcon: 'list',
   facts: (spec) => {
     const s = spec as z.infer<typeof pollSpec>
     return {
-      surfaces: {
-        nav: { style: 'tabs', sections: [{ id: 'open', label: 'Open' }, { id: 'closed', label: 'Closed' }] },
-        actions: [{ id: 'new', label: `New ${s.noun}` }],
-      },
+      surfaces: { nav: null, actions: [{ id: 'new', label: `New ${s.noun}` }] },
       collections: {
         polls: {
           schema: {
             type: 'object',
-            properties: { question: { type: 'string', maxLength: 200 }, options: { type: 'array', items: { type: 'string', maxLength: 60 }, maxItems: 8 }, closed: { type: 'boolean' } },
+            properties: {
+              question: { type: 'string', maxLength: 200 },
+              options: { type: 'array', items: { type: 'string', maxLength: 60 }, maxItems: 8 },
+              tally: { type: 'array', items: { type: 'number' }, maxItems: 8 },
+              closed: { type: 'boolean' },
+            },
             required: ['question', 'options'],
             additionalProperties: false,
           },
@@ -272,7 +283,10 @@ const poll: ToolTemplate = {
       },
     }
   },
-  specProblems: () => [],
+  specProblems: (spec) => {
+    const s = spec as z.infer<typeof pollSpec>
+    return s.sample.filter((p) => p.tally && p.tally.length !== p.options.length).map((p) => `"${p.question}" has ${p.options.length} answers but ${p.tally!.length} tally counts`)
+  },
 }
 
 const checkinSpec = z.object({
@@ -290,7 +304,7 @@ const checkin: ToolTemplate = {
   spec: checkinSpec as unknown as z.ZodType<Record<string, unknown>>,
   specGuide: [
     'noun: one post ("check-in", "update", "entry").',
-    'fields: what each person answers, 2–5 of them — longtext for prose answers, rating for a 1–5 score, select for a fixed set, boolean for a did-you. No name or date fields: those are added.',
+    'fields: what each person answers, 2–5 of them — longtext for prose answers, rating for a 1–5 score, select for a fixed set, boolean for a did-you (a habit is a boolean: "Exercised", "Read 20 min"). Labels are short names, never instructions. No name or date fields: those are added.',
     'flagField: a field whose being filled deserves attention (blockers), if one exists.',
     'sample: 6–10 posts by 3–4 different people over the last three days. Each row has `name` (a person), `daysAgo` (0, 1, 2) and a value per field.',
   ].join('\n'),
@@ -298,7 +312,7 @@ const checkin: ToolTemplate = {
   facts: (spec) => {
     const s = spec as z.infer<typeof checkinSpec>
     return {
-      surfaces: { nav: { style: 'tabs', sections: [{ id: 'today', label: 'Today' }, { id: 'history', label: 'History' }] }, actions: [] },
+      surfaces: { nav: { style: 'tabs', sections: [{ id: 'today', label: 'Today' }, { id: 'history', label: 'History' }] }, actions: [{ id: 'post', label: `Post ${s.noun}` }] },
       collections: {
         entries: {
           schema: schemaForFields(s.fields, { name: { type: 'string', maxLength: 120 }, date: { type: 'string', maxLength: 10 } }),
@@ -363,6 +377,7 @@ const directory: ToolTemplate = {
 
 const leaderboardSpec = z.object({
   unit: z.string().min(1).max(20),
+  unitOne: z.string().min(1).max(20).optional(),
   actionLabel: z.string().min(1).max(24),
   amounts: z.array(z.number()).min(1).max(5),
   reasons: z.array(z.string().max(40)).max(8).optional(),
@@ -377,7 +392,7 @@ const leaderboard: ToolTemplate = {
   keywords: ['leaderboard', 'kudos', 'points', 'score', 'scores', 'ranking', 'rank', 'competition', 'challenge', 'gamification', 'shoutout', 'shoutouts', 'recognition', 'thanks', 'appreciation', 'steps', 'miles', 'km', 'streak', 'contest'],
   spec: leaderboardSpec as unknown as z.ZodType<Record<string, unknown>>,
   specGuide: [
-    'unit: what is counted, plural ("kudos", "points", "km"). actionLabel: the button ("Give kudos", "Log a run").',
+    'unit: what is counted, plural ("kudos", "points", "km"); unitOne: the singular when it differs ("point"). actionLabel: the button ("Give kudos", "Log a run").',
     'amounts: 1–4 quick amounts. reasons: optional kinds of entry.',
     'people: 4–8 realistic names who start on the board.',
     'sample: 6–10 entries for those people with amounts, reasons, short notes and daysAgo 0–20.',

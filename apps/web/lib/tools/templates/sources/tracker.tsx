@@ -115,6 +115,7 @@ export default function App() {
   const [view, setView] = useState(views[0].value)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
+  const [onlyOverdue, setOnlyOverdue] = useState(false)
   const [editing, setEditing] = useState<Row | 'new' | null>(null)
   const [month, setMonth] = useState(todayIso())
   const [draft, setDraft] = useState<RecordData>({})
@@ -125,20 +126,31 @@ export default function App() {
 
   useBandAction('new', () => startNew())
 
+  const done = new Set(SPEC.doneValues ?? [])
+  const isDone = (r: Row) => Boolean(group) && done.has(String(r.data[group!.key] ?? ''))
+  const isLate = (r: Row) => Boolean(dateField) && !isDone(r) && (daysFrom(r.data[dateField!.key]) ?? 0) < 0
+
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase()
     return rows.filter((row) => {
       if (filter && group && String(row.data[group.key] ?? '') !== filter) return false
+      if (onlyOverdue && !isLate(row)) return false
       if (!q) return true
       return SPEC.fields.some((f) => String(row.data[f.key] ?? '').toLowerCase().includes(q))
     })
-  }, [rows, search, filter, group])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, search, filter, group, onlyOverdue])
 
-  const done = new Set(SPEC.doneValues ?? [])
-  const open = group ? rows.filter((r) => !done.has(String(r.data[group.key] ?? ''))) : rows
-  const overdue = dateField ? open.filter((r) => (daysFrom(r.data[dateField.key]) ?? 0) < 0).length : 0
-  const total = (list: Row[]) => list.reduce((acc, r) => acc + (Number(r.data[sumField?.key ?? '']) || 0), 0)
-  const fmt = (n: number) => (sumField?.kind === 'money' ? formatMoney(n, sumField.currency) : formatNumber(n))
+  const open = rows.filter((r) => !isDone(r))
+  const overdue = rows.filter(isLate).length
+  // A percent or a rating is averaged, never added up: three 70% key results are not 210%.
+  const averaged = sumField?.kind === 'percent' || sumField?.kind === 'rating'
+  const total = (list: Row[]) => {
+    const values = list.map((r) => Number(r.data[sumField?.key ?? ''])).filter((n) => Number.isFinite(n))
+    const sum = values.reduce((a, b) => a + b, 0)
+    return averaged ? (values.length ? sum / values.length : 0) : sum
+  }
+  const fmt = (n: number) => (sumField?.kind === 'money' ? formatMoney(n, sumField.currency) : averaged ? `${Math.round(n)}${sumField?.kind === 'percent' ? '%' : ''}` : formatNumber(n))
   const firstDone = group && SPEC.doneValues?.[0]
   const doneCount = firstDone ? rows.filter((r) => String(r.data[group.key] ?? '') === firstDone).length : 0
 
@@ -168,10 +180,35 @@ export default function App() {
   return (
     <Page>
       <StatRow>
-        <Stat label={title(SPEC.plural)} value={rows.length} hint={group && SPEC.doneValues?.length ? `${open.length} open` : undefined} />
-        {sumField && <Stat label={group && SPEC.doneValues?.length ? `Open ${sumField.label.toLowerCase()}` : `Total ${sumField.label.toLowerCase()}`} value={fmt(total(group && SPEC.doneValues?.length ? open : rows))} />}
-        {firstDone && <Stat label={firstDone} value={doneCount} hint={sumField ? fmt(total(rows.filter((r) => String(r.data[group!.key] ?? '') === firstDone))) : undefined} />}
-        {dateField && <Stat label="Overdue" value={overdue} hint={overdue ? `past ${dateField.label.toLowerCase()}` : undefined} />}
+        {sumField ? (
+          <Stat
+            lead
+            label={averaged ? `Average ${sumField.label.toLowerCase()}` : SPEC.doneValues?.length ? `Open ${sumField.label.toLowerCase()}` : `Total ${sumField.label.toLowerCase()}`}
+            value={fmt(total(SPEC.doneValues?.length ? open : rows))}
+            hint={`${open.length} open ${open.length === 1 ? SPEC.noun : SPEC.plural}`}
+          />
+        ) : (
+          <Stat lead label={`Open ${SPEC.plural}`} value={open.length} hint={`of ${rows.length}`} />
+        )}
+        {sumField && <Stat label={title(SPEC.plural)} value={rows.length} hint={`${open.length} open`} />}
+        {firstDone && (
+          <Stat
+            label={firstDone}
+            value={doneCount}
+            tone={doneCount > 0 ? 'success' : undefined}
+            hint={sumField && !averaged ? fmt(total(rows.filter((r) => String(r.data[group!.key] ?? '') === firstDone))) : `${rows.length ? Math.round((doneCount / rows.length) * 100) : 0}% of all`}
+          />
+        )}
+        {dateField && (
+          <Stat
+            label="Overdue"
+            value={overdue}
+            tone={overdue > 0 ? 'danger' : undefined}
+            hint={overdue ? (onlyOverdue ? 'Showing only these' : 'Show them') : `past ${dateField.label.toLowerCase()}`}
+            onClick={overdue ? () => setOnlyOverdue(!onlyOverdue) : undefined}
+            active={onlyOverdue}
+          />
+        )}
       </StatRow>
 
       <Toolbar
@@ -203,8 +240,18 @@ export default function App() {
       ) : rows.length === 0 ? (
         <RecordsEmpty noun={SPEC.plural} onAdd={() => startNew()} />
       ) : view === 'board' && group ? (
-        <div className="overflow-x-auto pb-2">
-          <RecordBoard fields={SPEC.fields} groupBy={group.key} rows={shown} onMove={move} onOpen={setEditing} sumField={sumField?.key} />
+        <div>
+          <RecordBoard
+            fields={SPEC.fields}
+            groupBy={group.key}
+            rows={shown}
+            onMove={move}
+            onOpen={setEditing}
+            sumField={averaged ? undefined : sumField?.key}
+            dueField={dateField?.key}
+            doneValues={SPEC.doneValues}
+            onAdd={(value) => startNew({ [group.key]: value })}
+          />
         </div>
       ) : view === 'calendar' && dateField ? (
         <MonthCalendar
@@ -222,7 +269,14 @@ export default function App() {
           onDay={(date) => startNew({ [dateField.key]: date })}
         />
       ) : (
-        <RecordTable fields={SPEC.fields} rows={shown} onOpen={setEditing} empty={<span className="text-fg-muted">No {SPEC.plural} match.</span>} />
+        <RecordTable
+          fields={SPEC.fields}
+          rows={shown}
+          onOpen={setEditing}
+          dueField={dateField?.key}
+          isDone={isDone}
+          empty={<span className="text-fg-muted">No {SPEC.plural} match.</span>}
+        />
       )}
 
       <RecordDialog

@@ -437,6 +437,14 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     snippet: `<HueChip hue="green">Won</HueChip>`,
   },
   {
+    name: 'PersonAvatar',
+    kind: 'component',
+    what: "A person's initials on their own hue, the same everywhere their name is drawn.",
+    when: 'Beside a name in a list, a card or a ranking. FieldValue draws one for a person field on its own.',
+    props: "name · size?: 'xs' | 'sm' | 'md'",
+    snippet: `<PersonAvatar name="Ana Silva" size="sm" />`,
+  },
+  {
     name: 'HueDot',
     kind: 'component',
     what: 'A small round swatch of a hue.',

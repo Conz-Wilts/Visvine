@@ -7,7 +7,8 @@
 import type { SVGProps } from 'react';
 import { clsx } from 'clsx';
 
-const PATHS = {
+/** Each icon's path data, `M`-joined; `set_tool_icon` draws a rail icon from these too. */
+export const ICON_PATHS = {
   plus: 'M5 12h14 M12 5v14',
   search: 'M21 21l-4.34-4.34 M11 3a8 8 0 1 0 0 16a8 8 0 1 0 0-16',
   filter: 'M22 3H2l8 9.46V19l4 2v-8.54L22 3',
@@ -56,10 +57,10 @@ const PATHS = {
   vote: 'M9 12l2 2 4-4 M5 7c0-1.1.9-2 2-2h10a2 2 0 0 1 2 2v12H5V7Z M22 19H2',
 } as const;
 
-export type IconName = keyof typeof PATHS;
+export type IconName = keyof typeof ICON_PATHS;
 
 /** Every name `Icon` draws. */
-export const ICON_NAMES = Object.keys(PATHS) as IconName[];
+export const ICON_NAMES = Object.keys(ICON_PATHS) as IconName[];
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName;
@@ -68,7 +69,7 @@ export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
 }
 
 export function Icon({ name, size = 16, className, ...rest }: IconProps) {
-  const d = PATHS[name] ?? PATHS.more;
+  const d = ICON_PATHS[name] ?? ICON_PATHS.more;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

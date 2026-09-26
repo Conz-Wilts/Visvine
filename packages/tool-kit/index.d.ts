@@ -581,12 +581,20 @@ export const Recharts: typeof RechartsNamespace
 
 // ── date picker ──
 
-export interface DatePickerProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange' | 'min' | 'max'> {
+/** The app's own date field: a trigger reading "12 Oct 2026" and a month popover — never the browser's control. */
+export interface DatePickerProps {
   /** YYYY-MM-DD or null. */
   value: string | null
   onChange: (value: string | null) => void
   min?: string
   max?: string
+  id?: string
+  placeholder?: string
+  disabled?: boolean
+  /** sm: a toolbar's height. */
+  size?: 'sm' | 'md'
+  className?: string
+  'aria-label'?: string
 }
 export function DatePicker(props: DatePickerProps): JSX.Element
 
@@ -649,7 +657,7 @@ export function Page(props: { children: ReactNode; width?: 'wide' | 'normal'; cl
 export interface ToolbarView { value: string; label: string }
 /** search · filters · view switch (two looks at the same rows) · the primary action. */
 export function Toolbar(props: { search?: string; onSearch?: (value: string) => void; searchPlaceholder?: string; views?: ToolbarView[]; view?: string; onView?: (value: string) => void; filters?: ReactNode; actions?: ReactNode; className?: string }): JSX.Element
-export function Stat(props: { label: ReactNode; value: ReactNode; delta?: number; deltaLabel?: ReactNode; invert?: boolean; icon?: IconName; hint?: ReactNode }): JSX.Element
+export function Stat(props: { label: ReactNode; value: ReactNode; delta?: number; deltaLabel?: ReactNode; invert?: boolean; icon?: IconName; hint?: ReactNode; lead?: boolean; tone?: 'danger' | 'success'; onClick?: () => void; active?: boolean }): JSX.Element
 export function StatRow(props: { children: ReactNode; className?: string }): JSX.Element
 export function Progress(props: { value: number; max?: number; hue?: Hue; label?: ReactNode; className?: string }): JSX.Element
 export function ListDetail<T>(props: { items: T[]; itemKey: (item: T) => string; selected: string | null; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode; detail: ReactNode; listHeader?: ReactNode; empty?: ReactNode; placeholder?: ReactNode }): JSX.Element
@@ -688,12 +696,16 @@ export function relativeDate(value: unknown): string
 export function daysFrom(value: unknown): number | null
 export function HueChip(props: { hue?: Hue; className?: string; children: ReactNode }): JSX.Element
 export function HueDot(props: { hue?: Hue; className?: string }): JSX.Element
-export function FieldValue(props: { field: FieldDef; value: unknown; compact?: boolean }): JSX.Element
+/** due: a date falling due on something not done — red once past. Otherwise dates are never red. */
+export function FieldValue(props: { field: FieldDef; value: unknown; compact?: boolean; due?: boolean }): JSX.Element
+/** A person's initials on their own hue. */
+export function PersonAvatar(props: { name: string; size?: 'xs' | 'sm' | 'md' }): JSX.Element
+export function hueOf(name: string): Hue
 export function FieldInput(props: { field: FieldDef; value: unknown; onChange: (value: unknown) => void; id?: string; autoFocus?: boolean }): JSX.Element
 export function RecordForm(props: { fields: FieldDef[]; value: RecordData; onChange: (next: RecordData) => void; errors?: string[] }): JSX.Element
 export function RecordDialog(props: { open: boolean; title: ReactNode; fields: FieldDef[]; initial: RecordData; onClose: () => void; onSave: (value: RecordData) => Promise<void> | void; onDelete?: () => Promise<void> | void; saveLabel?: string }): JSX.Element
-export function RecordTable<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; rows: T[]; onOpen?: (row: T) => void; empty?: ReactNode; trailing?: (row: T) => ReactNode; maxHeight?: number }): JSX.Element
-export function RecordBoard<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; groupBy: string; rows: T[]; onMove: (row: T, toValue: string) => void; onOpen?: (row: T) => void; cardFields?: string[]; sumField?: string }): JSX.Element | null
+export function RecordTable<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; rows: T[]; onOpen?: (row: T) => void; empty?: ReactNode; trailing?: (row: T) => ReactNode; maxHeight?: number; dueField?: string; isDone?: (row: T) => boolean }): JSX.Element
+export function RecordBoard<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; groupBy: string; rows: T[]; onMove: (row: T, toValue: string) => void; onOpen?: (row: T) => void; cardFields?: string[]; sumField?: string; dueField?: string; doneValues?: string[]; onAdd?: (columnValue: string) => void }): JSX.Element | null
 export function RecordsEmpty(props: { noun: string; onAdd?: () => void }): JSX.Element
 /** Seeds an empty collection once per install with sample rows; clear() removes exactly those. */
 export function useSampleRows(collection: string, rows: RecordData[]): { seeding: boolean; clear: () => Promise<void> }

@@ -115,6 +115,8 @@ export type ToolStep =
   /** Scroll the Tool's page by `pixels` (down when positive), or bring `target` into view. */
   | { do: 'scroll'; pixels?: number; target?: StepTarget }
   | { do: 'wait'; ms: number }
+  /** Press one of the Tool's band buttons (`surfaces.actions`) — it sits on the app's band, outside the frame. */
+  | { do: 'band'; action: string }
 
 interface StepOutcome {
   step: number
@@ -357,6 +359,9 @@ async function runStep(page: PageLike, frame: FrameLike, step: ToolStep, timeout
         else await frame.evaluate('(dy) => { (document.scrollingElement || document.body).scrollBy(0, dy); document.body.scrollBy(0, dy) }', step.pixels ?? 600)
         break
       case 'wait': await page.waitForTimeout(Math.min(step.ms, 3000)); break
+      // The band is the host page's, so its buttons are pressed there, by the
+      // id the Tool declared — quoted, so nothing passed becomes a selector.
+      case 'band': await page.click(`[data-tool-action=${JSON.stringify(step.action)}]`, { timeout }); break
     }
     return null
   } catch (err) {

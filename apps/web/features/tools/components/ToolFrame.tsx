@@ -172,10 +172,12 @@ export default function ToolFrame({
   // one closes; zeroed whenever the frame goes, so a frame torn down with a
   // dialog open can never leave the page behind a scrim it cannot lift.
   const [scrim, setScrim] = useState<DOMRect | null>(null);
+  const [scrimCorners, setScrimCorners] = useState<Corners>({ tl: 0, tr: 0, bl: 0, br: 0 });
   const scrimCountRef = useRef(0);
   const showScrim = useCallback((open: boolean) => {
     scrimCountRef.current = Math.max(0, scrimCountRef.current + (open ? 1 : -1));
     setScrim(scrimCountRef.current > 0 && slotRef.current ? slotRef.current.getBoundingClientRect() : null);
+    if (slotRef.current) setScrimCorners(clippingCorners(slotRef.current));
   }, []);
   const clearScrim = useCallback(() => {
     scrimCountRef.current = 0;
@@ -517,7 +519,7 @@ export default function ToolFrame({
           </>
         )}
       </div>
-      {scrim && !error && !stopped && <FrameScrim rect={scrim} />}
+      {scrim && !error && !stopped && <FrameScrim rect={scrim} corners={scrimCorners} />}
       <ToastHost toasts={toasts} onDismiss={dismiss} />
       <ConfirmDialog
         open={question !== null}
@@ -546,16 +548,54 @@ export default function ToolFrame({
  * one surface edge to edge. They take the clicks, so nothing behind a Tool's
  * dialog can be pressed.
  */
-function FrameScrim({ rect }: { rect: DOMRect }) {
+function FrameScrim({ rect, corners }: { rect: DOMRect; corners: Corners }) {
   const pane = 'fixed z-40 bg-black/40';
+  // The pane holding the frame has rounded corners, and the frame is clipped
+  // to them: the sliver outside each curve is neither inside the frame nor
+  // outside its rectangle, so it is dimmed here — a square masked to what the
+  // curve leaves uncovered.
+  const corner = (r: number, at: 'tl' | 'tr' | 'bl' | 'br') => {
+    if (r <= 0) return null;
+    const x = at[1] === 'l' ? rect.left : rect.right - r;
+    const y = at[0] === 't' ? rect.top : rect.bottom - r;
+    const origin = `${at[1] === 'l' ? '100%' : '0%'} ${at[0] === 't' ? '100%' : '0%'}`;
+    const mask = `radial-gradient(circle at ${origin}, transparent ${r - 0.5}px, black ${r}px)`;
+    return <div key={at} className={pane} style={{ left: x, top: y, width: r, height: r, WebkitMaskImage: mask, maskImage: mask }} />;
+  };
   return (
     <div aria-hidden>
       <div className={pane} style={{ left: 0, right: 0, top: 0, height: Math.max(0, rect.top) }} />
       <div className={pane} style={{ left: 0, right: 0, top: rect.bottom, bottom: 0 }} />
       <div className={pane} style={{ left: 0, width: Math.max(0, rect.left), top: rect.top, height: rect.height }} />
       <div className={pane} style={{ left: rect.right, right: 0, top: rect.top, height: rect.height }} />
+      {corner(corners.tl, 'tl')}
+      {corner(corners.tr, 'tr')}
+      {corner(corners.bl, 'bl')}
+      {corner(corners.br, 'br')}
     </div>
   );
+}
+
+interface Corners {
+  tl: number;
+  tr: number;
+  bl: number;
+  br: number;
+}
+
+/** The rounding the frame is clipped by: its own, or the nearest ancestor's that has any. */
+function clippingCorners(el: HTMLElement | null): Corners {
+  for (let node = el, depth = 0; node && depth < 6; node = node.parentElement, depth++) {
+    const style = getComputedStyle(node);
+    const c = {
+      tl: parseFloat(style.borderTopLeftRadius) || 0,
+      tr: parseFloat(style.borderTopRightRadius) || 0,
+      bl: parseFloat(style.borderBottomLeftRadius) || 0,
+      br: parseFloat(style.borderBottomRightRadius) || 0,
+    };
+    if (c.tl || c.tr || c.bl || c.br) return c;
+  }
+  return { tl: 0, tr: 0, bl: 0, br: 0 };
 }
 
 /**
