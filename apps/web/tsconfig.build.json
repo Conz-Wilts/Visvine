@@ -4,5 +4,8 @@
   // whose dependencies the production image does not install; CI's
   // `pnpm typecheck` checks them with tsconfig.json.
   "extends": "./tsconfig.json",
-  "exclude": ["node_modules", "scripts/fixtures/**", "tests/**"]
+  // An `exclude` here replaces tsconfig.json's, so it repeats every entry of
+  // that list: the Tool sources (fixtures, the templates) import
+  // `@visvine/tool-kit`, which resolves only through a Tool frame's import map.
+  "exclude": ["node_modules", "scripts/fixtures/**", "lib/tools/templates/sources/**", "tests/**", ".eval/**"]
 }
