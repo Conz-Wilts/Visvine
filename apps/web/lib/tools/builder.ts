@@ -129,7 +129,7 @@ export type BuilderReadiness = { ok: true; model: string } | { ok: false; messag
 /** Whether the builder can answer in this space — the same model a chat would use. */
 export async function builderReadiness(spaceId: string): Promise<BuilderReadiness> {
   const resolved = await resolveAgentChatConfig(spaceId, null)
-  if (!resolved.ok) return { ok: false, message: resolved.message }
+  if (!resolved.ok) return { ok: false, message: 'Connect a model to build here, or build over MCP:' }
   return { ok: true, model: `${resolved.ref.provider.label} · ${resolved.ref.modelId}` }
 }
 
