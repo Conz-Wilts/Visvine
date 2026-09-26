@@ -87,7 +87,7 @@ export default function Sidebar() {
   const pathname = useRoutePathname();
   const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
-  const { setHost, dockTopInset } = useContextPanel();
+  const { setHost, dockTopInset, railFoot } = useContextPanel();
   // The desktop shell's window controls stand in the band's left end, over
   // the rail, and the closed rail is wide enough to clear them.
   const { inset: chromeInset, railW: collapsedW, railTop, bandH } = useDesktopChrome();
@@ -439,7 +439,7 @@ export default function Sidebar() {
           borderTopColor: "var(--vv-color-line-subtle)",
         }}
       >
-        <UserMenu expanded={expanded} reduced={reduced} />
+        {railFoot ?? <UserMenu expanded={expanded} reduced={reduced} />}
       </div>
     </>
   );

@@ -49,6 +49,10 @@ interface ContextPanelValue {
   setShellTabsHost: (el: HTMLElement | null) => void;
   shellTrailHost: HTMLElement | null;
   setShellTrailHost: (el: HTMLElement | null) => void;
+  // Rows a page stands in the rail's account slot while it is up (a Tool's
+  // preview puts Delete and Publish there). Null keeps the account.
+  railFoot: ReactNode | null;
+  setRailFoot: (node: ReactNode | null) => void;
   // Pixels the docked panel's content should start BELOW the card top. A page
   // that keeps its own bar pinned at the card top (the Directory's Grid/Context
   // tabs) sets this to that bar's height so the notes tree begins under
@@ -71,6 +75,8 @@ const ContextPanelContext = createContext<ContextPanelValue>({
   setShellTabsHost: () => {},
   shellTrailHost: null,
   setShellTrailHost: () => {},
+  railFoot: null,
+  setRailFoot: () => {},
   dockTopInset: 0,
   setDockTopInset: () => {},
 });
@@ -123,6 +129,7 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [tabTrailHost, setTabTrailHost] = useState<HTMLElement | null>(null);
   const [shellTabsHost, setShellTabsHost] = useState<HTMLElement | null>(null);
   const [shellTrailHost, setShellTrailHost] = useState<HTMLElement | null>(null);
+  const [railFoot, setRailFoot] = useState<ReactNode | null>(null);
   const [dockTopInsetState, setDockTopInsetState] = useState(0);
 
   // One timer per latched value: claiming cancels a pending release.
@@ -194,6 +201,8 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
         setShellTabsHost,
         shellTrailHost,
         setShellTrailHost,
+        railFoot,
+        setRailFoot,
         dockTopInset: dockTopInsetState,
         setDockTopInset,
       }}

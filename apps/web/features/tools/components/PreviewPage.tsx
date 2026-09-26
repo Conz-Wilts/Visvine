@@ -8,7 +8,7 @@
  * Tools are made over MCP, from a repo with `visvine-tool`, or from a file;
  * this page only shows what was made: the working copy running exactly as it
  * will on its own page — full bleed, its own sections and band buttons on the
- * band — with its files, its checks and Publish behind one ⋯ menu, so the
+ * band — and Delete and Publish standing in the rail's account slot, so the
  * authoring chrome never takes the band a Tool's own views stand on.
  * Someone who can read the Tool but not edit it gets the preview alone
  * (ToolPreview).
@@ -17,15 +17,18 @@
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Button, IconButton, Menu, Skeleton, type MenuItem } from '@visvine/ui';
+import { Button, ConfirmDialog, Skeleton } from '@visvine/ui';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useShellBand } from '@/features/desktop/lib/chrome';
-import { EllipsisIcon } from '@/features/shared/icons';
+import { HammerIcon, Trash2Icon } from '@/features/shared/icons';
+import { useSidebar } from '@/features/shared/contexts/SidebarContext';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
+import { Row } from '@/features/shared/components/layout/railRow';
 import type { AuthoredToolView } from '@/lib/tools/api';
 import type { BuildSummary } from '@/lib/tools/builds';
-import { fetchAuthoredTool, runToolChecks } from '../lib/client';
+import { deleteAuthoredTool, fetchAuthoredTool, runToolChecks } from '../lib/client';
 import BuildDiagnostics from './BuildDiagnostics';
 import CheckReport from './CheckReport';
 import PublishDialog from './PublishDialog';
@@ -54,15 +57,17 @@ export default function PreviewPage({ name }: { name: string }) {
   const { user } = useAuth();
   const spaceId = currentSpace?.id ?? null;
   const searchParams = useSearchParams();
-  const { shellTabsHost, shellTrailHost } = useContextPanel();
+  const { shellTabsHost, shellTrailHost, setRailFoot } = useContextPanel();
+  const { expanded, reduced } = useSidebar();
+  const router = useSpaceRouter();
   useShellBand(true);
 
   const [view, setView] = useState<AuthoredToolView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<{ text: string; tone: 'error' | 'info' } | null>(null);
-  const [attempt, setAttempt] = useState(0);
   const [runRequested, setRunRequested] = useState(false);
   const actionRef = useRef<((id: string) => void) | null>(null);
   const nav = useToolSections(view?.tool.config?.surfaces.nav, isAdmin);
@@ -106,6 +111,19 @@ export default function PreviewPage({ name }: { name: string }) {
     }
   };
 
+  const canEdit = !!view?.canEdit;
+  const runnable = !!view && !view.tool.invalid && !!view.tool.build?.ok;
+  useEffect(() => {
+    if (!canEdit) return;
+    setRailFoot(
+      <>
+        <Row label="Delete" icon={<Trash2Icon />} danger onClick={() => setDeleting(true)} expanded={expanded} reduced={reduced} />
+        <Row label="Publish" icon={<HammerIcon />} onClick={() => runnable && setPublishing(true)} expanded={expanded} reduced={reduced} />
+      </>,
+    );
+    return () => setRailFoot(null);
+  }, [canEdit, runnable, expanded, reduced, setRailFoot]);
+
   if (spaceLoading || (!view && !loadError)) {
     return (
       <div className="h-full p-6">
@@ -127,33 +145,23 @@ export default function PreviewPage({ name }: { name: string }) {
   const report = view.checks && !view.checks.stale ? view.checks.report : null;
   const blocked = !!report && (report.compatibility.status === 'blocked' || report.security.status === 'blocked');
   const status = tool.invalid ? 'Config error' : !build ? 'Never built' : !build.ok ? 'Not building' : blocked ? 'Blocked' : 'Builds';
-  const runnable = !tool.invalid && !!build?.ok;
   const isAuthor = !!user && tool.draft.authors.some((author) => author.userId === user.id);
   const sources: Record<string, string | null> = { ...tool.sources, ...tool.modules };
 
   const inTool = active === 'preview';
   const tabs = inTool ? <ToolSectionTabs nav={nav} title={tool.title} /> : null;
-  const menu: MenuItem[] = [
-    ...(inTool ? [] : [{ id: 'preview', label: 'Back to the tool', onSelect: () => select('preview') }]),
-    ...(inTool && runnable ? [{ id: 'reload', label: 'Reload', onSelect: () => setAttempt((n) => n + 1) }] : []),
-    ...files.map((file) => ({ id: file, label: file, onSelect: () => select(file) })),
-    { id: 'checks', label: blocked ? 'Checks · blocked' : 'Checks', onSelect: () => select('checks') },
-    { id: 'publish', label: 'Publish', onSelect: () => setPublishing(true), disabled: !runnable },
-  ];
   const trail = (
     <div className="flex items-center gap-1 pr-2">
       {inTool ? (
         <ToolActionButtons actions={runnable && (isAuthor || runRequested) ? (tool.config?.surfaces.actions ?? []) : []} onAction={(id) => actionRef.current?.(id)} />
       ) : (
-        <span className="whitespace-nowrap px-2 text-xs text-fg-muted">{[active === 'checks' ? 'Checks' : active, status].join(' · ')}</span>
+        <>
+          <span className="whitespace-nowrap px-2 text-xs text-fg-muted">{[active === 'checks' ? 'Checks' : active, status].join(' · ')}</span>
+          <Button size="sm" variant="ghost" onClick={() => select('preview')}>
+            Preview
+          </Button>
+        </>
       )}
-      <Menu
-        label={`${tool.title} source`}
-        items={menu}
-        trigger={({ open, toggle }) => (
-          <IconButton size="sm" label={`${tool.title} source`} icon={<EllipsisIcon />} active={open} onClick={toggle} />
-        )}
-      />
     </div>
   );
 
@@ -184,7 +192,6 @@ export default function PreviewPage({ name }: { name: string }) {
     return (
       <ToolSectionsLayout nav={nav} title={tool.title}>
         <ToolFrame
-          key={attempt}
           target={{ kind: 'preview', spaceId, name: tool.name }}
           title={tool.title}
           mode="page"
@@ -215,6 +222,18 @@ export default function PreviewPage({ name }: { name: string }) {
         )}
         {inTool ? <div className="min-h-0 flex-1">{body}</div> : body}
       </div>
+      <ConfirmDialog
+        open={deleting}
+        title={`Delete ${tool.title}?`}
+        confirmLabel="Delete"
+        destructive
+        onClose={() => setDeleting(false)}
+        onConfirm={async () => {
+          await deleteAuthoredTool(spaceId, name);
+          setDeleting(false);
+          router.push('/home');
+        }}
+      />
       {publishing && (
         <PublishDialog
           view={view}
