@@ -19,6 +19,7 @@ import {
   useBandAction,
   useCollection,
   useSampleRows,
+  SampleData,
   useVisvine,
   type FieldDef,
   type RecordData,
@@ -86,10 +87,10 @@ function resolveDates(rows: RecordData[]): RecordData[] {
     const out = { ...row }
     for (const key of dateKeys) {
       const v = out[key]
-      if (typeof v === 'string' && /^[+-]\d+$/.test(v)) {
+      if (typeof v === 'string' && /^(?:0|[+-]\d+)$/.test(v)) {
         const d = new Date()
         d.setDate(d.getDate() + Number(v))
-        out[key] = d.toISOString().slice(0, 10)
+        out[key] = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       }
     }
     return out
@@ -100,7 +101,7 @@ const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function App() {
   const visvine = useVisvine()
-  useSampleRows('items', useMemo(() => resolveDates(SPEC.sample), []))
+  const sampleRows = useSampleRows('items', useMemo(() => resolveDates(SPEC.sample), []))
   const { data, loading } = useCollection<RecordData>('items', { limit: 200 })
   const rows: Row[] = data ?? []
 
@@ -146,7 +147,7 @@ export default function App() {
   // A percent or a rating is averaged, never added up: three 70% key results are not 210%.
   const averaged = sumField?.kind === 'percent' || sumField?.kind === 'rating'
   const total = (list: Row[]) => {
-    const values = list.map((r) => Number(r.data[sumField?.key ?? ''])).filter((n) => Number.isFinite(n))
+    const values = list.map((r) => r.data[sumField?.key ?? '']).filter((v) => v !== null && v !== undefined && v !== '').map(Number).filter(Number.isFinite)
     const sum = values.reduce((a, b) => a + b, 0)
     return averaged ? (values.length ? sum / values.length : 0) : sum
   }
@@ -179,6 +180,7 @@ export default function App() {
 
   return (
     <Page>
+      <SampleData state={sampleRows} />
       <StatRow>
         {sumField ? (
           <Stat
@@ -247,13 +249,22 @@ export default function App() {
             rows={shown}
             onMove={move}
             onOpen={setEditing}
-            sumField={averaged ? undefined : sumField?.key}
+            sumField={sumField?.key}
             dueField={dateField?.key}
             doneValues={SPEC.doneValues}
             onAdd={(value) => startNew({ [group.key]: value })}
           />
         </div>
       ) : view === 'calendar' && dateField ? (
+        <>
+        {shown.some((r) => !r.data[dateField.key]) && (
+          <section className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium text-fg-muted">Unscheduled</span>
+            {shown.filter((r) => !r.data[dateField.key]).map((r) => (
+              <button key={r.id} type="button" onClick={() => setEditing(r)} className="rounded-md bg-surface-subtle px-2 py-1 text-fg hover:bg-surface-muted">{String(r.data[SPEC.fields[0].key] ?? '')}</button>
+            ))}
+          </section>
+        )}
         <MonthCalendar
           month={month}
           onMonth={setMonth}
@@ -263,11 +274,12 @@ export default function App() {
               id: r.id,
               date: String(r.data[dateField.key]),
               title: String(r.data[SPEC.fields[0].key] ?? ''),
-              hue: group ? optionsOf(group).find((o) => o.value === r.data[group.key])?.hue : undefined,
+              hue: isLate(r) ? 'red' : group ? optionsOf(group).find((o) => o.value === r.data[group.key])?.hue : undefined,
             }))}
           onOpen={(id) => setEditing(rows.find((r) => r.id === id) ?? null)}
           onDay={(date) => startNew({ [dateField.key]: date })}
         />
+        </>
       ) : (
         <RecordTable
           fields={SPEC.fields}

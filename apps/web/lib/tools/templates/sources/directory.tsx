@@ -14,6 +14,7 @@ import {
   useBandAction,
   useCollection,
   useSampleRows,
+  SampleData,
   useVisvine,
   type FieldDef,
   type RecordData,
@@ -75,10 +76,10 @@ function resolveDates(rows: RecordData[]): RecordData[] {
     const out = { ...row }
     for (const key of dateKeys) {
       const v = out[key]
-      if (typeof v === 'string' && /^[+-]\d+$/.test(v)) {
+      if (typeof v === 'string' && /^(?:0|[+-]\d+)$/.test(v)) {
         const d = new Date()
         d.setDate(d.getDate() + Number(v))
-        out[key] = d.toISOString().slice(0, 10)
+        out[key] = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       }
     }
     return out
@@ -87,7 +88,7 @@ function resolveDates(rows: RecordData[]): RecordData[] {
 
 export default function App() {
   const visvine = useVisvine()
-  useSampleRows('items', useMemo(() => resolveDates(SPEC.sample), []))
+  const sampleRows = useSampleRows('items', useMemo(() => resolveDates(SPEC.sample), []))
   const { data, loading } = useCollection<RecordData>('items', { limit: 200 })
   const nameKey = SPEC.fields[0].key
   const rows = useMemo(() => [...((data ?? []) as Row[])].sort((a, b) => String(a.data[nameKey] ?? '').localeCompare(String(b.data[nameKey] ?? ''))), [data, nameKey])
@@ -107,7 +108,7 @@ export default function App() {
         (!q || SPEC.fields.some((f) => String(r.data[f.key] ?? '').toLowerCase().includes(q))),
     )
   }, [rows, search, filter, group])
-  const current = rows.find((r) => r.id === selected) ?? shown[0] ?? null
+  const current = shown.find((r) => r.id === selected) ?? shown[0] ?? null
 
   const save = async (value: RecordData) => {
     if (editing === 'new') {
@@ -134,6 +135,7 @@ export default function App() {
 
   return (
     <Page>
+      <SampleData state={sampleRows} />
       {rows.length === 0 ? (
         <RecordsEmpty noun={SPEC.plural} onAdd={() => setEditing('new')} />
       ) : (
@@ -177,6 +179,7 @@ export default function App() {
                 {subtitle && r.data[subtitle.key] ? (
                   <span className="truncate text-xs text-fg-muted">{subtitle.kind === 'select' ? String(r.data[subtitle.key]) : <FieldValue field={subtitle} value={r.data[subtitle.key]} compact />}</span>
                 ) : null}
+                {group && group.key !== subtitle?.key && r.data[group.key] ? <span className="mt-1"><FieldValue field={group} value={r.data[group.key]} compact /></span> : null}
               </span>
             </span>
           )}
@@ -231,4 +234,4 @@ export default function App() {
   )
 }
 
-const EMPTY: RecordData = {}
+const EMPTY: RecordData = Object.fromEntries(SPEC.fields.filter((field) => field.kind === 'select').map((field) => [field.key, optionsOf(field)[0]?.value ?? '']))

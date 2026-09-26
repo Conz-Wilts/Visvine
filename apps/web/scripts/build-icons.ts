@@ -64,6 +64,7 @@ const CHILD_ATTRS: Record<string, string> = {
 interface Glyph {
   /** Kebab file stem, and the key `<Icon name>` is looked up by. */
   name: string;
+  svg: string;
   /** The glyph's own stroke weight — lucide-derived art is 2, house art is 1.8. */
   strokeWidth: number;
   /** The child elements, as JSX, indented ready to inline. */
@@ -111,7 +112,7 @@ async function readGlyph(file: string): Promise<Glyph> {
     })
     .join('\n');
 
-  return { name, strokeWidth: Number(width[1]), body };
+  return { name, svg: raw.trim(), strokeWidth: Number(width[1]), body };
 }
 
 function renderIconsModule(glyphs: Glyph[], iconBaseFrom = '@visvine/ui'): string {
@@ -206,6 +207,12 @@ async function main() {
   const glyphs = await Promise.all(files.map(readGlyph));
 
   const outputs: Record<string, string> = {
+    [path.resolve(HERE, '../lib/icons/svg.generated.ts')]: [
+      BANNER,
+      `import type { IconName } from './names';`,
+      `export const ICON_SVGS: Record<IconName, string> = ${JSON.stringify(Object.fromEntries(glyphs.map((glyph) => [glyph.name, glyph.svg])), null, 2)};`,
+      '',
+    ].join('\n'),
     [path.join(OUT_DIR, 'icons.tsx')]: renderIconsModule(glyphs),
     [path.join(OUT_DIR, 'registry.ts')]: renderRegistryModule(glyphs),
     [NAMES_FILE]: renderNamesModule(glyphs),

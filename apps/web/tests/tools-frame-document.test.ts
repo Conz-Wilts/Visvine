@@ -56,7 +56,6 @@ test('the import map names every specifier a Tool may import, pointed at vendorB
     'clsx',
     'date-fns',
     'fuse.js',
-    'lucide-react',
     'motion/react',
     'nanoid',
     'papaparse',

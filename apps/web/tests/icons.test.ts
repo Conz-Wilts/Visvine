@@ -16,6 +16,9 @@ import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { ICON_NAMES, isIconName } from '@/lib/icons/names'
+import { ICON_SVGS } from '@/lib/icons/svg.generated'
+import { TOOL_ICON_NAMES, resolveToolIconName } from '@/lib/icons/toolIcons'
+import { sanitizeToolIcon } from '@/lib/tools/iconSvg'
 import { TOOL_RAIL_ICONS } from '@/lib/tools/config'
 import { CHANNEL_ICONS } from '@/features/messages/components/ChannelIcon'
 
@@ -33,6 +36,28 @@ function svgFiles(): string[] {
 
 test('every SVG has a name, and every name has an SVG', () => {
   assert.deepEqual([...ICON_NAMES].sort(), svgFiles())
+})
+
+test('tools can use every app icon and every generated SVG passes the rail sanitizer', () => {
+  for (const name of ICON_NAMES) {
+    assert.ok(TOOL_ICON_NAMES.includes(name))
+    assert.equal(resolveToolIconName(name), name)
+    assert.equal(ICON_SVGS[name], readFileSync(path.join(SVG_DIR, `${name}.svg`), 'utf8').trim())
+    const result = sanitizeToolIcon(ICON_SVGS[name])
+    assert.equal(result.ok, true, `${name}: ${result.ok ? '' : result.error}`)
+  }
+})
+
+test('tool icon aliases resolve safely to shared glyphs', () => {
+  for (const name of TOOL_ICON_NAMES) assert.ok(isIconName(resolveToolIconName(name)), name)
+  assert.equal(resolveToolIconName('arrowRight'), 'arrow-right')
+  assert.equal(resolveToolIconName('MessageSquare'), 'message-square')
+  assert.equal(resolveToolIconName('edit'), 'pencil')
+  assert.equal(resolveToolIconName('dollar'), 'dollar-sign')
+  assert.equal(resolveToolIconName('bug'), 'bug')
+  for (const name of ['constructor', 'toString', '__proto__', 'unknown-icon']) {
+    assert.equal(resolveToolIconName(name), null)
+  }
 })
 
 test('names are kebab-case, so the generated component names are predictable', () => {

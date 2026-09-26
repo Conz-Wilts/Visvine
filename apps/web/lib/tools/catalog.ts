@@ -367,7 +367,7 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     name: 'Icon',
     kind: 'component',
     what: 'A stroke icon by name, in the current colour.',
-    when: 'Beside a stat label, in an icon button, in an empty state. For any other icon declare `lucide-react`.',
+    when: 'Use the same icons as the Visvine app. For a custom rail icon, call set_tool_icon with SVG markup or an uploaded SVG resource_id.',
     props: 'name: IconName (plus, search, calendar, users, dollar, chart, star, …) · size?',
     snippet: `<Icon name="calendar" className="text-fg-muted" />`,
   },
@@ -419,6 +419,14 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     when: 'Anything that moves through stages: deals, hiring, bugs, content, tasks.',
     props: 'fields · groupBy · rows · onMove(row, value) · onOpen? · cardFields? · sumField?',
     snippet: `<RecordBoard fields={[{ key: 'name', label: 'Name', kind: 'text' }, { key: 'stage', label: 'Stage', kind: 'select', options: [{ value: 'Lead' }, { value: 'Won' }] }]} groupBy="stage" rows={[{ id: '1', data: { name: 'Acme', stage: 'Lead' } }]} onMove={() => {}} />`,
+  },
+  {
+    name: 'SampleData',
+    kind: 'component',
+    what: 'One Sample data label with a Clear action for seeded demonstration rows.',
+    when: 'Once at the top of each page while sample rows remain; never prefix each record title.',
+    props: 'state: the return value of useSampleRows(collection, rows)',
+    snippet: `<SampleData state={{ seeding: false, hasSamples: true, clear: async () => {} }} />`,
   },
   {
     name: 'RecordsEmpty',
@@ -548,7 +556,7 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     kind: 'hook',
     what: 'Puts sample rows into an empty collection the first time the Tool opens.',
     when: 'Every Tool over a collection: the first look is the Tool working. `clear()` removes exactly those rows.',
-    props: 'useSampleRows(collection, rows) → { seeding, clear }',
+    props: 'useSampleRows(collection, rows) → { seeding, hasSamples, clear }',
     snippet: `const { clear } = useSampleRows('deals', [{ name: 'Acme', stage: 'Lead', value: 12000 }])\nvoid clear`,
   },
 ]
@@ -559,7 +567,7 @@ export const TOOL_CATALOG: readonly CatalogEntry[] = [...KIT_CATALOG, ...UI_CATA
 /** The rules a Tool keeps to look like the app — the same ones the app keeps. */
 const TOOL_DESIGN_RULES: readonly string[] = [
   'Build from blocks, not from divs. A page is `Page` holding a `Toolbar`, a `StatRow`, and a `RecordBoard` / `RecordTable` / `ListDetail` / `MonthCalendar` over rows described once as `FieldDef[]`; adding and editing is `RecordDialog`. Write your own layout only for what no block draws.',
-  'Never an empty first look: seed a collection with 8–15 realistic rows through `useSampleRows` (real names, plausible numbers, dates around today).',
+  'Never an empty first look: seed a collection with 8–15 fictional, realistic rows through `useSampleRows` (plausible people, complete fields, dates around today). `SampleData` labels them once and offers Clear; no Sample/Example prefixes in names. Preserve the demo rows at hand-over and remove only temporary interaction-test rows.',
   'The app draws the chrome. The rail row, the band (your sections as tabs, your band buttons, the ⋯ menu) and every state are the app\'s. Draw only content: never a page title, a top tab strip or a header that repeats what the band says.',
   'Lay out with Tailwind classes: grid, flex, gap, padding, widths and text sizes (with sm:/md:/lg: variants) are all compiled in, and the role colours (`text-fg-muted`, `bg-surface-subtle`, `border-line-subtle`, `bg-accent`). A grid of cards is `grid gap-4 sm:grid-cols-2 lg:grid-cols-3`.',
   'Flat surfaces: sections separated by hairlines, no cards around everything, no shadows except on things that float.',

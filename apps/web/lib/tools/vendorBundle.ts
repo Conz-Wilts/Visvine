@@ -55,7 +55,6 @@ export const VENDOR_FILES = [
   'dep-zod.js',
   'dep-date-fns.js',
   'dep-clsx.js',
-  'dep-lucide-react.js',
   'dep-motion-react.js',
   'dep-dnd-kit-core.js',
   'dep-dnd-kit-sortable.js',

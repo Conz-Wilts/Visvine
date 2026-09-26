@@ -19,6 +19,7 @@ import {
   useChartColors,
   useCollection,
   useSampleRows,
+  SampleData,
   useSection,
   useVisvine,
   type FieldDef,
@@ -96,10 +97,10 @@ function resolveDates(rows: RecordData[]): RecordData[] {
     const out = { ...row }
     for (const key of dateKeys) {
       const v = out[key]
-      if (typeof v === 'string' && /^[+-]\d+$/.test(v)) {
+      if (typeof v === 'string' && /^(?:0|[+-]\d+)$/.test(v)) {
         const d = new Date()
         d.setDate(d.getDate() + Number(v))
-        out[key] = d.toISOString().slice(0, 10)
+        out[key] = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       }
     }
     return out
@@ -107,6 +108,7 @@ function resolveDates(rows: RecordData[]): RecordData[] {
 }
 
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const monthOf = (value: unknown) => String(value ?? '').slice(0, 7)
 
 /** The Monday of a date's week, as YYYY-MM-DD. */
@@ -114,20 +116,20 @@ function weekOf(value: unknown): string {
   const d = new Date(`${String(value).slice(0, 10)}T00:00:00`)
   if (Number.isNaN(d.getTime())) return ''
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-  return d.toISOString().slice(0, 10)
+  return iso(d)
 }
 
 export default function App() {
   const visvine = useVisvine()
   const [section] = useSection()
-  useSampleRows('items', useMemo(() => resolveDates(SPEC.sample), []))
+  const sampleRows = useSampleRows('items', useMemo(() => resolveDates(SPEC.sample), []))
   const { data, loading } = useCollection<RecordData>('items', { limit: 200, order: 'desc' })
   const rows: Row[] = data ?? []
   const [editing, setEditing] = useState<Row | 'new' | null>(null)
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState<RecordData>({})
   const startNew = () => {
-    setDraft({ [SPEC.dateField]: new Date().toISOString().slice(0, 10) })
+    setDraft({ [SPEC.dateField]: iso(new Date()) })
     setEditing('new')
   }
   useBandAction('new', startNew)
@@ -140,8 +142,8 @@ export default function App() {
   const sum = (list: Row[]) => list.reduce((acc, r) => acc + valueOf(r), 0)
 
   const now = new Date()
-  const thisMonth = now.toISOString().slice(0, 7)
-  const last = new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString().slice(0, 7)
+  const thisMonth = iso(now).slice(0, 7)
+  const last = iso(new Date(now.getFullYear(), now.getMonth() - 1, 15)).slice(0, 7)
   const inThis = rows.filter((r) => monthOf(r.data[SPEC.dateField]) === thisMonth)
   const inLast = rows.filter((r) => monthOf(r.data[SPEC.dateField]) === last)
   const change = inLast.length ? Math.round(((sum(inThis) - sum(inLast)) / Math.max(1, sum(inLast))) * 100) : undefined
@@ -205,6 +207,7 @@ export default function App() {
   if (rows.length === 0) {
     return (
       <Page>
+      <SampleData state={sampleRows} />
         <RecordsEmpty noun={SPEC.plural} onAdd={startNew} />
         {dialog}
       </Page>
@@ -214,6 +217,7 @@ export default function App() {
   if (section === 'entries') {
     return (
       <Page>
+      <SampleData state={sampleRows} />
         <Toolbar search={search} onSearch={setSearch} searchPlaceholder={`Search ${SPEC.plural}`} />
         <RecordTable fields={SPEC.fields} rows={shown} onOpen={setEditing} />
         {dialog}
@@ -226,6 +230,7 @@ export default function App() {
   const used = SPEC.monthlyTarget ? sum(inThis) / SPEC.monthlyTarget : 0
   return (
     <Page>
+      <SampleData state={sampleRows} />
       <StatRow>
         <Stat
           lead

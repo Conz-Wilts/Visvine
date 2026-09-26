@@ -13,6 +13,7 @@ import {
   useBandAction,
   useCollection,
   useSampleRows,
+  SampleData,
   useSection,
   useVisvine,
   type FieldDef,
@@ -56,13 +57,14 @@ type Entry = { id: string; mine: boolean; data: RecordData & { name: string; dat
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const hasFlag = (v: unknown) => v !== false && v !== 0 && filled(v)
 const filled = (v: unknown) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
 
 function EntryView({ entry, onEdit }: { entry: Entry; onEdit?: () => void }) {
   const checks = SPEC.fields.filter((f) => f.kind === 'boolean')
   const prose = SPEC.fields.filter((f) => f.kind === 'longtext' || f.kind === 'text')
   const facts = SPEC.fields.filter((f) => f.kind !== 'boolean' && f.kind !== 'longtext' && f.kind !== 'text' && filled(entry.data[f.key]))
-  const flagged = SPEC.flagField && filled(entry.data[SPEC.flagField])
+  const flagged = SPEC.flagField && hasFlag(entry.data[SPEC.flagField])
   return (
     <article className="flex gap-3 border-b border-line-subtle py-4">
       <PersonAvatar name={entry.data.name} size="sm" />
@@ -78,7 +80,7 @@ function EntryView({ entry, onEdit }: { entry: Entry; onEdit?: () => void }) {
           ))}
           {onEdit && (
             <Button size="sm" variant="ghost" onClick={onEdit} className="ml-auto">
-              Edit
+              Edit update
             </Button>
           )}
         </div>
@@ -117,7 +119,7 @@ export default function App() {
       }),
     [],
   )
-  useSampleRows('entries', samples)
+  const sampleRows = useSampleRows('entries', samples)
   const { data, loading } = useCollection<Entry['data']>('entries', { order: 'desc', limit: 200 })
   const entries = (data ?? []) as Entry[]
   const [posting, setPosting] = useState(false)
@@ -126,7 +128,7 @@ export default function App() {
   const mineToday = entries.find((e) => e.mine && e.data.date === today && e.data.name === me)
   useBandAction('post', () => setPosting(true))
 
-  const flag = (e: Entry) => Boolean(SPEC.flagField && filled(e.data[SPEC.flagField]))
+  const flag = (e: Entry) => Boolean(SPEC.flagField && hasFlag(e.data[SPEC.flagField]))
   const todays = entries.filter((e) => e.data.date === today && e !== mineToday).sort((a, b) => Number(flag(b)) - Number(flag(a)))
   const people = [...new Set(entries.map((e) => e.data.name))]
   const posted = new Set(entries.filter((e) => e.data.date === today).map((e) => e.data.name))
@@ -181,6 +183,7 @@ export default function App() {
   if (section === 'history') {
     return (
       <Page width="normal">
+      <SampleData state={sampleRows} />
         {history.length === 0 ? (
           <p className="py-8 text-center text-sm text-fg-muted">Earlier days show here.</p>
         ) : (
@@ -202,11 +205,12 @@ export default function App() {
 
   return (
     <Page width="normal">
+      <SampleData state={sampleRows} />
       <StatRow>
         <Stat lead label="Posted today" value={posted.size} hint={`of ${Math.max(people.length, posted.size)} people`} />
         <Stat label="Your streak" value={streak} hint={streak === 1 ? 'day' : 'days'} />
         {SPEC.flagField && (
-          <Stat label={SPEC.fields.find((f) => f.key === SPEC.flagField)?.label ?? 'Flagged'} value={flagged} tone={flagged > 0 ? 'danger' : undefined} hint={flagged ? 'today' : 'none today'} />
+          <Stat label={SPEC.fields.find((f) => f.key === SPEC.flagField)?.label ?? 'Flagged'} value={flagged} tone={flagged > 0 ? 'danger' : undefined} hint={flagged ? 'today' : undefined} />
         )}
       </StatRow>
 

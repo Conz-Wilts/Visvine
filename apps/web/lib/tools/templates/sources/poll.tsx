@@ -7,10 +7,10 @@ import {
   Modal,
   Page,
   Spinner,
-  Textarea,
   useBandAction,
   useCollection,
   useSampleRows,
+  SampleData,
   useVisvine,
   type RecordData,
 } from '@visvine/tool-kit'
@@ -49,7 +49,7 @@ function PollCard({ poll, votes, onVote, onClose }: { poll: Poll; votes: Vote[];
     <section className="flex flex-col gap-3 border-b border-line-subtle pb-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-fg">{poll.data.question}</h2>
+          <h2 className="text-lg font-semibold text-fg">{poll.data.question}</h2>
           <p className="mt-0.5 text-xs text-fg-muted">
             {total} {total === 1 ? 'vote' : 'votes'}
             {mine ? ` · you voted ${mine.data.choice}` : closed ? ' · closed' : ' · you have not voted'}
@@ -99,13 +99,13 @@ function PollCard({ poll, votes, onVote, onClose }: { poll: Poll; votes: Vote[];
 
 export default function App() {
   const visvine = useVisvine()
-  useSampleRows('polls', useMemo(() => SPEC.sample as unknown as RecordData[], []))
+  const sampleRows = useSampleRows('polls', useMemo(() => SPEC.sample as unknown as RecordData[], []))
   const polls = useCollection<PollData>('polls', { order: 'desc', limit: 100 })
   const votes = useCollection<Vote['data']>('votes', { limit: 200 })
   const [creating, setCreating] = useState(false)
   const [showClosed, setShowClosed] = useState(false)
   const [question, setQuestion] = useState('')
-  const [options, setOptions] = useState('')
+  const [options, setOptions] = useState(['', ''])
   const [busy, setBusy] = useState(false)
   useBandAction('new', () => setCreating(true))
 
@@ -115,7 +115,7 @@ export default function App() {
   const open = all.filter((p) => !p.data.closed)
   const closed = all.filter((p) => p.data.closed)
   const voted = open.filter((p) => votesFor(p.id).some((v) => v.mine)).length
-  const answers = options.split('\n').map((o) => o.trim()).filter(Boolean)
+  const answers = [...new Set(options.map((o) => o.trim()).filter(Boolean))]
 
   const vote = async (poll: Poll, choice: string, current?: Vote) => {
     if (current?.data.choice === choice) return
@@ -131,7 +131,7 @@ export default function App() {
       await visvine.collections.insert('polls', { question: question.trim(), options: list.slice(0, 8) })
       setCreating(false)
       setQuestion('')
-      setOptions('')
+      setOptions(['', ''])
       void visvine.ui.toast(`${title(SPEC.noun)} created`, 'success')
     } finally {
       setBusy(false)
@@ -147,7 +147,8 @@ export default function App() {
   }
 
   return (
-    <Page width="normal">
+    <Page className="max-w-3xl">
+      <SampleData state={sampleRows} />
       {open.length > 0 && (
         <p className="text-sm text-fg-muted">
           {open.length} open · you voted on <span className="font-medium text-fg">{voted}</span> of {open.length}
@@ -190,9 +191,17 @@ export default function App() {
         <Field label="Question" htmlFor="q">
           <Input id="q" value={question} onChange={(e) => setQuestion(e.currentTarget.value)} placeholder={SPEC.sample[0]?.question ?? 'What should we decide?'} />
         </Field>
-        <Field label="Answers" htmlFor="o" hint="One per line, two or more">
-          <Textarea id="o" rows={5} value={options} onChange={(e) => setOptions(e.currentTarget.value)} placeholder={(SPEC.sample[0]?.options ?? ['First answer', 'Second answer']).join('\n')} />
-        </Field>
+        <div className="flex flex-col gap-3">
+          {options.map((option, i) => (
+            <Field key={i} label={`Answer ${i + 1}`} htmlFor={`answer-${i}`}>
+              <div className="flex items-center gap-2">
+                <Input id={`answer-${i}`} value={option} onChange={(e) => setOptions(options.map((value, index) => index === i ? e.currentTarget.value : value))} />
+                {options.length > 2 && <Button size="sm" variant="ghost" onClick={() => setOptions(options.filter((_, index) => index !== i))} aria-label={`Remove answer ${i + 1}`}>Remove</Button>}
+              </div>
+            </Field>
+          ))}
+          {options.length < 8 && <Button size="sm" variant="ghost" className="self-start" onClick={() => setOptions([...options, ''])}>+ Add answer</Button>}
+        </div>
       </Modal>
     </Page>
   )

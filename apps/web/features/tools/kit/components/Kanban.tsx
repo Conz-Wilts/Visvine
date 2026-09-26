@@ -135,14 +135,19 @@ export function KanbanBoard({ onMove, className, children }: KanbanBoardProps) {
 
   const value = useMemo(() => ({ drag, beginDrag }), [drag, beginDrag]);
 
-  // A board wider than the page scrolls sideways; a fade on the right edge
-  // says there is more, so a clipped column never reads as the last one.
+  // Name the hidden columns and provide scroll controls; a fade alone
+  // looks like clipped content when a board is wider than the page.
   const scroller = useRef<HTMLDivElement>(null);
-  const [more, setMore] = useState(false);
+  const [more, setMore] = useState(0);
+  const [back, setBack] = useState(false);
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const check = () => setMore(el.scrollWidth - el.scrollLeft - el.clientWidth > 4);
+    const check = () => {
+      const right = el.getBoundingClientRect().right;
+      setMore(Array.from(el.querySelectorAll(`[${COLUMN_ATTR}]`)).filter((col) => col.getBoundingClientRect().right > right + 4).length);
+      setBack(el.scrollLeft > 4);
+    };
     check();
     el.addEventListener('scroll', check, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(check);
@@ -151,15 +156,23 @@ export function KanbanBoard({ onMove, className, children }: KanbanBoardProps) {
       el.removeEventListener('scroll', check);
       observer?.disconnect();
     };
-  }, []);
+  }, [children]);
 
   return (
     <BoardContext.Provider value={value}>
-      <div className="relative">
-        <div ref={scroller} className={cx('flex items-stretch gap-3 overflow-x-auto pb-1', drag && 'cursor-grabbing select-none', className)}>
-          {children}
+      <div>
+        {(more > 0 || back) && (
+          <div className="mb-2 flex items-center justify-end gap-2">
+            {back && <button type="button" aria-label="Scroll board left" className="rounded-md px-2 py-1 text-xs font-medium text-fg-secondary hover:bg-surface-muted" onClick={() => scroller.current?.scrollBy({ left: -scroller.current.clientWidth, behavior: 'smooth' })}>← Back</button>}
+            {more > 0 && <button type="button" aria-label={`Scroll board right, ${more} more columns`} className="rounded-md bg-surface-subtle px-2 py-1 text-xs font-medium text-fg-secondary hover:bg-surface-muted" onClick={() => scroller.current?.scrollBy({ left: scroller.current.clientWidth, behavior: 'smooth' })}>{more} more →</button>}
+          </div>
+        )}
+        <div className="relative">
+          <div ref={scroller} className={cx('flex snap-x snap-proximity items-stretch gap-3 overflow-x-auto pb-1', drag && 'cursor-grabbing select-none', className)}>
+            {children}
+          </div>
+          {more > 0 && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-linear-to-l from-surface to-transparent" />}
         </div>
-        {more && <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-16 bg-linear-to-l from-surface to-transparent" />}
       </div>
     </BoardContext.Provider>
   );
@@ -190,7 +203,7 @@ export function KanbanColumn({ id, title, count, actions, empty, fill = false, c
       <div
         {...attrs}
         className={cx(
-          'flex flex-col rounded-lg border',
+          'flex snap-start flex-col rounded-lg border',
           fill ? 'min-w-52 flex-1' : 'w-64 shrink-0',
           isOver ? 'border-accent bg-accent-soft' : 'border-transparent bg-surface-subtle',
           className,

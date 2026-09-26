@@ -20,6 +20,8 @@ import { ActionError, type ActionCaller } from '@/lib/actions/types'
 import { appToolHandlers, type AppToolDeps } from '@/lib/actions/defs/apps'
 import type { BuildSummary } from '@/lib/tools/builds'
 import type { ToolConfig } from '@/lib/tools/config'
+import { defaultSpecText } from '@/lib/tools/templates'
+import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { EMPTY_PERIMETER } from '@/lib/tools/perimeter'
 import { factsFromPerimeter } from '@visvine/tool-protocol/manifest'
 import type { AuthoredToolDetail } from '@/lib/tools/service'
@@ -207,6 +209,7 @@ function deps(over: Partial<AppToolDeps> = {}): AppToolDeps {
     listAuthoredTools: unexpected('listAuthoredTools'),
     describeAuthoredTool: unexpected('describeAuthoredTool'),
     createTool: unexpected('createTool'),
+    deleteTool: unexpected('deleteTool'),
     writeToolFile: unexpected('writeToolFile'),
     rebuild: unexpected('rebuild'),
     publishTool: unexpected('publishTool'),
@@ -1111,4 +1114,95 @@ test('bind_tool hands the change to the install service, as the admin', async ()
     actor: CTX.userId,
     patch: { bindings: { crm: 'hubspot-2' }, settings: { currency: 'EUR' } },
   })
+})
+
+for (const failure of ['configure', 'write', 'compile', 'throw'] as const) {
+  test(`template create cleans up its scaffold after ${failure} failure`, async () => {
+    const removed: string[] = []
+    await assert.rejects(appToolHandlers.createTool(CTX, {
+      space_id: SPACE, name: 'board', title: 'Board', description: 'Track work',
+      template: 'tracker', spec: new Function(`return (${defaultSpecText('tracker')})`)() as Record<string, unknown>,
+    }, deps({
+      createTool: async () => ({ ok: true, name: 'board', build: build() }),
+      configureTool: async () => failure === 'configure'
+        ? { ok: false, status: 400, error: 'bad facts' }
+        : { ok: true, changed: [], facts: {}, build: build() },
+      writeToolFile: async () => {
+        if (failure === 'throw') throw new Error('storage unavailable')
+        return failure === 'write' ? { ok: false, status: 403, error: 'write denied' }
+          : { ok: true, path: 'tools/board/ui.tsx', build: brokenBuild() }
+      },
+      deleteTool: async (principal, context, name) => {
+        assert.equal(principal, PRINCIPAL)
+        assert.equal(context, RESOLVED)
+        removed.push(name)
+        return { ok: true }
+      },
+    })))
+    assert.deepEqual(removed, ['board'])
+  })
+}
+
+test('configure_tool writes prose to the index and reports prose and facts together', async () => {
+  const writes: string[] = []
+  const result = await appToolHandlers.configureTool(CTX, {
+    space_id: SPACE, name: 'board', facts: { title: 'Team work', description: 'Shared tracker', tags: ['team'], sdk: '^2.0.0' },
+  }, deps({
+    describeAuthoredTool: async () => detail(),
+    writeToolFile: async (_p, _c, _n, file, content) => {
+      assert.equal(file, 'index.md')
+      writes.push(content)
+      return { ok: true, path: 'tools/board/index.md', build: build() }
+    },
+    configureTool: async (_p, _c, _n, patch) => {
+      assert.deepEqual(patch, { sdk: '^2.0.0' })
+      return { ok: true, facts: patch, changed: ['sdk'], build: build() }
+    },
+  }))
+  assert.deepEqual(parseFrontmatter(writes[0]), { type: 'tool', title: 'Team work', description: 'Shared tracker', tags: ['team'] })
+  assert.match(writes[0], /# Board/)
+  assert.deepEqual(result.changed, ['title', 'description', 'tags', 'sdk'])
+})
+
+test('configure_tool stops when its index write is refused', async () => {
+  await refusal(appToolHandlers.configureTool(CTX, {
+    space_id: SPACE, name: 'board', facts: { description: 'Changed', sdk: '^2.0.0' },
+  }, deps({
+    describeAuthoredTool: async () => detail(),
+    writeToolFile: async () => ({ ok: false, status: 403, error: 'denied' }),
+  })), 403)
+})
+
+
+test('configure_tool rejects invalid prose and unknown facts before any write', async () => {
+  for (const facts of [{ tags: 'team' }, { title: '' }, { description: 7 }, { title: 'Renamed', mystery: true }]) {
+    await refusal(appToolHandlers.configureTool(CTX, { space_id: SPACE, name: 'board', facts }, deps()), 400)
+  }
+})
+
+test('configure_tool can clear prose without changing manifest facts', async () => {
+  const result = await appToolHandlers.configureTool(CTX, {
+    space_id: SPACE, name: 'board', facts: { description: null, tags: null },
+  }, deps({
+    describeAuthoredTool: async () => detail(),
+    writeToolFile: async (_p, _c, _n, _file, content) => {
+      assert.equal(parseFrontmatter(content).description, undefined)
+      assert.equal(parseFrontmatter(content).tags, undefined)
+      return { ok: true, path: 'tools/board/index.md', build: build() }
+    },
+    rebuild: async () => build(),
+  }))
+  assert.deepEqual(result.changed, ['description', 'tags'])
+})
+
+test('a missing index while saving the creation plan cleans up only the new scaffold', async () => {
+  const removed: string[] = []
+  await assert.rejects(appToolHandlers.createTool(CTX, {
+    space_id: SPACE, name: 'board', title: 'Board', description: 'Track work', plan: '## Design\nA board.',
+  }, deps({
+    createTool: async () => ({ ok: true, name: 'board', build: build() }),
+    describeAuthoredTool: async () => null,
+    deleteTool: async (_principal, _context, name) => { removed.push(name); return { ok: true } },
+  })), /no index/)
+  assert.deepEqual(removed, ['board'])
 })

@@ -15,6 +15,7 @@
  * overrule it with a reason.
  */
 import { z } from 'zod'
+import { rowDenial } from '@visvine/tool-protocol/schema'
 import { TEMPLATE_SOURCES } from './sources.generated'
 
 // ── the spec vocabulary ──
@@ -28,7 +29,7 @@ const fieldSchema = z.object({
   kind: FIELD_KIND,
   options: z.array(z.object({ value: z.string().min(1).max(40), label: z.string().max(40).optional(), hue: HUE.optional() })).max(12).optional(),
   required: z.boolean().optional(),
-  currency: z.string().length(3).optional(),
+  currency: z.string().toUpperCase().regex(/^[A-Z]{3}$/).optional(),
   placeholder: z.string().max(60).optional(),
   hideInTable: z.boolean().optional(),
 })
@@ -112,7 +113,13 @@ function fieldProblems(fields: TemplateField[]): string[] {
 function sampleProblems(fields: TemplateField[], sample: Record<string, unknown>[]): string[] {
   const problems: string[] = []
   const byKey = new Map(fields.map((f) => [f.key, f]))
+  const schema = schemaForFields(fields)
   sample.forEach((r, i) => {
+    const invalid = rowDenial(schema, r)
+    if (invalid) problems.push(`sample[${i}]: ${invalid}`)
+    for (const f of fields.filter((field) => field.required)) {
+      if (r[f.key] === null || r[f.key] === undefined || r[f.key] === '') problems.push(`sample[${i}].${f.key} is required`)
+    }
     for (const [key, value] of Object.entries(r)) {
       const f = byKey.get(key)
       if (!f) {
@@ -328,6 +335,11 @@ const checkin: ToolTemplate = {
     const problems = fieldProblems(s.fields).filter((p) => !p.startsWith('the first field'))
     if (s.fields.some((f) => f.key === 'name' || f.key === 'date')) problems.push('`name` and `date` are added by the Tool — do not declare them')
     if (s.flagField && !s.fields.some((f) => f.key === s.flagField)) problems.push('flagField must name a field')
+    s.sample.forEach(({ name, daysAgo, ...values }, i) => {
+      if (typeof name !== 'string' || !name.trim()) problems.push(`sample[${i}].name must name a person`)
+      if (typeof daysAgo !== 'number' || !Number.isInteger(daysAgo) || daysAgo < 0) problems.push(`sample[${i}].daysAgo must be a non-negative integer`)
+      problems.push(...sampleProblems(s.fields, [values]).map((p) => p.replace('sample[0]', `sample[${i}]`)))
+    })
     return problems
   },
 }

@@ -263,15 +263,35 @@ compiles, renders without errors and scores higher. With no model in the space
 it hands the round back as a `stand_in`. An MCP call ends at 120s, so a long
 build is the HTTP door's (`budget_seconds` up to 600).
 
-`pnpm eval:tools` measures it: the prompts in `scripts/eval/tool-prompts.ts`
-built against the running dev server in a throwaway `tool-lab` space, every
-screen scored by an independent judge model; `--mode freeform` builds the old
-way (a model writing the whole Tool from the guide) for comparison. Results
-land in `apps/web/.eval/tools/`; the plan and its numbers are
-`docs/tools-oneshot-plan.md`.
+`pnpm --filter @visvine/web eval:tools --provider codex --new-space` measures
+all 20 prompts through the local MCP using the Codex CLI's ChatGPT login.
+Run `codex login` first. Each builder gets a fresh session with only the local
+Visvine MCP; a separate judge receives every section and band-action screenshot.
+The CLI child drops API-key environment variables and requires ChatGPT login.
+For a subscription-only evaluation, start the local server with
+`TOOL_REVIEW=off pnpm --filter @visvine/web dev`; the server-side visual reviewer
+otherwise uses its own configured API key. The fresh evaluation space has no
+server model, so the client builds from templates itself.
+
+The default provider remains `claude` for comparison with the historical run.
+`--builder-model` and `--judge-model` pin the models; `--concurrency` controls
+builders, while final captures are always serialized. `--new-space` provisions
+an isolated local evaluation space and preserves previous Tools. An existing
+`EVAL_SPACE` must be empty for a fresh run. `--rejudge <run-directory-name>`
+recaptures a previous run into a **new** result directory and preserves its
+original scores. A failed capture, missing screen verdict, or runtime error
+cannot count as a passing result. The pass gate also checks the lowest category
+on any screen, so averaging cannot hide a failure.
+
+Results and raw builder/judge answers land in `apps/web/.eval/tools/`.
+The target is a mean of at least 9 across all 20 prompts, with none below 8;
+`summary.json` reports `target_reached`. Changing the judge model is a new
+measurement series, not a directly comparable improvement over the historical
+Claude score. `eval:tools:server --mode freeform` retains the API-backed baseline
+runner. The plan and measured numbers are in `docs/tools-oneshot-plan.md`.
 
 Tier-one packages a Tool may declare (`@visvine/tool-protocol/dependencies`):
-`zod`, `date-fns`, `clsx`, `lucide-react`, `motion/react`, `@dnd-kit/core`,
+`zod`, `date-fns`, `clsx`, `motion/react`, `@dnd-kit/core`,
 `@dnd-kit/sortable`, `@dnd-kit/utilities`, `@tanstack/react-table`,
 `react-hook-form`, `papaparse`, `fuse.js`, `nanoid` — each pinned, served from
 the tools origin, every other curated module external to it.

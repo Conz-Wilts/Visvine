@@ -391,3 +391,10 @@ test('a curated dependency imports once the manifest declares it, and stays a ba
   const uncurated = await compileToolUi(`import _ from 'lodash'\nexport default function App() { return <p>{String(_)}</p> }`, { dependencies: ['lodash'] })
   assert.equal(uncurated.ok, false, 'declaring a package the server does not serve grants nothing')
 })
+
+test('tools use shared icons instead of importing the removed icon library', async () => {
+  const removed = await compileToolUi(`import { Users } from 'lucide-react'\nexport default function App() { return <Users /> }`, { dependencies: ['lucide-react'] })
+  assert.equal(removed.ok, false)
+  const shared = await compileToolUi(`import { Icon } from '@visvine/tool-kit'\nexport default function App() { return <Icon name="users" /> }`)
+  assert.equal(shared.ok, true)
+})

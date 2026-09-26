@@ -60,6 +60,7 @@ import { renderCatalog, TOOL_CATALOG } from '@/lib/tools/catalog'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { reviewModel, reviewScreens, visualReviewAvailable } from '@/lib/tools/visualReview'
 import { passes } from '@/lib/tools/shared/visualRubric'
+import { TOOL_FACT_KEYS } from '@/lib/tools/indexFacts'
 import { applySpec, checkSpec, templateById, TOOL_TEMPLATES, type ToolTemplate } from '@/lib/tools/templates'
 import { bindableSpace as bindableSpaceService } from '@/lib/tools/bindable'
 import { bindingChoices, type BindableSpace, type BindingValues } from '@visvine/tool-protocol/bindings'
@@ -74,6 +75,7 @@ import {
 import {
   configureTool as configureToolService,
   createTool as createToolService,
+  deleteTool as deleteToolService,
   describeAuthoredTool as describeAuthoredToolService,
   listAuthoredTools as listAuthoredToolsService,
   writeToolFile as writeToolFileService,
@@ -154,6 +156,7 @@ export interface AppToolDeps {
     context: Context,
     name: string,
   ): Promise<AuthoredToolDetail | null>
+  deleteTool: typeof deleteToolService
   createTool(
     p: ContextPrincipal,
     context: Context,
@@ -225,6 +228,7 @@ const liveDeps: AppToolDeps = {
   listAuthoredTools: listAuthoredToolsService,
   describeAuthoredTool: describeAuthoredToolService,
   createTool: createToolService,
+  deleteTool: deleteToolService,
   writeToolFile: writeToolFileService,
   rebuild: async (spaceId, name) => toBuildSummary(await rebuildTool(spaceId, name)),
   publishTool: publishToolService,
@@ -476,52 +480,61 @@ async function createTool(ctx: ActionCaller, args: CreateToolArgs, deps: AppTool
     description: args.description,
   })
   if (!result.ok) refuse(result)
-  let build = result.build
-  if (args.plan?.trim()) {
-    const detail = await deps.describeAuthoredTool(target.principal, target.context, result.name)
-    const index = detail?.sources['index.md']
-    if (index) {
+  try {
+    let build = result.build
+    if (args.plan?.trim()) {
+      const detail = await deps.describeAuthoredTool(target.principal, target.context, result.name)
+      const index = detail?.sources['index.md']
+      if (!index) throw new ActionError(500, 'The created Tool has no index for its plan.')
       const written = await deps.writeToolFile(target.principal, target.context, result.name, 'index.md', withDesignSection(index, args.plan))
-      if (written.ok) build = written.build
+      if (!written.ok) refuse(written)
+      build = written.build
     }
-  }
-  if (started) {
-    const facts = started.template.facts(started.spec)
-    const configured = await deps.configureTool(target.principal, target.context, result.name, {
-      sdk: '^2.0.0',
-      surfaces: { rail: { label: args.title, icon: started.template.railIcon }, types: [], nav: facts.surfaces.nav, actions: facts.surfaces.actions },
-      collections: facts.collections,
-    })
-    if (!configured.ok) refuse(configured)
-    const written = await deps.writeToolFile(target.principal, target.context, result.name, 'ui.tsx', applySpec(started.template.id, started.spec))
-    if (!written.ok) refuse(written)
-    build = written.build
+    if (started) {
+      const facts = started.template.facts(started.spec)
+      const configured = await deps.configureTool(target.principal, target.context, result.name, {
+        sdk: '^2.0.0',
+        surfaces: { rail: { label: args.title, icon: started.template.railIcon }, types: [], nav: facts.surfaces.nav, actions: facts.surfaces.actions },
+        collections: facts.collections,
+      })
+      if (!configured.ok) refuse(configured)
+      const written = await deps.writeToolFile(target.principal, target.context, result.name, 'ui.tsx', applySpec(started.template.id, started.spec))
+      if (!written.ok) refuse(written)
+      build = written.build
+      if (!build.ok) throw new ActionError(400, `The template did not compile: ${build.errors.map((e) => e.message).join('; ') || build.configError}`)
+      return {
+        name: result.name,
+        template: started.template.id,
+        files: SCAFFOLDED_FILES.map((file) => `tools/${result.name}/${file}`),
+        build: buildReport(build),
+        ...previewLinks(result.name, deps.appOrigin(), target.context.spaceId),
+        sections: facts.surfaces.nav?.sections.map((s) => s.id) ?? [],
+        band_actions: facts.surfaces.actions.map((a) => a.id),
+        next: [
+          `It is built from the ${started.template.title} template with your spec, and opens with the spec's sample rows. Before hand-over, inspect every section and band action with preview_tool { screenshot: true }, fix the concrete problems you see with write_tool, and capture again. Exercise the main action with try_tool, then remove only your temporary test records. Preserve the labelled sample rows; SampleData offers the person Clear. check_tool { review: true } adds a scored review when a judge is available; aim for 9/10 and report any unverified behaviour.`,
+          'To change what it is about, edit the SPEC block in ui.tsx with read_tool and write_tool. To change how it looks or add behaviour, read_tool then write_tool ui.tsx — the SPEC block at the top holds the fields, and the kit\'s blocks (RecordBoard, RecordTable, RecordDialog, StatRow, Toolbar) draw everything else.',
+        ],
+      }
+    }
     return {
       name: result.name,
-      template: started.template.id,
       files: SCAFFOLDED_FILES.map((file) => `tools/${result.name}/${file}`),
       build: buildReport(build),
       ...previewLinks(result.name, deps.appOrigin(), target.context.spaceId),
-      sections: facts.surfaces.nav?.sections.map((s) => s.id) ?? [],
-      band_actions: facts.surfaces.actions.map((a) => a.id),
       next: [
-        `It is built from the ${started.template.title} template with your spec, and opens with the spec's sample rows. Look before you hand it over: preview_tool { screenshot: true } per section and with each band action, or check_tool { review: true } for a scored review.`,
-        'To change what it is about, create again with a new spec. To change how it looks or add behaviour, read_tool then write_tool ui.tsx — the SPEC block at the top holds the fields, and the kit\'s blocks (RecordBoard, RecordTable, RecordDialog, StatRow, Toolbar) draw everything else.',
+        'Call get_tool_sdk for its short index, then request the sections you need with get_tool_sdk { section }.',
+        'configure_tool: surfaces (nav sections, band actions), collections, bindings and permissions — everything the plan decided. The bridge refuses anything undeclared.',
+        'set_tool_icon: a built-in name or your own 24×24 stroke SVG.',
+        `write_tool { name: "${result.name}", file: "ui.tsx", content } and read the build it hands back — kit components and Tailwind layout classes, never a painted page background.`,
+        'Then the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action, then try_tool through the main act.',
       ],
     }
-  }
-  return {
-    name: result.name,
-    files: SCAFFOLDED_FILES.map((file) => `tools/${result.name}/${file}`),
-    build: buildReport(build),
-    ...previewLinks(result.name, deps.appOrigin(), target.context.spaceId),
-    next: [
-      'Call get_tool_sdk once — it returns the authoring guide, the @visvine/tool-kit type definitions and the bridge method list.',
-      'configure_tool: surfaces (nav sections, band actions), collections, bindings and permissions — everything the plan decided. The bridge refuses anything undeclared.',
-      'set_tool_icon: a built-in name or your own 24×24 stroke SVG.',
-      `write_tool { name: "${result.name}", file: "ui.tsx", content } and read the build it hands back — kit components and Tailwind layout classes, never a painted page background.`,
-      'Then the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action, then try_tool through the main act.',
-    ],
+  } catch (err) {
+    // Only this call's successful scaffold is eligible for compensation. A
+    // create conflict returns above and must never remove an existing Tool.
+    const removed = await deps.deleteTool(target.principal, target.resolved, result.name)
+    if (!removed.ok) throw new ActionError(removed.status, `Creation failed (${err instanceof Error ? err.message : String(err)}); cleanup failed: ${removed.error}`)
+    throw err
   }
 }
 
@@ -710,9 +723,9 @@ async function reviewTool(ctx: ActionCaller, target: Target, config: ToolConfig,
       const img = shot as { image_base64: string; mime: 'image/png' | 'image/jpeg' }
       return { imageBase64: img.image_base64, mime: img.mime, screen: p.screen }
     })
-  if (screens.length === 0) {
+  if (screens.length !== plan.length || shots.some(({ shot }) => shot.available && (('rendered' in shot && !shot.rendered) || ('action_missing' in shot && shot.action_missing)))) {
     const reason = shots.find(({ shot }) => !shot.available)?.shot
-    return { available: false as const, reason: reason && !reason.available ? reason.reason : 'No screen could be captured.' }
+    return { available: false as const, reason: reason && !reason.available ? reason.reason : 'Not every screen and band action could be captured.' }
   }
   const result = await reviewScreens({ request, title: config.title }, screens)
   const console_errors = [...new Set(shots.flatMap(({ shot }) => (shot.available ? shot.console_errors : [])))]
@@ -720,7 +733,7 @@ async function reviewTool(ctx: ActionCaller, target: Target, config: ToolConfig,
     available: true as const,
     model: reviewModel(),
     verdict: result.verdict,
-    passes: result.verdict ? passes(result.verdict) : null,
+    passes: result.verdict ? passes(result.verdict) && console_errors.length === 0 : null,
     screens: result.screens.map((s) => ({ screen: s.screen, score: s.verdict?.score ?? null, fixes: s.verdict?.fixes ?? [] })),
     ...(console_errors.length ? { console_errors } : {}),
   }
@@ -1090,6 +1103,14 @@ const NOTE_KEYS = ['title', 'description', 'tags'] as const
 async function configureTool(ctx: ActionCaller, args: ConfigureToolArgs, deps: AppToolDeps = liveDeps) {
   const target = await deps.resolveTarget(ctx, args.space_id)
   await requireToolsFeature(ctx, target, deps)
+  const prose = z.object({
+    title: z.string().trim().min(1).nullable().optional(),
+    description: z.string().nullable().optional(),
+    tags: z.array(z.string()).nullable().optional(),
+  }).safeParse(args.facts)
+  if (!prose.success) throw new ActionError(400, prose.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
+  const stray = Object.keys(args.facts).find((key) => !TOOL_FACT_KEYS.includes(key) && !(NOTE_KEYS as readonly string[]).includes(key))
+  if (stray) throw new ActionError(400, `Unknown Tool fact "${stray}".`)
   const noteKeys = NOTE_KEYS.filter((k) => k in args.facts)
   if (noteKeys.length) {
     const detail = await deps.describeAuthoredTool(target.principal, target.context, args.name)
@@ -1115,7 +1136,7 @@ async function configureTool(ctx: ActionCaller, args: ConfigureToolArgs, deps: A
   const config = result.build.config
   return {
     name: args.name,
-    changed: result.changed,
+    changed: [...noteKeys, ...result.changed],
     build: buildReport(result.build),
     perimeter: config ? describePerimeter(config.perimeter) : [],
     surfaces: describeSurfaces(config),

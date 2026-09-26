@@ -61,6 +61,24 @@ import { ICON_NAMES, isIconName } from '@/lib/icons/names';
 const schema = z.object({ icon: z.enum(ICON_NAMES).nullable() });
 ```
 
+## Tool icons
+
+Tools use the same collection through `Icon` and `ICON_NAMES` from
+`@visvine/tool-kit`, with no icon dependency in their manifest. Existing short
+tool-kit names such as `edit`, `chart` and `arrowRight` remain supported as
+aliases for the shared names.
+
+For a tool's rail icon, `set_tool_icon` accepts an app icon name in `icon`,
+AI-written SVG markup in `svg`, or an uploaded SVG's `resource_id` (from
+`upload_file` or `request_upload`). Custom icons must use a 24×24 viewBox and
+stroke geometry, with optional `none` or `currentColor` fills. The sanitizer
+refuses unsafe markup and unsupported child paint before an icon can appear in
+the app.
+
+Tools that previously imported `lucide-react` must replace those imports with
+the kit's `Icon` (or their own inline SVG) and remove that manifest dependency
+before rebuilding and publishing. Already stored custom SVG icons are unchanged.
+
 ## Adding or changing a glyph
 
 1. Put the SVG in `assets/icons/<name>.svg`, normalised to the spec above.
@@ -71,7 +89,8 @@ const schema = z.object({ icon: z.enum(ICON_NAMES).nullable() });
 4. Commit the generated output alongside the SVG.
 
 The generated files — `apps/web/features/shared/icons/generated/icons.tsx`,
-`.../registry.ts` and `apps/web/lib/icons/names.ts` — are committed so `dev` and
+`.../registry.ts`, `apps/web/lib/icons/names.ts` and
+`apps/web/lib/icons/svg.generated.ts` — are committed so `dev` and
 `typecheck` need no prebuild step. **Never hand-edit them.** `pnpm icons:check`
 regenerates in memory and fails on any difference, and it rides `lint`.
 

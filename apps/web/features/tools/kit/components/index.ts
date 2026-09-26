@@ -95,6 +95,7 @@ export {
   RecordDialog,
   RecordForm,
   RecordsEmpty,
+  SampleData,
   RecordTable,
   relativeDate,
   useSampleRows,

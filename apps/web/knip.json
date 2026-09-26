@@ -28,7 +28,6 @@
   // @visvine/tool-protocol/dependencies); nothing in the app imports them.
   "ignoreDependencies": [
     "date-fns",
-    "lucide-react",
     "motion",
     "@dnd-kit/core",
     "@dnd-kit/sortable",
@@ -39,6 +38,6 @@
     "fuse.js",
     "nanoid"
   ],
-  // The eval drives headless Claude Code sessions (scripts/eval-tools-claude.ts).
-  "ignoreBinaries": ["claude"]
+  // The eval drives installed subscription CLIs (scripts/eval-tools-claude.ts).
+  "ignoreBinaries": ["claude", "codex"]
 }

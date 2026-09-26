@@ -262,3 +262,90 @@ Ordered by points per hour.
     Then a polish pass per template on its judge fixes until every prompt is ≥ 8.
 
 Expected: 6.0 → about 7 (P1) → 7.7 (P2) → 8.2 (P3) → 9 with per-template polish.
+
+## Subscription evaluation and completion — 2026-09-27
+
+The Claude handoff at `ef7f5704` left the measured score at **6.0**. That number
+belongs to the earlier Claude builder/judge series; it is not a ChatGPT score.
+The new runner supports `--provider codex`, using the Codex CLI's ChatGPT login
+for both a fresh builder and a separate screenshot judge. It forces ChatGPT
+authentication and strips API credentials from child processes. For these local
+runs the dev server has `TOOL_REVIEW=off`, so `check_tool` does not silently call
+the deployment's paid reviewer.
+
+Completed after the handoff:
+
+- Failed template configuration, writes or compilation remove that call's
+  scaffold. Failures during the scaffold itself remove its node, folder and
+  facts. Existing-name conflicts never enter cleanup. This is compensating
+  cleanup, not a crash-safe database transaction; a cleanup refusal is reported.
+- `create_tool` asks for a look, fix, recapture and interaction pass before
+  handover. `configure_tool` validates prose and unknown keys before writing,
+  routes prose into the index, and reports all changed keys. Icon resolution
+  and prose routing have regression coverage.
+- Evaluation captures every section and band action, serializes browser
+  captures, requires complete numeric judgments, retains the weakest category,
+  and rejects a pass on console errors or broken controls. Rejudging writes a
+  new report instead of overwriting the earlier evidence. `--rescore-saved`
+  recovers valid saved answers whose screen names used an unambiguous shorthand;
+  it does not make new model calls or alter the scores.
+- Shared UI fixes include explicit board scroll controls, correct initials
+  colours, percentage averages that ignore missing values, readable calendar
+  entries with expandable overflow, required-field cues, reset-on-reopen forms,
+  and visible save/delete failures that preserve entered values.
+- Templates retain labelled, clearable fictional sample rows. Planning
+  distinguishes an available record type from actual records, and warns against
+  putting fictional people into the real directory. Polls use separate answer
+  inputs; filtered directories keep detail selection inside the filtered list;
+  calendars expose unscheduled items; date calculations use local calendar days.
+
+The score target stays **mean ≥ 9, every prompt ≥ 8, no failed captures or
+broken controls**. A passing aggregate must also keep every screen's weakest
+category at 6 or above. No score is inferred from code changes or passing tests.
+The `screens-v2` judge instructions clarify that an intentionally blank creation
+form is evaluated on its fields and controls, that labelled realistic examples
+are valid, and that the Next.js development badge is outside the shipped Tool.
+Runs with different judge contracts must not be presented as a controlled
+before/after comparison.
+
+### Initial ChatGPT measurement
+
+Run: `apps/web/.eval/tools/2026-09-26T16-38-23-codex-initial-measured/`.
+The saved judgments and screenshots came from
+`2026-09-26T15-46-59-codex-fresh`; only response parsing was repaired. All 20
+judgments were recovered without another model call. Mean **5.61**, minimum
+**4.0**, **0** passing, **0** missing judgments; 15 outputs retained a template.
+The lowest criterion was realistic content (**2.7**), followed by density
+(**4.5**). The run used the handoff kit cached before the template polish,
+with the API completion fixes already applied; it is not a pristine checkout
+of `ef7f5704`.
+
+| Request | Initial ChatGPT score |
+|---|---:|
+| crm | 4.4 |
+| track stuff for my team | 6.2 |
+| make me a sales pipeline thing | 7.2 |
+| hiring | 4.9 |
+| bug tracker | 5.3 |
+| expenses | 4.4 |
+| where should we go for lunch poll | 6.5 |
+| daily standup | 4.8 |
+| vendor list | 6.6 |
+| kudos | 5.1 |
+| content calendar for our blog | 6.2 |
+| inventory | 5.6 |
+| okrs | 5.4 |
+| reading list | 7.1 |
+| team budget dashboard | 5.6 |
+| customer feedback | 6.4 |
+| habit tracker | 5.2 |
+| recipes we like | 4.0 |
+| fundraising investors | 5.4 |
+| event planning | 5.8 |
+
+### Paused for later continuation
+
+The user paused after the full checks passed and the updated-system retest began.
+No updated-system score is complete. Both evaluators and the task's dev server
+were stopped. The full restart instructions, exact artifact paths, remaining
+runner fixes and retest commands are in [tools-restart-handoff.md](tools-restart-handoff.md).

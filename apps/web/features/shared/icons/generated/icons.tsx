@@ -150,6 +150,22 @@ export function BriefcaseIcon(props: IconProps) {
   );
 }
 
+export function BugIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={1.8} {...props}>
+      <path d="M8 2l1.88 1.88 M14.12 3.88 16 2 M9 7.13v-1a3.003 3.003 0 1 1 6 0v1 M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6 M12 20v-9 M6.53 9C4.6 8.8 3 7.1 3 5 M6 13H2 M3 21c0-2.1 1.7-3.9 3.8-4 M20.97 5c0 2.1-1.6 3.8-3.5 4 M22 13h-4 M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+    </IconBase>
+  );
+}
+
+export function BuildingIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={1.8} {...props}>
+      <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2 M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2 M10 6h4 M10 10h4 M10 14h4 M10 18h4" />
+    </IconBase>
+  );
+}
+
 export function CalendarCheckIcon(props: IconProps) {
   return (
     <IconBase strokeWidth={2} {...props}>
@@ -345,6 +361,14 @@ export function CopyIcon(props: IconProps) {
   );
 }
 
+export function DollarSignIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={1.8} {...props}>
+      <path d="M12 2v20 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </IconBase>
+  );
+}
+
 export function DownloadIcon(props: IconProps) {
   return (
     <IconBase strokeWidth={2} {...props}>
@@ -527,6 +551,14 @@ export function FileIcon(props: IconProps) {
   );
 }
 
+export function FlagIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={1.8} {...props}>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z M4 22v-7" />
+    </IconBase>
+  );
+}
+
 export function FlameIcon(props: IconProps) {
   return (
     <IconBase strokeWidth={2} {...props}>
@@ -684,6 +716,14 @@ export function ImageIcon(props: IconProps) {
       <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
       <circle cx="9" cy="9" r="2" />
       <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+    </IconBase>
+  );
+}
+
+export function InboxIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={1.8} {...props}>
+      <path d="M22 12h-6l-2 3h-4l-2-3H2 M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </IconBase>
   );
 }
@@ -1030,6 +1070,14 @@ export function NewspaperIcon(props: IconProps) {
       <path d="M18 14h-8" />
       <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9a2 2 0 0 1 2-2h2" />
       <rect width="8" height="4" x="10" y="6" rx="1" />
+    </IconBase>
+  );
+}
+
+export function PackageIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={1.8} {...props}>
+      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z M3.3 7 12 12l8.7-5 M12 22V12" />
     </IconBase>
   );
 }
@@ -1651,6 +1699,14 @@ export function XIcon(props: IconProps) {
     <IconBase strokeWidth={2} {...props}>
       <path d="M18 6 6 18" />
       <path d="m6 6 12 12" />
+    </IconBase>
+  );
+}
+
+export function ZapIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={1.8} {...props}>
+      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
     </IconBase>
   );
 }

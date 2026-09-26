@@ -158,7 +158,7 @@ export function buildPlanBrief(facts: PlanFacts): PlanBrief {
     const noun = RECORD_NOUN[type] ?? type
     warnings.push(
       `"${word}" is the built-in \`${type}\` type — add_type ${word} is refused. ` +
-        (count > 0 ? `The space already has ${count} ${noun} record${count === 1 ? '' : 's'}; build on them` : `Build on ${noun} records`) +
+        (count > 0 ? `The space already has ${count} ${noun} record${count === 1 ? '' : 's'}; build on them` : `There are no ${noun} records yet; prefer the recommended collection template with labelled fictional sample rows`) +
         `, or name a type for what these are here (e.g. "Portfolio company") if they are not those records.`,
     )
   }
@@ -186,6 +186,7 @@ export function buildPlanBrief(facts: PlanFacts): PlanBrief {
     decide: [
       `Start from a template unless none fits: \`${chosen.id}\` (${chosen.summary}) fits this request best; the alternatives are listed. A template is a finished, designed Tool — you write only its spec (what THIS one is about: nouns, fields, options, realistic sample rows) and get a Tool that already looks right. A vague request still gets a full spec: decide the fields a team like this would want.`,
       'For each kind of thing the Tool shows, pick ONE home (the tool_data guide): the space\'s records when it is about things the space already tracks (records above); a note type of its own in a folder when agents and search should see it (add_type with fields, then a folder binding); the Tool\'s own collection when only this Tool cares (votes, predictions, check-ins).',
+      'A built-in type existing is not data. Choose a custom directory-backed Tool only when the user asks to reuse those records or you have inspected relevant records; an admin profile alone is not a CRM. If the relevant records are empty, use the recommended collection template and keep its labelled fictional demo rows. Do not build an empty directory-backed CRM or put fictional people into the real directory. Fill owners and dates as well as titles; SampleData labels the demonstration once, so never prefix every record with Sample or Example.',
       'Give every field with a known set of values an enum — that is what its Select draws.',
       'Pick each chart from the tool_charts guide, and put the numbers beside it.',
       'Decide the icon and any images now: set_tool_icon, and ImageUpload + a `format: resource` field for a picture people add in the Tool.',
@@ -196,7 +197,7 @@ export function buildPlanBrief(facts: PlanFacts): PlanBrief {
       'Custom path (no template fits, or it must work over the space\'s own records): fill in plan_template and show it to the person in ONE message; build on their yes, or on "you decide".',
       'Model the data first: add_type (with fields) for a note type; the collection schema goes in configure_tool.',
       'create_tool with `plan` set to the filled-in template, then configure_tool (surfaces, collections, bindings, permissions), set_tool_icon, and write_tool.',
-      'End with the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action, then try_tool through the main act.',
+      'End with the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action, then try_tool through the main act. Remove only the temporary rows you inserted for that test; preserve the labelled demo rows for the first look.',
     ],
   }
 }

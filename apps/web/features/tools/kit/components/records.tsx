@@ -7,7 +7,7 @@
  * due date that has slipped or a person's name is then the kit's, the same in
  * every Tool, and the Tool's own code is only what is particular to it.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { Avatar, Toggle } from '@visvine/ui';
@@ -24,6 +24,7 @@ import { Select } from './Select';
 import { Textarea } from './Textarea';
 import { EmptyState } from './EmptyState';
 import { useVisvine } from '../hooks';
+import { BridgeCallError } from '../client';
 
 // ── hues ──
 
@@ -160,7 +161,8 @@ export function hueOf(name: string): Hue {
 
 /** A person's initials on their own hue. */
 export function PersonAvatar({ name, size = 'xs' }: { name: string; size?: 'xs' | 'sm' | 'md' }) {
-  return <Avatar name={name} size={size} fallback="initials" accentColor={`var(--vv-color-hue-${hueOf(name)})`} />;
+  const hue = hueOf(name);
+  return <Avatar name={name} size={size} fallback="initials" style={{ backgroundColor: `var(--vv-color-hue-${hue}-wash)`, color: `var(--vv-color-hue-${hue}-fg)` }} />;
 }
 
 export function formatNumber(value: unknown): string {
@@ -312,7 +314,7 @@ export interface FieldInputProps {
 export function FieldInput({ field, value, onChange, id, autoFocus }: FieldInputProps) {
   switch (field.kind) {
     case 'longtext':
-      return <Textarea id={id} rows={4} value={String(value ?? '')} placeholder={field.placeholder} onChange={(e) => onChange(e.currentTarget.value)} />;
+      return <Textarea id={id} aria-required={field.required} rows={3} value={String(value ?? '')} placeholder={field.placeholder} onChange={(e) => onChange(e.currentTarget.value)} />;
     case 'number':
     case 'money':
     case 'percent':
@@ -333,7 +335,7 @@ export function FieldInput({ field, value, onChange, id, autoFocus }: FieldInput
         <Select
           id={id}
           value={value ? String(value) : ''}
-          placeholder={field.placeholder ?? 'Choose…'}
+          placeholder={field.placeholder ?? `Select ${field.label.toLowerCase()}`}
           options={optionsOf(field).map((o) => ({ value: o.value, label: o.label }))}
           onValueChange={(v) => onChange(v)}
         />
@@ -391,6 +393,7 @@ export function FieldInput({ field, value, onChange, id, autoFocus }: FieldInput
         <Input
           id={id}
           autoFocus={autoFocus}
+          aria-required={field.required}
           type={field.kind === 'email' ? 'email' : field.kind === 'url' ? 'url' : 'text'}
           value={String(value ?? '')}
           placeholder={field.placeholder}
@@ -410,7 +413,7 @@ export interface RecordFormProps {
   errors?: string[];
 }
 
-const WIDE: ReadonlySet<FieldKind> = new Set(['longtext', 'tags']);
+const WIDE: ReadonlySet<FieldKind> = new Set(['longtext', 'tags', 'url']);
 
 /**
  * Every field, two to a row on a wide frame; long text, tags and the title
@@ -425,7 +428,7 @@ export function RecordForm({ fields, value, onChange, errors = [] }: RecordFormP
         const id = `vv-field-${field.key}`;
         return (
           <div key={field.key} className={clsx(WIDE.has(field.kind) || field.key === firstText ? 'sm:col-span-2' : undefined)}>
-            <Field label={field.label} htmlFor={id} error={errors.includes(field.key) ? `${field.label} is needed` : undefined}>
+            <Field label={<>{field.label}{field.required && <span className="ml-1 text-fg-muted" aria-label="required">*</span>}</>} htmlFor={id} error={errors.includes(field.key) ? `${field.label} is needed` : undefined}>
               <FieldInput id={id} field={field} value={value[field.key]} onChange={(v) => onChange({ ...value, [field.key]: v })} />
             </Field>
           </div>
@@ -439,7 +442,7 @@ export function RecordForm({ fields, value, onChange, errors = [] }: RecordFormP
 export function missingRequired(fields: FieldDef[], value: RecordData): string[] {
   return fields.filter((f) => f.required).filter((f) => {
     const v = value[f.key];
-    return v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
+    return v === null || v === undefined || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && v.length === 0);
   }).map((f) => f.key);
 }
 
@@ -461,26 +464,43 @@ export interface RecordDialogProps {
 export function RecordDialog({ open, title, fields, initial, onClose, onSave, onDelete, saveLabel = 'Save' }: RecordDialogProps) {
   const [value, setValue] = useState<RecordData>(initial);
   const [errors, setErrors] = useState<string[]>([]);
+  const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const seeded = useRef(initial);
-  useEffect(() => {
-    if (open && seeded.current !== initial) {
+  const wasOpen = useRef(false);
+  useLayoutEffect(() => {
+    if (open && (!wasOpen.current || seeded.current !== initial)) {
       seeded.current = initial;
       setValue(initial);
       setErrors([]);
+      setFailure(null);
     }
+    wasOpen.current = open;
   }, [open, initial]);
 
   const save = async () => {
+    if (busy) return;
+    setFailure(null);
     const missing = missingRequired(fields, value);
     setErrors(missing);
     if (missing.length) return;
     setBusy(true);
     try {
       await onSave(value);
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : 'Could not save this record');
     } finally {
       setBusy(false);
     }
+  };
+
+  const remove = async () => {
+    if (busy || !onDelete) return;
+    setBusy(true);
+    setFailure(null);
+    try { await onDelete(); }
+    catch (err) { setFailure(err instanceof Error ? err.message : 'Could not delete this record'); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -492,7 +512,7 @@ export function RecordDialog({ open, title, fields, initial, onClose, onSave, on
       footer={
         <div className="flex w-full items-center gap-2">
           {onDelete && (
-            <Button variant="danger-text" onClick={() => void onDelete()}>
+            <Button variant="danger-text" disabled={busy} onClick={() => void remove()}>
               Delete
             </Button>
           )}
@@ -512,6 +532,7 @@ export function RecordDialog({ open, title, fields, initial, onClose, onSave, on
         }}
       >
         <RecordForm fields={fields} value={value} onChange={setValue} errors={errors} />
+        {failure && <p role="alert" className="mt-4 text-sm text-danger">{failure}</p>}
       </form>
     </Modal>
   );
@@ -623,7 +644,9 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
         <KanbanBoard onMove={move}>
           {columns.map((col) => {
             const inCol = rows.filter((r) => String(r.data[groupBy] ?? '') === col.value);
-            const total = sum ? inCol.reduce((acc, r) => acc + (Number(r.data[sum.key]) || 0), 0) : null;
+            const values = sum ? inCol.map((r) => r.data[sum.key]).filter((v) => v !== null && v !== undefined && v !== '').map(Number).filter(Number.isFinite) : [];
+            const averaged = sum?.kind === 'percent' || sum?.kind === 'rating';
+            const total = values.length ? values.reduce((a, b) => a + b, 0) / (averaged ? values.length : 1) : null;
             const colDone = done.has(col.value);
             return (
               <KanbanColumn
@@ -640,7 +663,7 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
                 count={inCol.length}
                 actions={
                   total !== null && total > 0 ? (
-                    <span className="text-xs text-fg-muted tabular-nums">{sum!.kind === 'money' ? formatMoney(total, sum!.currency) : formatNumber(total)}</span>
+                    <span className="text-xs text-fg-muted tabular-nums">{sum!.kind === 'money' ? formatMoney(total, sum!.currency) : `${formatNumber(Math.round(total * 10) / 10)}${sum!.kind === 'percent' ? '%' : ''}${averaged ? ' avg' : ''}`}</span>
                   ) : undefined
                 }
               >
@@ -651,7 +674,7 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
                         <span className="min-w-0 text-sm font-medium leading-snug text-fg">{String(row.data[titleKey] ?? '') || 'Untitled'}</span>
                         {headline && row.data[headline.key] !== undefined && row.data[headline.key] !== null && row.data[headline.key] !== '' && (
                           <span className="shrink-0 text-sm font-semibold tabular-nums text-fg">
-                            {headline.kind === 'money' ? formatMoney(row.data[headline.key], headline.currency) : formatNumber(row.data[headline.key])}
+                            <FieldValue field={headline} value={row.data[headline.key]} compact />
                           </span>
                         )}
                       </div>
@@ -699,16 +722,19 @@ export function RecordBoard<T extends { id: string; data: RecordData }>({ fields
  * (an install-wide state key), so clearing the rows keeps them cleared.
  * Returns `clear`, which deletes every row this seeded.
  */
-export function useSampleRows(collection: string, rows: RecordData[]): { seeding: boolean; clear: () => Promise<void> } {
+export function useSampleRows(collection: string, rows: RecordData[]): { seeding: boolean; hasSamples: boolean; clear: () => Promise<void> } {
   const visvine = useVisvine();
   const [seeding, setSeeding] = useState(false);
+  const [hasSamples, setHasSamples] = useState(false);
   const key = `vv:sample:${collection}`;
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const done = await visvine.state.get<string[]>(key, { scope: 'install' });
-        if (done || cancelled || rows.length === 0) return;
+        if (cancelled) return;
+        if (done) { setHasSamples(done.length > 0); return; }
+        if (rows.length === 0) return;
         const existing = await visvine.collections.count(collection);
         if (existing.total > 0 || cancelled) {
           await visvine.state.set(key, [], { scope: 'install' });
@@ -718,6 +744,7 @@ export function useSampleRows(collection: string, rows: RecordData[]): { seeding
         const ids: string[] = [];
         for (const row of rows) ids.push((await visvine.collections.insert(collection, row)).id);
         await visvine.state.set(key, ids, { scope: 'install' });
+        if (!cancelled) setHasSamples(ids.length > 0);
       } catch {
         // A viewer who may not write sees the Tool as it is.
       } finally {
@@ -732,10 +759,33 @@ export function useSampleRows(collection: string, rows: RecordData[]): { seeding
   }, [visvine, collection, key]);
   const clear = async () => {
     const ids = (await visvine.state.get<string[]>(key, { scope: 'install' })) ?? [];
-    for (const id of ids) await visvine.collections.delete(collection, id).catch(() => null);
+    for (const id of ids) {
+      try { await visvine.collections.delete(collection, id); }
+      catch (err) { if (!(err instanceof BridgeCallError && err.code === 'not_found')) throw err; }
+    }
     await visvine.state.set(key, [], { scope: 'install' });
+    setHasSamples(false);
   };
-  return { seeding, clear };
+  return { seeding, hasSamples, clear };
+}
+
+/** Demo provenance appears once, keeping record titles natural and readable. */
+export function SampleData({ state }: { state: ReturnType<typeof useSampleRows> }) {
+  const visvine = useVisvine();
+  const [clearing, setClearing] = useState(false);
+  if (!state.hasSamples && !state.seeding) return null;
+  const clear = async () => {
+    setClearing(true);
+    try { await state.clear(); }
+    catch (err) { void visvine.ui.toast(err instanceof Error ? err.message : 'Could not clear sample data', 'error'); }
+    finally { setClearing(false); }
+  };
+  return (
+    <div className="flex items-center justify-end gap-2 text-xs text-fg-muted">
+      <span>Sample data</span>
+      <Button size="sm" variant="ghost" disabled={clearing || state.seeding} onClick={() => void clear()}>{clearing ? 'Clearing…' : 'Clear'}</Button>
+    </div>
+  );
 }
 
 /** An empty collection's state with its one way out. */

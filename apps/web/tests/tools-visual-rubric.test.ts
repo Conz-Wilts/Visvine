@@ -48,3 +48,18 @@ test('the prompt names the request, the screen and every criterion', () => {
   assert.ok(p.includes('"crm"') && p.includes('the Board section'))
   for (const r of RUBRIC) assert.ok(p.includes(r.key))
 })
+
+
+test('a failed category on one screen cannot be averaged into a pass', () => {
+  const bad = parseVerdict(JSON.stringify({ scores: { ...all(10), data: 2 } }))!
+  const good = parseVerdict(JSON.stringify({ scores: all(10) }))!
+  const combined = combineVerdicts([bad, good, good])!
+  assert.ok(combined.score >= 9)
+  assert.equal(passes(combined), false)
+})
+
+test('missing numeric judgments are not silently converted to zero', () => {
+  for (const data of [null, '', false, '9']) {
+    assert.equal(parseVerdict(JSON.stringify({ scores: { ...all(9), data } })), null)
+  }
+})

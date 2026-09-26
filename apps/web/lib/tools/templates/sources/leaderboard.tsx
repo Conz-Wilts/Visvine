@@ -15,6 +15,7 @@ import {
   useBandAction,
   useCollection,
   useSampleRows,
+  SampleData,
   useSection,
   useVisvine,
   type RecordData,
@@ -58,7 +59,7 @@ const SPEC: Spec = {
 
 type Entry = { id: string; data: { person: string; amount: number; reason?: string; note?: string; date: string; from?: string } }
 
-const iso = (d: Date) => d.toISOString().slice(0, 10)
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const unitFor = (n: number) => (n === 1 ? (SPEC.unitOne ?? SPEC.unit) : SPEC.unit)
 const PERIODS = [
   { value: 'week', label: 'Week' },
@@ -78,7 +79,7 @@ export default function App() {
       }),
     [],
   )
-  useSampleRows('entries', samples)
+  const sampleRows = useSampleRows('entries', samples)
   const { data, loading } = useCollection<Entry['data']>('entries', { order: 'desc', limit: 200 })
   // Newest first by the day it happened, not the order the rows were written.
   const entries = useMemo(() => [...((data ?? []) as Entry[])].sort((a, b) => b.data.date.localeCompare(a.data.date)), [data])
@@ -167,6 +168,7 @@ export default function App() {
   if (section === 'activity') {
     return (
       <Page width="normal">
+      <SampleData state={sampleRows} />
         <ul className="flex flex-col">
           {entries.map((e) => (
             <li key={e.id} className="flex items-start gap-3 border-b border-line-subtle py-3">
@@ -193,6 +195,7 @@ export default function App() {
 
   return (
     <Page width="normal">
+      <SampleData state={sampleRows} />
       <StatRow>
         <Stat label="Leader" value={ranking[0]?.total ? ranking[0].person : '—'} hint={ranking[0]?.total ? `${ranking[0].total} ${SPEC.unit}` : undefined} />
         <Stat label={`${SPEC.unit.charAt(0).toUpperCase() + SPEC.unit.slice(1)} given`} value={periodTotal} />

@@ -17,7 +17,12 @@ introduced; the geometry is unchanged from what shipped there.
 | `nav-context` | `tool-calendar` | `tool-list` |  |
 | `nav-directory` | `tool-chart` | `tool-note` | `file-pdf` |
 
-## Derived from Lucide (145)
+## Derived from Lucide
+
+The `building`, `dollar-sign`, `flag`, `package`, `zap`, `bug` and `inbox`
+glyphs were moved from the tool kit's inline path collection into this shared
+set when the remaining React library dependency was removed. Their existing
+geometry and 1.8 stroke weight are preserved; the licence below still applies.
 
 Copied verbatim from `lucide-react` 0.545.0 — the version the app depended on
 before it owned its icons — then normalised into this directory's file shape

@@ -19,6 +19,7 @@ import { STATE_MAX_BYTES, STATE_MAX_KEYS } from './state'
 import { MAX_TOOL_MODULES } from './config'
 import { TOOL_ACTIONS } from './actionAllowlist'
 import { DETACHED_DAYS, LIST_LIMIT_MAX } from './shared/collections'
+import { TOOL_ICON_NAMES } from '@/lib/icons/toolIcons'
 import { CURATED_DEPENDENCIES } from '@visvine/tool-protocol/dependencies'
 
 /**
@@ -677,7 +678,7 @@ declare module '@visvine/tool-kit' {
 
   // ── page blocks ──
 
-  export type IconName = 'plus' | 'search' | 'filter' | 'check' | 'x' | 'trash' | 'edit' | 'calendar' | 'clock' | 'user' | 'users' | 'building' | 'dollar' | 'chart' | 'trend' | 'list' | 'board' | 'table' | 'star' | 'heart' | 'flag' | 'tag' | 'link' | 'mail' | 'message' | 'file' | 'folder' | 'box' | 'target' | 'trophy' | 'bolt' | 'bug' | 'book' | 'home' | 'settings' | 'arrowRight' | 'arrowUp' | 'arrowDown' | 'chevronLeft' | 'chevronRight' | 'more' | 'download' | 'upload' | 'sparkles' | 'inbox' | 'vote'
+  export type IconName = ${TOOL_ICON_NAMES.map((name) => JSON.stringify(name)).join(' | ')}
   export const ICON_NAMES: IconName[]
   export function Icon(props: { name: IconName; size?: number; className?: string }): JSX.Element
   /** The Tool's page: the app's gutter and gap-6 between blocks. The root of every Tool. */
@@ -736,7 +737,8 @@ declare module '@visvine/tool-kit' {
   export function RecordBoard<T extends { id: string; data: RecordData }>(props: { fields: FieldDef[]; groupBy: string; rows: T[]; onMove: (row: T, toValue: string) => void; onOpen?: (row: T) => void; cardFields?: string[]; sumField?: string; dueField?: string; doneValues?: string[]; onAdd?: (columnValue: string) => void }): JSX.Element | null
   export function RecordsEmpty(props: { noun: string; onAdd?: () => void }): JSX.Element
   /** Seeds an empty collection once per install with sample rows; clear() removes exactly those. */
-  export function useSampleRows(collection: string, rows: RecordData[]): { seeding: boolean; clear: () => Promise<void> }
+  export function useSampleRows(collection: string, rows: RecordData[]): { seeding: boolean; hasSamples: boolean; clear: () => Promise<void> }
+  export function SampleData(props: { state: ReturnType<typeof useSampleRows> }): JSX.Element | null
 
   // ── the app's own (@visvine/ui) ──
 
@@ -810,8 +812,18 @@ const fields: FieldDef[] = [
 </Page>
 \`\`\`
 
-Seed a collection with \`useSampleRows\` so the first look is the Tool working,
-and look before you hand it over: \`check_tool { review: true }\` scores every
+Seed a collection with \`useSampleRows\` so the first look is the Tool working.
+Render \`<SampleData state={sampleRows} />\` once per page, where
+\`const sampleRows = useSampleRows(collection, rows)\`. This labels the fictional
+rows and lets the person clear them. Keep titles and people natural: no repeated
+"Sample:" or "Example:" prefixes and no "Example teammate". Populate owner,
+amount, stage, and date fields with plausible demonstration values. Keep these
+labelled sample rows when handing over; delete only the temporary rows you
+created for interaction testing. Never seed fictional people or companies into
+the space directory. If its relevant records are empty, use the recommended
+collection template instead of building an empty directory-backed application.
+
+Look before you hand it over: \`check_tool { review: true }\` scores every
 screen 0–10 with fixes; hand over at 8.5.
 
 ## index.md — the manifest
@@ -922,7 +934,8 @@ to a strict shape and anything outside it fails the build:
   \`foreignObject\`, \`a\`, animation, event handlers, links, \`url(...)\`, or
   \`id\`/\`class\`.
 - **No colours** — paint is supplied by the sidebar so your icon follows the
-  theme and the active-row highlight like a built-in. Draw strokes, not fills.
+  theme and the active-row highlight like a built-in. Child fills may only be
+  \`none\` or \`currentColor\`; arbitrary colours and paint references are refused.
 
 ## Permissions
 

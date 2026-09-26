@@ -9,7 +9,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildPlanBrief, takenTypeWords, PLAN_TEMPLATE } from '@/lib/tools/shared/planBrief'
 import { withDesignSection } from '@/lib/actions/defs/apps'
-import { droppedFromIcon } from '@/lib/actions/defs/toolPlan'
+import { droppedFromIcon, namedIconSvg } from '@/lib/actions/defs/toolPlan'
+import { ICON_SVGS } from '@/lib/icons/svg.generated'
 
 const TYPES = [
   { type: 'person', usage_count: 12, fields: [{ key: 'email', label: 'Email', kind: 'email' }], note_dir: 'people', enabled: true },
@@ -18,6 +19,14 @@ const TYPES = [
   { type: 'deal', usage_count: 7, fields: [{ key: 'stage', label: 'Stage', kind: 'select' }], note_dir: null, enabled: true },
   { type: 'connector', usage_count: 2, fields: [], note_dir: 'connectors', enabled: true },
 ]
+
+test('set_tool_icon resolves app glyphs and old kit names without an icon library', () => {
+  assert.equal(namedIconSvg('message-square'), ICON_SVGS['message-square'])
+  assert.equal(namedIconSvg('MessageSquare'), ICON_SVGS['message-square'])
+  assert.equal(namedIconSvg('chart'), ICON_SVGS['tool-chart'])
+  assert.equal(namedIconSvg('constructor'), null)
+  assert.equal(namedIconSvg('unknown-icon'), null)
+})
 
 test('the brief says what the space keeps, what it invented, and its own folders — never the platform\'s', () => {
   const brief = buildPlanBrief({

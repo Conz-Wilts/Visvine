@@ -75,7 +75,7 @@ export async function reviewScreen(ctx: ReviewContext, shot: ReviewScreen, model
 export async function reviewScreens(ctx: ReviewContext, shots: ReviewScreen[], model = reviewModel()): Promise<{ verdict: VisualVerdict | null; screens: Array<{ screen: string; verdict: VisualVerdict | null }> }> {
   const verdicts = await Promise.all(shots.map((shot) => reviewScreen(ctx, shot, model)))
   return {
-    verdict: combineVerdicts(verdicts.filter((v): v is VisualVerdict => v !== null)),
+    verdict: verdicts.every((v): v is VisualVerdict => v !== null) ? combineVerdicts(verdicts) : null,
     screens: shots.map((shot, i) => ({ screen: shot.screen ?? 'main', verdict: verdicts[i] })),
   }
 }

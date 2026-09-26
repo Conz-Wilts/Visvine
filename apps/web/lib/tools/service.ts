@@ -436,18 +436,19 @@ export async function createTool(
 
   const title = (input.title ?? '').trim() || name
   const description = (input.description ?? '').trim()
-  await syncEntityNode({
-    spaceId: context.spaceId,
-    type: 'tool',
-    nodeId,
-    name: title,
-    subtitle: description || null,
-    metadata: { notePath: indexPath },
-    parentNodeId: spaceNodeId(context.spaceId),
-    actor: actorOf(p),
-  })
-
+  let failureStatus = 400
   try {
+    await syncEntityNode({
+      spaceId: context.spaceId,
+      type: 'tool',
+      nodeId,
+      name: title,
+      subtitle: description || null,
+      metadata: { notePath: indexPath },
+      parentNodeId: spaceNodeId(context.spaceId),
+      actor: actorOf(p),
+    })
+
     // createIndexFolder rather than a plain write: the Tool IS its folder, and
     // this is the one call that makes the folder row, the index and the parent
     // listing all appear together.
@@ -456,22 +457,35 @@ export async function createTool(
     const scaffold = splitToolIndex(newToolIndexNote({ name, title, description, railLabel: input.railLabel }))
     await writeToolFacts(context.spaceId, name, scaffold.facts ?? {}, p.name)
     await store.createIndexFolder(context, folder, scaffold.note, actorOf(p))
+
+    for (const [file, content] of [
+      [TOOL_SOURCE_FILES.ui.authorName, starterUi()] as const,
+      [TOOL_SOURCE_FILES.data.authorName, starterData()] as const,
+    ]) {
+      const written = await writeGated(p, context, notePathOf(name, file, folder), noteContentOf(file, content))
+      // Pre-checked above; only a grant revoked mid-call can land here.
+      if (written.status === 'denied') {
+        failureStatus = 403
+        throw new Error(written.reason)
+      }
+    }
+
+    // Each write above already rebuilt through the store hook; this returns that
+    // row (the hash is unchanged, so nothing recompiles).
+    return { ok: true, name, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
   } catch (err) {
-    return { ok: false, status: 400, error: err instanceof Error ? err.message : 'Could not create the tool.' }
+    // Undo this call's scaffold too: the MCP's later template cleanup cannot
+    // run when createTool itself failed before returning the created name.
+    const reason = err instanceof Error ? err.message : 'Could not create the tool.'
+    try {
+      await removeEntityNode(context.spaceId, 'tool', indexPath)
+      await store.deleteFolder(context, folder)
+      await dropToolFacts(context.spaceId, name)
+    } catch (cleanup) {
+      return { ok: false, status: 500, error: `${reason} Cleanup failed: ${cleanup instanceof Error ? cleanup.message : String(cleanup)}` }
+    }
+    return { ok: false, status: failureStatus, error: reason }
   }
-
-  for (const [file, content] of [
-    [TOOL_SOURCE_FILES.ui.authorName, starterUi()] as const,
-    [TOOL_SOURCE_FILES.data.authorName, starterData()] as const,
-  ]) {
-    const written = await writeGated(p, context, notePathOf(name, file, folder), noteContentOf(file, content))
-    // Pre-checked above; only a grant revoked mid-call can land here.
-    if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
-  }
-
-  // Each write above already rebuilt through the store hook; this returns that
-  // row (the hash is unchanged, so nothing recompiles).
-  return { ok: true, name, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
 }
 
 // ── writing ───────────────────────────────────────────────────────────────────

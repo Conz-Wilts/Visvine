@@ -6,7 +6,7 @@
  * page's own gutter (`Page`). Each is flat — hairlines, never a boxed card —
  * and draws its own empty state.
  */
-import { Children, useMemo } from 'react';
+import { Children, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { Icon } from './Icon';
@@ -285,6 +285,7 @@ export function todayIso(): string {
 
 /** A month grid with each day's items as chips; ‹ › step the month. */
 export function MonthCalendar({ month, onMonth, items, onOpen, onDay, weekStart = 1 }: MonthCalendarProps) {
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set());
   const first = useMemo(() => {
     const d = new Date(`${month.slice(0, 7)}-01T00:00:00`);
     return Number.isNaN(d.getTime()) ? new Date(new Date().getFullYear(), new Date().getMonth(), 1) : d;
@@ -339,12 +340,12 @@ export function MonthCalendar({ month, onMonth, items, onOpen, onDay, weekStart 
               <span
                 className={clsx(
                   'flex size-6 items-center justify-center rounded-full text-xs tabular-nums',
-                  key === today ? 'bg-accent font-semibold text-fg-inverse' : inMonth ? 'text-fg-secondary' : 'text-fg-subtle',
+                  key === today ? 'bg-accent-strong font-semibold text-fg-inverse' : inMonth ? 'text-fg-secondary' : 'text-fg-subtle',
                 )}
               >
                 {d.getDate()}
               </span>
-              {dayItems.slice(0, 3).map((item) => (
+              {(expandedDays.has(key) ? dayItems : dayItems.slice(0, 3)).map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -352,13 +353,17 @@ export function MonthCalendar({ month, onMonth, items, onOpen, onDay, weekStart 
                     e.stopPropagation();
                     onOpen?.(item.id);
                   }}
-                  className="flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-xs text-fg hover:bg-surface-muted"
+                  title={typeof item.title === 'string' ? item.title : undefined}
+                  className="flex min-w-0 items-start gap-1.5 rounded bg-surface-subtle px-1.5 py-1 text-left text-xs text-fg hover:bg-surface-muted"
                 >
-                  <HueDot hue={item.hue ?? 'blue'} />
-                  <span className="truncate">{item.title}</span>
+                  <HueDot hue={item.hue ?? 'blue'} className="mt-1 shrink-0" />
+                  <span className="line-clamp-2 whitespace-normal leading-snug">{item.title}</span>
                 </button>
               ))}
-              {dayItems.length > 3 && <span className="px-1 text-xs text-fg-muted">+{dayItems.length - 3} more</span>}
+              {dayItems.length > 3 && <button type="button" aria-expanded={expandedDays.has(key)} onClick={(e) => {
+                e.stopPropagation();
+                setExpandedDays((old) => { const next = new Set(old); if (next.has(key)) next.delete(key); else next.add(key); return next; });
+              }} className="px-1 text-left text-xs font-medium text-fg-muted hover:text-fg">{expandedDays.has(key) ? 'Show less' : `+${dayItems.length - 3} more`}</button>}
             </div>
           );
         })}

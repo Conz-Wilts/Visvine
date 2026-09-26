@@ -148,8 +148,18 @@ const fields: FieldDef[] = [
 </Page>
 ```
 
-Seed a collection with `useSampleRows` so the first look is the Tool working,
-and look before you hand it over: `check_tool { review: true }` scores every
+Seed a collection with `useSampleRows` so the first look is the Tool working.
+Render `<SampleData state={sampleRows} />` once per page, where
+`const sampleRows = useSampleRows(collection, rows)`. This labels the fictional
+rows and lets the person clear them. Keep titles and people natural: no repeated
+"Sample:" or "Example:" prefixes and no "Example teammate". Populate owner,
+amount, stage, and date fields with plausible demonstration values. Keep these
+labelled sample rows when handing over; delete only the temporary rows you
+created for interaction testing. Never seed fictional people or companies into
+the space directory. If its relevant records are empty, use the recommended
+collection template instead of building an empty directory-backed application.
+
+Look before you hand it over: `check_tool { review: true }` scores every
 screen 0–10 with fixes; hand over at 8.5.
 
 ## index.md — the manifest
@@ -260,7 +270,8 @@ to a strict shape and anything outside it fails the build:
   `foreignObject`, `a`, animation, event handlers, links, `url(...)`, or
   `id`/`class`.
 - **No colours** — paint is supplied by the sidebar so your icon follows the
-  theme and the active-row highlight like a built-in. Draw strokes, not fills.
+  theme and the active-row highlight like a built-in. Child fills may only be
+  `none` or `currentColor`; arbitrary colours and paint references are refused.
 
 ## Permissions
 
@@ -360,7 +371,6 @@ version the server serves — declare it in `dependencies` and import it by name
 - `zod` 4.3.6 — schema validation
 - `date-fns` 4.1.0 — date arithmetic and formatting
 - `clsx` 2.1.1 — class name joining
-- `lucide-react` 1.48.0 — icons — `import { Users } from "lucide-react"`, sized with `size-4`
 - `motion/react` 13.4.4 — animation — `motion.div`, `AnimatePresence`
 - `@dnd-kit/core` 6.3.1 — drag and drop
 - `@dnd-kit/sortable` 10.0.0 — sortable lists over @dnd-kit/core

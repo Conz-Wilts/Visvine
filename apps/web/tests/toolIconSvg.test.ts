@@ -29,6 +29,16 @@ function rejected(src: string): string {
 }
 
 describe('sanitizeToolIcon — what it accepts', () => {
+  it('keeps only theme-owned fills on geometry', () => {
+    for (const fill of ['none', 'currentColor']) {
+      const shape = `<path d="M0 0h4" fill="${fill}" />`
+      assert.equal(accepted(wrap(shape)), shape)
+    }
+    for (const fill of ['red', 'url(#shape)', 'url(https://example.com/icon.svg)', 'var(--paint)', 'currentcolor', '&#99;urrentColor']) {
+      assert.match(rejected(wrap(`<path d="M0 0h4" fill="${fill}" />`)), /fill|external/)
+    }
+  })
+
   it('keeps a plain path', () => {
     assert.equal(accepted(wrap('<path d="M20 6 9 17l-5-5" />')), '<path d="M20 6 9 17l-5-5" />')
   })

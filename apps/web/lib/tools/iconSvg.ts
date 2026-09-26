@@ -27,11 +27,11 @@ const ALLOWED_ELEMENTS = new Set([
  *
  * No `id`, `class` or `style`: an icon has no business naming things in the
  * host document, and `style` is a second expression language to have to reason
- * about. No `fill`/`stroke` either — paint is forced (see below) so the glyph
- * inherits the rail's colour like a built-in instead of burning in a colour that
- * disappears in one of the two themes.
+ * about. Stroke is inherited; fill is limited to `none` or `currentColor`,
+ * so geometry can use the same theme-owned fills as the app's icons.
  */
 const ALLOWED_ATTRS = new Set([
+  'fill',
   // path / polyline / polygon
   'd', 'points',
   // circle / ellipse
@@ -49,12 +49,10 @@ const ALLOWED_ATTRS = new Set([
 /**
  * Attribute values that may not contain a reference of any kind.
  *
- * Defence in depth, NOT the boundary — the boundary is ALLOWED_ATTRS, and it
- * admits no URL-bearing attribute (`fill`, `stroke`, `clip-path`, `mask`,
- * `filter`, `marker-*` and `style` are all excluded on purpose). Keep it that
- * way: presentation attributes are parsed as CSS, where `= rl(#x)` means
- * `url(#x)` and this regex would not see it. If ALLOWED_ATTRS ever gains an
- * attribute that takes a URL, this pattern is NOT sufficient to make that safe.
+ * Defence in depth, NOT the boundary — ALLOWED_ATTRS excludes URL-bearing
+ * attributes except fill, whose value must pass an exact two-value allowlist.
+ * Presentation attributes are parsed as CSS; this regex alone cannot make
+ * an attribute that accepts URLs safe.
  */
 const REFERENCE_RE = /url\s*\(|data:|javascript:|&#|&\w+;/i
 
@@ -219,6 +217,9 @@ export function sanitizeToolIcon(input: string): IconResult {
       }
       if (!ALLOWED_ATTRS.has(name)) {
         return fail(`The attribute "${name}" is not allowed in an icon.`)
+      }
+      if (name === 'fill' && value !== 'none' && value !== 'currentColor') {
+        return fail('The fill attribute must be none or currentColor.')
       }
       if (value.length > ICON_MAX_ATTR_LENGTH) return fail(`The "${name}" attribute is too long.`)
       if (REFERENCE_RE.test(value)) {

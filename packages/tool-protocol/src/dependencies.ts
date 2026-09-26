@@ -27,7 +27,6 @@ export const CURATED_DEPENDENCIES = {
   zod: { version: '4.3.6', file: 'dep-zod.js', license: 'MIT', summary: 'schema validation' },
   'date-fns': { version: '4.1.0', file: 'dep-date-fns.js', license: 'MIT', summary: 'date arithmetic and formatting' },
   clsx: { version: '2.1.1', file: 'dep-clsx.js', license: 'MIT', summary: 'class name joining' },
-  'lucide-react': { version: '1.48.0', file: 'dep-lucide-react.js', license: 'ISC', summary: 'icons — `import { Users } from "lucide-react"`, sized with `size-4`' },
   'motion/react': { version: '13.4.4', file: 'dep-motion-react.js', license: 'MIT', summary: 'animation — `motion.div`, `AnimatePresence`', package: 'motion' },
   '@dnd-kit/core': { version: '6.3.1', file: 'dep-dnd-kit-core.js', license: 'MIT', summary: 'drag and drop' },
   '@dnd-kit/sortable': { version: '10.0.0', file: 'dep-dnd-kit-sortable.js', license: 'MIT', summary: 'sortable lists over @dnd-kit/core' },

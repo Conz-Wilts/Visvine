@@ -110,3 +110,24 @@ test("every template types against the kit's published .d.ts", () => {
     assert.fail(String((err as { stdout?: string }).stdout ?? err))
   }
 })
+
+
+test('sample rows are refused before creation when the collection would reject them', () => {
+  const tracker = TOOL_TEMPLATES.find((t) => t.id === 'tracker')!
+  const spec = exampleSpec('tracker')
+  const sample = spec.sample as Array<Record<string, unknown>>
+  for (const value of ['USD 1200', { amount: 1200 }]) {
+    const checked = checkSpec(tracker, { ...spec, sample: [{ ...sample[0], value }, ...sample.slice(1)] })
+    assert.equal(checked.ok, false)
+    assert.ok(!checked.ok && checked.problems.some((p) => p.includes('sample[0]')))
+  }
+})
+
+test('check-in samples require a person and a valid relative day', () => {
+  const template = TOOL_TEMPLATES.find((t) => t.id === 'checkin')!
+  const spec = exampleSpec('checkin')
+  const sample = spec.sample as Array<Record<string, unknown>>
+  const checked = checkSpec(template, { ...spec, sample: [{ ...sample[0], daysAgo: 'yesterday' }, ...sample.slice(1)] })
+  assert.equal(checked.ok, false)
+  assert.ok(!checked.ok && checked.problems.some((p) => p.includes('daysAgo')))
+})

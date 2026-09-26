@@ -22,6 +22,8 @@ type RubricKey = (typeof RUBRIC)[number]['key']
 export interface VisualVerdict {
   /** 0–10, the mean of the rubric's scores, one decimal. */
   score: number
+  /** Lowest category on any reviewed screen; averaging must not hide a failure. */
+  minimumCategory?: number
   scores: Record<RubricKey, number>
   /** Concrete changes that would raise the score, most important first. */
   fixes: string[]
@@ -72,8 +74,8 @@ export function parseVerdict(text: string): VisualVerdict | null {
   if (!raw || typeof raw.scores !== 'object' || raw.scores === null) return null
   const scores = {} as Record<RubricKey, number>
   for (const r of RUBRIC) {
-    const n = Number(raw.scores[r.key])
-    if (!Number.isFinite(n)) return null
+    const n = raw.scores[r.key]
+    if (typeof n !== 'number' || !Number.isFinite(n)) return null
     scores[r.key] = clamp(n)
   }
   const values = Object.values(scores)
@@ -106,6 +108,7 @@ export function combineVerdicts(verdicts: VisualVerdict[]): VisualVerdict | null
   return {
     score: Math.round((verdicts.reduce((a, v) => a + v.score, 0) / verdicts.length) * 10) / 10,
     scores,
+    minimumCategory: Math.min(...verdicts.map((v) => v.minimumCategory ?? Math.min(...Object.values(v.scores)))),
     fixes: fixes.slice(0, 8),
     summary: verdicts.map((v) => v.summary).filter(Boolean).join(' · '),
   }
@@ -113,5 +116,5 @@ export function combineVerdicts(verdicts: VisualVerdict[]): VisualVerdict | null
 
 /** Good enough to hand over: a mean at the bar and no category that fails. */
 export function passes(verdict: VisualVerdict, bar = 8.5): boolean {
-  return verdict.score >= bar && Object.values(verdict.scores).every((s) => s >= 6)
+  return verdict.score >= bar && (verdict.minimumCategory ?? 10) >= 6 && Object.values(verdict.scores).every((s) => s >= 6)
 }
