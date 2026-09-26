@@ -9,7 +9,7 @@
  * stolen session cookie is not also an agent credential.
  */
 import { SignJWT, jwtVerify } from 'jose'
-import { legacyResourceUrls, mcpResourceUrl } from '@/lib/mcp/config'
+import { legacyResourceUrl, mcpResourceUrl } from '@/lib/mcp/config'
 import { serializeScopes } from '@/lib/mcp/scopes'
 
 /**
@@ -76,15 +76,16 @@ export interface VerifiedAccessToken {
  * Verify a bearer. Anything not minted for this resource — a web session
  * cookie, a token for some other audience entirely — is null.
  *
- * The identifiers of the endpoints Tool authoring once had of its own
- * (`/api/mcp/creator`, `/api/mcp/tools`) are accepted too, so a connection made
- * there keeps working on its existing token. They name the same one server;
- * the scopes on the token decide what it can do, exactly as before.
+ * The legacy identifier is accepted alongside the canonical one so a connection
+ * made before the surfaces were one keeps working on its existing token rather
+ * than failing until someone notices. Both name the same single resource, so
+ * there is no cross-resource confusion to create; the scopes on the token are
+ * what decide what it can do, exactly as before.
  */
 export async function verifyAccessToken(token: string): Promise<VerifiedAccessToken | null> {
   try {
     const { payload } = await jwtVerify(token, secret(), {
-      audience: [mcpResourceUrl(), ...legacyResourceUrls()],
+      audience: [mcpResourceUrl(), legacyResourceUrl()],
     })
     if (payload.typ !== TOKEN_TYPE) return null
     if (!payload.sub) return null

@@ -86,11 +86,10 @@ export function actionAnnotations(def: ActionDef): {
  */
 function describeTool(): string {
   const count = allActions().length
-  const covering = 'covering context, files, events, connectors, agents and planning and building Tools'
   return (
     'The router into Visvine — a relationship-context platform where context notes are how you direct ' +
-    `agents. ${count} actions sit behind it, ${covering}, and this tool is how you find them, read them and run them. ` +
-    'Each action is also ' +
+    `agents. ${count} actions sit behind it, covering context, files, events, connectors, agents and ` +
+    'building Tools, and this tool is how you find them, read them and run them. Each action is also ' +
     'its own tool, `visvine_<action>`, with the same arguments — prefer that once you know which one ' +
     'you need, so the call is typed and named.\n\n' +
     "CALL IT FIRST, with no `action` and `request` set to the user's message VERBATIM. You get back the plan " +

@@ -88,8 +88,9 @@ const lines = [
   "  Visvine MCP — local, no auth",
   "",
   `    visvine-dev      ${APP_URL}/api/mcp`,
+  `    visvine-creator  ${APP_URL}/api/mcp/creator`,
   "",
-  "  It is in the committed .mcp.json. No token, no sign-in: just connect",
+  "  Both are in the committed .mcp.json. No token, no sign-in: just connect",
   "  (in Claude Code: /mcp → visvine-dev → Connect) and every tool is available.",
   "",
 ];

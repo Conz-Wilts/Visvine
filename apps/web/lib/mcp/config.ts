@@ -16,18 +16,19 @@ export function oauthIssuer(): string {
  * ONE MCP server, at `/api/mcp`, and one OAuth protected resource (RFC 8707):
  * one resource URL, one metadata document, and tokens whose `aud` names it.
  *
- * Everything is an action behind the `visvine` router — reading a space and
- * building a Tool for it included, because a Tool is planned well only by a
- * model that can see the space's types, records and files in the same session.
- * What an action costs is enforced by the scope on its definition, checked
- * before dispatch and again in `runAction`.
+ * Everything the platform can do is an action behind a single `visvine` tool,
+ * and which action a request needs is answered by the action notes rather than
+ * by which endpoint a client happened to connect to. Separating the surfaces
+ * would only make a client guess at a boundary the catalogue already explains,
+ * and what an action costs is still enforced where it always was: the scope on
+ * its definition, checked before dispatch and again in `runAction`.
  *
- * `/api/mcp/creator` and `/api/mcp/tools` — where Tool authoring once had
- * endpoints of its own — answer with a permanent redirect here, and
- * `LEGACY_RESOURCE_PATHS` keeps their tokens and `resource` parameter
- * verifying. All are deletable once no client is configured that way.
+ * `/api/mcp/creator` answers with a permanent redirect for connections made
+ * before the surfaces were one, and `LEGACY_RESOURCE_PATH` keeps their tokens
+ * and their `resource` parameter verifying. Both are deletable once no client
+ * is configured that way.
  */
-const LEGACY_RESOURCE_PATHS = ['/creator', '/tools'] as const
+const LEGACY_RESOURCE_PATH = '/creator'
 
 /**
  * The identity clients show for each server: name, title, site, and logo.
@@ -77,18 +78,18 @@ export function mcpInstructions(): string {
     'This server exposes the `visvine` router and one tool per action, `visvine_<action>`. Call the ' +
     "router first with no `action` and `request` set to the user's message verbatim: it returns the plan " +
     'for that ask plus the catalogue of every action that exists — reading and writing context, calling ' +
-    'connectors, running agents and building Tools. Then call the named tool for the action you need ' +
+    'connectors, running agents, and building Tools. Then call the named tool for the action you need ' +
     '(its schema carries every argument), or the router with `action` to read the manual and with ' +
     '`action` + `input` to run it.\n\n' +
     'Visvine is note-first — most things here are markdown notes at deterministic paths, not records ' +
     'behind a create_* API — so the absence of an action named for something is not evidence it cannot be ' +
     'done. The plan will tell you how it is actually done. Never report something as impossible without ' +
     'having read it.\n\n' +
-    'Building a Tool (an app inside a space): research, plan, then build. `plan_tool` first, with the ' +
-    "user's request verbatim — it reads the space's types, records, folders and files and says where each " +
-    'thing should live; agree its plan with the person in one message; then create_tool { plan } → ' +
-    'configure_tool → set_tool_icon → write_tool, and never hand over a preview you have not looked at: ' +
-    'check_tool { render: true }, then preview_tool { screenshot: true } per section and per band action.'
+    'Building a Tool: research, plan, then build. `plan_tool` first, with the user\'s request verbatim — it ' +
+    "reads the space's types, records, folders and files and says where each thing should live; agree its " +
+    'plan with the person in one message; then create_tool { plan } → configure_tool → set_tool_icon → ' +
+    'write_tool, and never hand over a preview you have not looked at: check_tool { render: true }, then ' +
+    'preview_tool { screenshot: true } per section and per band action.'
   )
 }
 
@@ -102,13 +103,13 @@ export function mcpResourceUrl(): string {
 }
 
 /**
- * The resource identifiers a connection made to an old authoring endpoint
- * still presents — as its token's `aud` and as its `resource` parameter.
- * Accepted as naming the one resource, so those clients keep working through
- * the redirect without being reconfigured.
+ * The resource identifier a connection made before the surfaces were one still
+ * presents — as its token's `aud` and as its `resource` parameter. Accepted as
+ * naming the same single resource, so those clients keep working without being
+ * reconfigured. There is no confusion to guard against: there is one resource.
  */
-export function legacyResourceUrls(): string[] {
-  return LEGACY_RESOURCE_PATHS.map((path) => `${mcpResourceUrl()}${path}`)
+export function legacyResourceUrl(): string {
+  return `${mcpResourceUrl()}${LEGACY_RESOURCE_PATH}`
 }
 
 /**
@@ -146,6 +147,6 @@ export function isCanonicalResource(raw: string | null | undefined): boolean {
   if (given === null) return false
   return (
     given === canonicalizeResource(mcpResourceUrl()) ||
-    legacyResourceUrls().some((url) => given === canonicalizeResource(url))
+    given === canonicalizeResource(legacyResourceUrl())
   )
 }

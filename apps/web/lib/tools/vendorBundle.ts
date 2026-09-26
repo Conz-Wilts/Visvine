@@ -203,17 +203,17 @@ async function dependencyEntry(name: CuratedDependencyName): Promise<string> {
     .join('\n')
 }
 
+/** Tailwind's spacing scale, every step — a Tool may reach for any of them. */
+const SCALE = '{0,px,0.5,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10,11,12,14,16,20,24,28,32,36,40,44,48,52,56,60,64,72,80,96}'
+
 /**
  * The layout utilities a Tool's own markup reaches for, compiled in whether or
  * not the kit happens to use them. The stylesheet is built from the kit's
  * sources, not the Tool's, so without this a Tool's `grid-cols-3` or `text-2xl`
  * would name a class that does not exist and silently draw nothing — rows that
- * never become a grid, spacing that never lands. Layout and type only: colour
- * comes from the role utilities the kit already carries.
+ * never become a grid, spacing that never lands. Layout, type and the role
+ * colours — never a palette or a hex.
  */
-/** Tailwind's spacing scale, every step — a Tool may reach for any of them. */
-const SCALE = '{0,px,0.5,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10,11,12,14,16,20,24,28,32,36,40,44,48,52,56,60,64,72,80,96}'
-
 const TOOL_LAYOUT_UTILITIES: readonly string[] = [
   '{sm:,md:,lg:,xl:,}grid-cols-{1,2,3,4,5,6,7,8,9,10,11,12}',
   '{sm:,md:,lg:,xl:,}col-span-{1,2,3,4,5,6,7,8,9,10,11,12,full}',

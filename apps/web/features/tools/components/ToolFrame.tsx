@@ -168,16 +168,30 @@ export default function ToolFrame({
 
   // A dialog is open inside the frame. The frame dims itself; the host dims
   // everything around it, so the scrim reads as the whole app's.
+  // Counted, so a dialog opened over another keeps the scrim until the last
+  // one closes; zeroed whenever the frame goes, so a frame torn down with a
+  // dialog open can never leave the page behind a scrim it cannot lift.
   const [scrim, setScrim] = useState<DOMRect | null>(null);
+  const scrimCountRef = useRef(0);
   const showScrim = useCallback((open: boolean) => {
-    setScrim(open && slotRef.current ? slotRef.current.getBoundingClientRect() : null);
+    scrimCountRef.current = Math.max(0, scrimCountRef.current + (open ? 1 : -1));
+    setScrim(scrimCountRef.current > 0 && slotRef.current ? slotRef.current.getBoundingClientRect() : null);
   }, []);
+  const clearScrim = useCallback(() => {
+    scrimCountRef.current = 0;
+    setScrim(null);
+  }, []);
+  const scrimOpen = scrim !== null;
   useEffect(() => {
-    if (!scrim) return;
+    if (!scrimOpen) return;
     const measure = () => { if (slotRef.current) setScrim(slotRef.current.getBoundingClientRect()); };
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [scrim !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [scrimOpen]);
 
   const targetKey = useMemo(() => JSON.stringify(target), [target]);
 
@@ -333,6 +347,7 @@ export default function ToolFrame({
       bridgeRef.current = null;
       if (actionRef) actionRef.current = null;
       bridge.dispose();
+      clearScrim();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframeEl, mint, targetKey, router]);
@@ -502,7 +517,7 @@ export default function ToolFrame({
           </>
         )}
       </div>
-      {scrim && <FrameScrim rect={scrim} />}
+      {scrim && !error && !stopped && <FrameScrim rect={scrim} />}
       <ToastHost toasts={toasts} onDismiss={dismiss} />
       <ConfirmDialog
         open={question !== null}

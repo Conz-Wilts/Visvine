@@ -51,6 +51,12 @@ function fromApp(req: NextRequest): boolean {
   return origin !== null && origin.trim().replace(/\/+$/, '').toLowerCase() === appOrigin().toLowerCase()
 }
 
+/**
+ * A file travels as a base64 data URL, a third larger than its bytes — the one
+ * call whose params may run past `maxParamsBytes`, and only to the upload cap.
+ */
+const UPLOAD_PARAMS_BYTES = Math.ceil((BRIDGE_LIMITS.maxUploadBytes * 4) / 3) + 1_024
+
 export async function POST(req: NextRequest) {
   const caller = await requireToolSession()
   if (caller instanceof Response) return caller
@@ -66,7 +72,7 @@ export async function POST(req: NextRequest) {
   // Read the body as text first so an oversized one is refused by SIZE rather
   // than by whatever JSON.parse does with it.
   const raw = await req.text()
-  if (Buffer.byteLength(raw, 'utf8') > BRIDGE_LIMITS.maxParamsBytes + ENVELOPE_SLACK_BYTES) {
+  if (Buffer.byteLength(raw, 'utf8') > UPLOAD_PARAMS_BYTES + ENVELOPE_SLACK_BYTES) {
     return json(
       { ok: false, error: { code: 'too_large', message: 'That call is too big for the bridge.' } },
       413,
@@ -88,13 +94,14 @@ export async function POST(req: NextRequest) {
   }
   // The params budget is its own cap so a Tool learns which limit it hit, and so
   // the envelope can never be used to smuggle a large payload past it.
-  if (params !== undefined && Buffer.byteLength(JSON.stringify(params) ?? '', 'utf8') > BRIDGE_LIMITS.maxParamsBytes) {
+  const paramsCap = method === 'resources.upload' ? UPLOAD_PARAMS_BYTES : BRIDGE_LIMITS.maxParamsBytes
+  if (params !== undefined && Buffer.byteLength(JSON.stringify(params) ?? '', 'utf8') > paramsCap) {
     return json(
       {
         ok: false,
         error: {
           code: 'too_large',
-          message: `Params are over the ${BRIDGE_LIMITS.maxParamsBytes} byte limit.`,
+          message: `Params are over the ${paramsCap} byte limit.`,
         },
       },
       413,

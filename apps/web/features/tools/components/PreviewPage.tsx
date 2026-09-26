@@ -50,9 +50,8 @@ function buildFor(build: BuildSummary | null, file: string): BuildSummary | null
 }
 
 export default function PreviewPage({ name }: { name: string }) {
-  const { currentSpace, loading: spaceLoading } = useSpace();
+  const { currentSpace, loading: spaceLoading, isAdmin } = useSpace();
   const { user } = useAuth();
-  const { isAdmin } = useSpace();
   const spaceId = currentSpace?.id ?? null;
   const searchParams = useSearchParams();
   const { shellTabsHost, shellTrailHost } = useContextPanel();
@@ -144,7 +143,7 @@ export default function PreviewPage({ name }: { name: string }) {
   const trail = (
     <div className="flex items-center gap-1 pr-2">
       {inTool ? (
-        <ToolActionButtons actions={runnable ? (tool.config?.surfaces.actions ?? []) : []} onAction={(id) => actionRef.current?.(id)} />
+        <ToolActionButtons actions={runnable && (isAuthor || runRequested) ? (tool.config?.surfaces.actions ?? []) : []} onAction={(id) => actionRef.current?.(id)} />
       ) : (
         <span className="whitespace-nowrap px-2 text-xs text-fg-muted">{[active === 'checks' ? 'Checks' : active, status].join(' · ')}</span>
       )}

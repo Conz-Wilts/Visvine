@@ -203,8 +203,8 @@ export const SPACE_ACTIONS = [
       }
       const result = merged as MergeNodeTypeResult | null
       if (!result) throw new ActionError(500, 'The type could not be added')
-      if (!result.ok) throw new ActionError(400, result.error)
       if (fieldError) throw new ActionError(400, fieldError)
+      if (!result.ok) throw new ActionError(400, result.error)
       const shaped = wantsFields && (result.created || admin) && result.type.scope === 'note'
       if (result.created || shaped) bustSpaceConfigCache()
       const folded = !result.created && result.type.name.toLowerCase() !== args.name.trim().toLowerCase()

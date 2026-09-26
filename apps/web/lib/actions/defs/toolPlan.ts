@@ -72,6 +72,7 @@ interface SetIconArgs {
 async function iconSource(ctx: ActionCaller, args: SetIconArgs): Promise<string> {
   if (args.svg) return args.svg
   const gated = await requireVisibleResource(args.resource_id!, ctx.userId, ctx.email)
+  if (gated.spaceId !== args.space_id) throw new ActionError(400, 'That file is in another space — upload the SVG into this one.')
   const row = await prisma.resource.findUnique({ where: { id: gated.id }, select: { gcsPath: true, mimeType: true, fileSize: true } })
   if (!row?.gcsPath) throw new ActionError(400, 'That resource has no file — upload the SVG with upload_file first.')
   if (row.mimeType !== 'image/svg+xml') throw new ActionError(400, `That resource is ${row.mimeType ?? 'not an SVG'} — the icon must be an SVG.`)
@@ -105,7 +106,7 @@ async function setToolIcon(ctx: ActionCaller, args: SetIconArgs) {
   const source = raw.replace(/<\?xml[^>]*>|<!--[\s\S]*?-->/g, '').replace(/<(text|title|desc|style|metadata)\b[\s\S]*?<\/\1>/gi, '')
   const clean = sanitizeToolIcon(source)
   if (!clean.ok) throw new ActionError(400, `${clean.error} Draw it on a 24×24 viewBox in strokes only (path, circle, rect, line).`)
-  await appToolHandlers.writeTool(ctx, { space_id: args.space_id, name: args.name, file: 'icon.svg', content: source })
+  await appToolHandlers.writeTool(ctx, { space_id: args.space_id, name: args.name, file: 'icon.svg', content: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${clean.svg}</svg>` })
   const configured = await appToolHandlers.configureTool(ctx, {
     space_id: args.space_id,
     name: args.name,
@@ -146,7 +147,6 @@ export const TOOL_PLAN_ACTIONS = [
   defineAction({
     name: 'set_tool_icon',
     scope: 'tools:author',
-    guides: ['tool_data'],
     summary: "Give a Tool its rail icon — a built-in name, SVG text, or an SVG uploaded with upload_file.",
     description:
       'Set the icon on a Tool\'s rail row. Give exactly one of: `icon`, a built-in name (' +

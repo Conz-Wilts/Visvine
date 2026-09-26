@@ -49,12 +49,12 @@ function recordingServer(): { server: McpServer; names: string[]; tools: Map<str
 
 test('the server registers the router, then one tool per action', () => {
   // Two doors from one registry: the router for discovery and a named tool per
-  // action so a client can permit, deny and log each one by name. Planning a
-  // Tool and reading the space it is for are on the same server.
+  // action so a client can permit, deny and log each one by name.
   const { server, names } = recordingServer()
   registerTools(server)
   assert.deepEqual(names, [TOOL_NAME, ...allActions().map((a) => actionToolName(a.name))])
-  for (const name of ['plan_tool', 'create_tool', 'list_context', 'list_resources', 'add_type']) assert.ok(names.includes(actionToolName(name)), name)
+  // Planning a Tool and reading the space it is for are on the same server.
+  for (const name of ['plan_tool', 'set_tool_icon', 'list_context', 'list_resources']) assert.ok(names.includes(actionToolName(name)), name)
 })
 
 test('the real SDK accepts every tool', () => {

@@ -1007,9 +1007,8 @@ for (its types, records, folders, files) in the same session.
 approving sees each spelled out (`SCOPE_DESCRIPTIONS`). `DEFAULT_SCOPES` is
 read-only. There is no per-server ceiling above `negotiateScopes`.
 
-- `/api/mcp/creator` and `/api/mcp/tools` 308 to `/api/mcp`;
-  `legacyResourceUrls()` keeps their tokens verifying. All deletable once
-  nothing is configured that way.
+- `/api/mcp/creator` 308s to `/api/mcp`; `legacyResourceUrl()` keeps its
+  tokens verifying. Both are deletable once nothing is configured that way.
 - Client-facing identity is `lib/mcp/config.ts#mcpServerInfo`. The logo is
   served from `public/images/brand-icon.png`, not Next's hashed `app/icon.png`
   route, because clients fetch it cross-origin long after that build. Keep the

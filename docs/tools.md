@@ -255,8 +255,7 @@ Visvine runs ONE MCP server at `/api/mcp`, exposing the `visvine` router and a
 named tool per action. The authoring loop is a set of actions like any other,
 beside the reads it plans from — `list_context`, `search_context`,
 `list_resources` — so the model building a Tool sees the space it is for.
-`/api/mcp/creator` and `/api/mcp/tools` 308 to it and the tokens they minted
-still verify. The address is shown in Settings → MCP (`/api/mcp/connect-info`).
+`/api/mcp/creator` 308s to it and the tokens it minted still verify. The address is shown in Settings → MCP (`/api/mcp/connect-info`).
 
 **A build is researched and planned before it is written.** `plan_tool`
 (`lib/actions/defs/toolPlan.ts`, brief in `lib/tools/shared/planBrief.ts`)

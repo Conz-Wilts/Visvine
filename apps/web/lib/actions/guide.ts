@@ -17,7 +17,7 @@
  * have is dropped upstream in lib/actions/notes.ts. The surface can therefore
  * never advertise a call that does not exist, however stale the notes get.
  */
-import { actionByName, allActions } from '@/lib/actions/registry'
+import { allActions, actionByName } from '@/lib/actions/registry'
 import { readActionNotes, readRecipeNotes, readActionNote, readGuideNote } from '@/lib/actions/notes'
 import { GUIDES, guideById } from '@/lib/actions/shared/guides'
 import { scoreCandidates, confidenceOf } from '@/lib/actions/shared/match'
