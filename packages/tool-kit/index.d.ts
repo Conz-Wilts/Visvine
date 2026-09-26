@@ -662,6 +662,9 @@ export function Toolbar(props: { search?: string; onSearch?: (value: string) => 
 export function Stat(props: { label: ReactNode; value: ReactNode; delta?: number; deltaLabel?: ReactNode; invert?: boolean; icon?: IconName; hint?: ReactNode; lead?: boolean; tone?: 'danger' | 'success'; onClick?: () => void; active?: boolean }): JSX.Element
 export function StatRow(props: { children: ReactNode; className?: string }): JSX.Element
 export function Progress(props: { value: number; max?: number; hue?: Hue; label?: ReactNode; className?: string }): JSX.Element
+export interface ChoiceOption { value: string; label: ReactNode; hint?: ReactNode }
+/** Options to pick from, each a row with its radio (or box, `multiple`); `marks` shows right and wrong after an answer is checked. */
+export function ChoiceList(props: { options: ChoiceOption[]; value: string | string[] | null; onChange: (value: string | string[]) => void; multiple?: boolean; disabled?: boolean; marks?: Record<string, 'correct' | 'wrong'>; label: string; className?: string }): JSX.Element
 export function ListDetail<T>(props: { items: T[]; itemKey: (item: T) => string; selected: string | null; onSelect: (key: string) => void; renderItem: (item: T, selected: boolean) => ReactNode; detail: ReactNode; listHeader?: ReactNode; empty?: ReactNode; placeholder?: ReactNode }): JSX.Element
 /** late: past due and not done — drawn red. done: finished — drawn quietly. */
 export interface CalendarItem { id: string; /** YYYY-MM-DD */ date: string; title: ReactNode; hue?: Hue; late?: boolean; done?: boolean }

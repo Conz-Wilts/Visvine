@@ -16,6 +16,8 @@
  * Pure and dependency-free so tests/toolIconSvg.test.ts can hammer it without a
  * DOM, a database or a network.
  */
+import { resolveToolIconName } from '@/lib/icons/toolIcons'
+import { ICON_SVGS } from '@/lib/icons/svg.generated'
 
 /** Elements an icon may contain. Geometry only — no text, no references. */
 const ALLOWED_ELEMENTS = new Set([
@@ -285,4 +287,10 @@ function isWellFormedOutput(svg: string): boolean {
 /** Attribute values are re-serialised, so the quoting is ours to guarantee. */
 function escapeAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** An app icon's SVG by any name a model might use for it, or null. */
+export function namedIconSvg(name: string): string | null {
+  const resolved = resolveToolIconName(name)
+  return resolved ? ICON_SVGS[resolved] : null
 }

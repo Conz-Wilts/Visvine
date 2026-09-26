@@ -14,6 +14,7 @@
  * way: deterministic, free, never a pattern from content); a model may
  * overrule it with a reason.
  */
+import { parseExpressionAt, type Expression, type Node } from 'acorn'
 import { z } from 'zod'
 import { rowDenial } from '@visvine/tool-protocol/schema'
 import { TEMPLATE_SOURCES } from './sources.generated'
@@ -58,6 +59,8 @@ export interface ToolTemplate {
   facts(spec: Record<string, unknown>): TemplateFacts
   /** Cross-field checks zod cannot say: groupBy names a select field, … */
   specProblems(spec: Record<string, unknown>): string[]
+  /** What a new Tool's first look needs of the sample rows — asked at creation only, since an edit's rows were seeded long ago. */
+  firstLookProblems?(spec: Record<string, unknown>): string[]
   railIcon: string
 }
 
@@ -189,7 +192,13 @@ const tracker: ToolTemplate = {
     if (s.dateField && kind(s.dateField) !== 'date') problems.push('dateField must name a date field')
     const group = s.fields.find((f) => f.key === s.groupBy)
     for (const v of s.doneValues ?? []) if (group && !group.options?.some((o) => o.value === v)) problems.push(`doneValues "${v}" is not an option of ${s.groupBy}`)
-    // The first look is the whole flow working: every column holds something.
+    return problems
+  },
+  // The first look is the whole flow working: every column holds something.
+  firstLookProblems: (spec) => {
+    const s = spec as z.infer<typeof recordsSpec>
+    const problems: string[] = []
+    const group = s.fields.find((f) => f.key === s.groupBy)
     if (group?.kind === 'select') {
       const empty = (group.options ?? []).filter((o) => !s.sample.some((r) => r[group.key] === o.value)).map((o) => o.value)
       if (empty.length) problems.push(`sample has no row in ${empty.map((v) => `"${v}"`).join(', ')} — give every ${group.label.toLowerCase()} at least one (two in the open ones)`)
@@ -479,20 +488,106 @@ export function defaultSpecText(id: string): string {
   return block ? block[0].replace(/^\/\/ @spec\nconst SPEC: Spec = /, '').replace(/\n\/\/ @end-spec$/, '') : ''
 }
 
-/** The template's ui.tsx with this Tool's spec in place of the example. */
+/** The template's ui.tsx with this Tool's spec in place of the example, marked with the template it came from. */
 export function applySpec(id: string, spec: Record<string, unknown>): string {
   const source = templateSource(id)
   if (!SPEC_BLOCK.test(source)) throw new Error(`Template ${id} has no // @spec block`)
-  return source.replace(SPEC_BLOCK, () => `// @spec\nconst SPEC: Spec = ${JSON.stringify(spec, null, 2)}\n// @end-spec`)
+  return source.replace(SPEC_BLOCK, () => `// @template ${id}\n// @spec\nconst SPEC: Spec = ${JSON.stringify(spec, null, 2)}\n// @end-spec`)
+}
+
+const TEMPLATE_MARK = /^\/\/ @template ([a-z][a-z0-9-]*)$/m
+
+/**
+ * The template a Tool's ui.tsx was built from and the spec written in it now,
+ * so an edit to the spec can carry the Tool's facts with it. Null for a
+ * source no template made. The spec is READ as literals — objects, arrays,
+ * strings, numbers, booleans, null — never run.
+ */
+export function readAppliedSpec(source: string): { template: ToolTemplate; spec: unknown } | { error: string } | null {
+  const mark = TEMPLATE_MARK.exec(source)
+  const template = mark ? templateById(mark[1]) : null
+  if (!template) return null
+  const block = SPEC_BLOCK.exec(source)
+  const start = block ? block[0].indexOf('=') : -1
+  if (!block || start === -1) return { error: 'The // @spec block is missing — keep `// @spec`, `const SPEC: Spec = { … }` and `// @end-spec` together.' }
+  const text = block[0].slice(start + 1).replace(/\n\/\/ @end-spec$/, '')
+  try {
+    return { template, spec: literal(parseExpressionAt(text, 0, { ecmaVersion: 'latest' })) }
+  } catch (err) {
+    return { error: `The SPEC is not plain data: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+type Surfaces = TemplateFacts['surfaces']
+
+/**
+ * The facts a spec edit changes, merged over what the Tool declares now: the
+ * collections the template needs (others the author added are kept), and its
+ * sections and band buttons by id — one the spec no longer has goes, a new one
+ * comes, and a label the author renamed stays.
+ */
+export function factsForEdit(
+  template: ToolTemplate,
+  spec: Record<string, unknown>,
+  current: { nav?: { style: 'tabs' | 'side'; sections: Array<{ id: string; label: string }> } | null; actions?: Surfaces['actions']; collections?: Record<string, unknown> },
+): { nav: { style: 'tabs' | 'side'; sections: Array<{ id: string; label: string }> } | null; actions: Surfaces['actions']; collections: Record<string, unknown> } {
+  const derived = template.facts(spec)
+  const keepLabels = <T extends { id: string; label: string }>(next: T[], now: T[] = []) => next.map((item) => ({ ...item, label: now.find((n) => n.id === item.id)?.label ?? item.label }))
+  // The author's choice of tabs or a side list stays too.
+  const nav = derived.surfaces.nav ? { style: current.nav?.style ?? derived.surfaces.nav.style, sections: keepLabels(derived.surfaces.nav.sections, current.nav?.sections) } : null
+  return {
+    nav,
+    actions: keepLabels(derived.surfaces.actions, current.actions),
+    collections: { ...(current.collections ?? {}), ...derived.collections },
+  }
+}
+
+/** A literal expression's value; anything that would have to run is refused. */
+function literal(node: Expression | Node): unknown {
+  const n = node as Node & Record<string, unknown>
+  switch (n.type) {
+    case 'Literal':
+      if (n.regex) throw new Error('a regular expression')
+      return n.value
+    case 'TemplateLiteral': {
+      const quasis = n.quasis as Array<{ value: { cooked: string } }>
+      if ((n.expressions as unknown[]).length) throw new Error('a template string with ${…}')
+      return quasis.map((q) => q.value.cooked).join('')
+    }
+    case 'UnaryExpression':
+      if (n.operator === '-' && (n.argument as Node & { value?: unknown }).type === 'Literal' && typeof (n.argument as { value?: unknown }).value === 'number') return -((n.argument as { value: number }).value)
+      throw new Error(`\`${String(n.operator)}\``)
+    case 'ArrayExpression':
+      return (n.elements as Array<Node | null>).map((e) => {
+        if (!e || e.type === 'SpreadElement') throw new Error('a hole or a spread in an array')
+        return literal(e)
+      })
+    case 'ObjectExpression': {
+      const out: Record<string, unknown> = {}
+      for (const prop of n.properties as Array<Node & Record<string, unknown>>) {
+        if (prop.type !== 'Property' || prop.computed || prop.kind !== 'init' || prop.method) throw new Error('a computed, spread or method property')
+        const key = prop.key as Node & { name?: string; value?: unknown }
+        const name = key.type === 'Identifier' ? key.name : key.type === 'Literal' ? String(key.value) : null
+        if (name === null || name === undefined || name === '__proto__') throw new Error('an unusual key')
+        out[name] = literal(prop.value as Node)
+      }
+      return out
+    }
+    case 'Identifier':
+      if (n.name === 'undefined') return undefined
+      throw new Error(`the name \`${String(n.name)}\``)
+    default:
+      throw new Error(`a ${n.type}`)
+  }
 }
 
 /** Parse and check a spec a model wrote for a template: the value, or what is wrong with it. */
-export function checkSpec(template: ToolTemplate, raw: unknown): { ok: true; spec: Record<string, unknown> } | { ok: false; problems: string[] } {
+export function checkSpec(template: ToolTemplate, raw: unknown, opts: { creating?: boolean } = {}): { ok: true; spec: Record<string, unknown> } | { ok: false; problems: string[] } {
   const parsed = template.spec.safeParse(raw)
   if (!parsed.success) {
     return { ok: false, problems: parsed.error.issues.slice(0, 12).map((i) => `${i.path.join('.') || 'spec'}: ${i.message}`) }
   }
-  const problems = template.specProblems(parsed.data)
+  const problems = [...template.specProblems(parsed.data), ...(opts.creating === false ? [] : (template.firstLookProblems?.(parsed.data) ?? []))]
   return problems.length ? { ok: false, problems } : { ok: true, spec: parsed.data }
 }
 

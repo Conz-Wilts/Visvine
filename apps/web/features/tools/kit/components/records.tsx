@@ -912,9 +912,29 @@ interface SeedClaim {
   claim: string;
   at: number;
 }
+/** What was seeded: the rows' ids, the spec's rows they came from (`v`), and the rows as stored (`h`). */
+interface Seeded {
+  ids: string[];
+  v: string;
+  h: string;
+}
+type SeedState = string[] | Seeded | SeedClaim | null;
 const CLAIM_SETTLE_MS = 250;
 /** A claim left by a frame that closed mid-seed stops holding after this. */
 const CLAIM_STALE_MS = 30_000;
+
+/** A short fingerprint of some JSON — enough to tell one set of rows from another, whatever order the store keeps keys in. */
+function fingerprint(value: unknown): string {
+  const text =
+    JSON.stringify(value, (_k, v: unknown) =>
+      v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))) : v,
+    ) ?? '';
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+const seededIds = (held: SeedState): string[] => (Array.isArray(held) ? held : held && 'ids' in held ? held.ids : []);
 
 export function useSampleRows(collection: string, rows: RecordData[]): { seeding: boolean; hasSamples: boolean; clear: () => Promise<void> } {
   const visvine = useVisvine();
@@ -923,34 +943,56 @@ export function useSampleRows(collection: string, rows: RecordData[]): { seeding
   const key = `vv:sample:${collection}`;
   useEffect(() => {
     let cancelled = false;
+    const version = fingerprint(rows);
+    // Two frames opening at once (a person with two tabs, a builder's parallel
+    // previews) would both write. Each writes a claim, waits a beat, and only
+    // the one whose claim is still there goes on — the last writer wins.
+    const claimed = async () => {
+      const claim: SeedClaim = { claim: Math.random().toString(36).slice(2), at: Date.now() };
+      await visvine.state.set(key, claim, { scope: 'install' });
+      await new Promise((resolve) => setTimeout(resolve, CLAIM_SETTLE_MS));
+      const held = await visvine.state.get<SeedState>(key, { scope: 'install' });
+      return !cancelled && !!held && !Array.isArray(held) && 'claim' in held && held.claim === claim.claim;
+    };
+    // All at once: one round trip, so a frame closed a moment after it opened
+    // (a preview capture, a tab shut) never leaves half the rows.
+    const seed = async () => {
+      setSeeding(true);
+      const written = await Promise.all(rows.map((row) => visvine.collections.insert(collection, row)));
+      const seeded: Seeded = { ids: written.map((r) => r.id), v: version, h: fingerprint(written.map((r) => r.data)) };
+      await visvine.state.set(key, seeded, { scope: 'install' });
+      if (!cancelled) setHasSamples(seeded.ids.length > 0);
+    };
     void (async () => {
       try {
-        const done = await visvine.state.get<string[] | SeedClaim>(key, { scope: 'install' });
+        const held = await visvine.state.get<SeedState>(key, { scope: 'install' });
         if (cancelled) return;
-        if (Array.isArray(done)) { setHasSamples(done.length > 0); return; }
-        if (done && Date.now() - done.at < CLAIM_STALE_MS) { setHasSamples(true); return; }
+        if (held && !Array.isArray(held) && 'claim' in held) {
+          if (Date.now() - held.at < CLAIM_STALE_MS) { setHasSamples(true); return; }
+        } else if (held) {
+          const ids = seededIds(held);
+          setHasSamples(ids.length > 0);
+          // The spec's sample rows changed since they were seeded (an author
+          // added a field, a stage). While the collection still holds exactly
+          // the rows seeded, untouched, they are swapped for the new ones; a
+          // row anyone added or edited keeps them as they are.
+          if (Array.isArray(held) || held.v === version || !ids.length || !rows.length) return;
+          const page = await visvine.collections.list(collection, { limit: 200 });
+          const byId = new Map(page.rows.map((r) => [r.id, r]));
+          const untouched = !page.nextCursor && page.rows.length === ids.length && ids.every((id) => byId.has(id)) && fingerprint(ids.map((id) => byId.get(id)!.data)) === held.h;
+          if (!untouched || !(await claimed())) return;
+          await Promise.all(ids.map((id) => visvine.collections.delete(collection, id).catch(() => undefined)));
+          await seed();
+          return;
+        }
         if (rows.length === 0) return;
         const existing = await visvine.collections.count(collection);
         if (existing.total > 0 || cancelled) {
           await visvine.state.set(key, [], { scope: 'install' });
           return;
         }
-        // Two frames opening at once (a person with two tabs, a builder's
-        // parallel previews) would both find the collection empty and both
-        // seed. Each writes a claim, waits a beat, and only the one whose
-        // claim is still there seeds — the last writer wins.
-        const claim: SeedClaim = { claim: Math.random().toString(36).slice(2), at: Date.now() };
-        await visvine.state.set(key, claim, { scope: 'install' });
-        await new Promise((resolve) => setTimeout(resolve, CLAIM_SETTLE_MS));
-        const held = await visvine.state.get<string[] | SeedClaim>(key, { scope: 'install' });
-        if (cancelled) return;
-        if (Array.isArray(held) || held?.claim !== claim.claim) { setHasSamples(true); return; }
-        setSeeding(true);
-        // All at once: one round trip, so a frame closed a moment after it
-        // opened (a preview capture, a tab shut) never leaves half the rows.
-        const ids = (await Promise.all(rows.map((row) => visvine.collections.insert(collection, row)))).map((r) => r.id);
-        await visvine.state.set(key, ids, { scope: 'install' });
-        if (!cancelled) setHasSamples(ids.length > 0);
+        if (!(await claimed())) { setHasSamples(true); return; }
+        await seed();
       } catch {
         // A viewer who may not write sees the Tool as it is.
       } finally {
@@ -964,8 +1006,7 @@ export function useSampleRows(collection: string, rows: RecordData[]): { seeding
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visvine, collection, key]);
   const clear = async () => {
-    const held = await visvine.state.get<string[] | SeedClaim>(key, { scope: 'install' });
-    const ids = Array.isArray(held) ? held : [];
+    const ids = seededIds(await visvine.state.get<SeedState>(key, { scope: 'install' }));
     for (const id of ids) {
       try { await visvine.collections.delete(collection, id); }
       catch (err) { if (!(err instanceof BridgeCallError && err.code === 'not_found')) throw err; }

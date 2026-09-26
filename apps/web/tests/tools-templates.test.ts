@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { compileToolUi } from '@/lib/tools/compile'
 import { parseManifestFacts } from '@visvine/tool-protocol/manifest'
-import { applySpec, checkSpec, defaultSpecText, matchTemplate, TOOL_TEMPLATES } from '@/lib/tools/templates'
+import { applySpec, checkSpec, defaultSpecText, factsForEdit, matchTemplate, readAppliedSpec, templateById, TOOL_TEMPLATES } from '@/lib/tools/templates'
 import { generateTemplateSources } from '../scripts/build-tool-templates'
 import { readFileSync } from 'node:fs'
 
@@ -130,4 +130,42 @@ test('check-in samples require a person and a valid relative day', () => {
   const checked = checkSpec(template, { ...spec, sample: [{ ...sample[0], daysAgo: 'yesterday' }, ...sample.slice(1)] })
   assert.equal(checked.ok, false)
   assert.ok(!checked.ok && checked.problems.some((p) => p.includes('daysAgo')))
+})
+
+test('a spec written into a Tool reads back as the same data, and nothing in it ever runs', () => {
+  for (const t of TOOL_TEMPLATES) {
+    const spec = checkSpec(t, exampleSpec(t.id)) as { ok: true; spec: Record<string, unknown> }
+    const read = readAppliedSpec(applySpec(t.id, spec.spec))
+    assert.ok(read && !('error' in read), t.id)
+    assert.equal(read.template.id, t.id)
+    assert.deepEqual(read.spec, spec.spec)
+  }
+  // A hand edit in TypeScript's own spelling still reads.
+  const edited = "// @template poll\n// @spec\nconst SPEC: Spec = { noun: 'poll', sample: [{ question: `Lunch?`, options: ['Thai', 'Pizza'], tally: [-0, 2] }] }\n// @end-spec"
+  assert.deepEqual((readAppliedSpec(edited) as { spec: unknown }).spec, { noun: 'poll', sample: [{ question: 'Lunch?', options: ['Thai', 'Pizza'], tally: [-0, 2] }] })
+  for (const bad of ['fetch("/x")', '{ a: process.env }', '{ ...other }', '{ [k]: 1 }', '`${x}`', '{ get a() { return 1 } }']) {
+    const read = readAppliedSpec(`// @template poll\n// @spec\nconst SPEC: Spec = ${bad}\n// @end-spec`)
+    assert.ok(read && 'error' in read, bad)
+  }
+  assert.equal(readAppliedSpec('export default function App() { return null }'), null)
+})
+
+test('editing a spec carries the collection and sections, keeping what the author renamed', () => {
+  const tracker = templateById('tracker')!
+  const base = exampleSpec('tracker') as Record<string, unknown> & { fields: Array<Record<string, unknown>> }
+  const before = tracker.facts(base)
+  const current = {
+    nav: { style: 'side' as const, sections: before.surfaces.nav!.sections.map((s) => (s.id === 'board' ? { ...s, label: 'Pipeline' } : s)) },
+    actions: before.surfaces.actions,
+    collections: { ...before.collections, notes: { schema: { type: 'object' }, read: 'all', write: 'all' } },
+  }
+  const edited = { ...base, fields: [...base.fields, { key: 'priority', label: 'Priority', kind: 'select', options: [{ value: 'High' }, { value: 'Low' }] }] }
+  const next = factsForEdit(tracker, edited, current)
+  const schema = (next.collections.items as { schema: { properties: Record<string, unknown> } }).schema
+  assert.ok(schema.properties.priority, 'the new field is storable')
+  assert.ok(next.collections.notes, "the author's own collection stays")
+  assert.equal(next.nav?.style, 'side')
+  assert.equal(next.nav?.sections.find((s) => s.id === 'board')?.label, 'Pipeline')
+  const noDates = factsForEdit(tracker, { ...base, dateField: undefined }, current)
+  assert.ok(!noDates.nav?.sections.some((s) => s.id === 'schedule'), 'a view the spec no longer has goes')
 })

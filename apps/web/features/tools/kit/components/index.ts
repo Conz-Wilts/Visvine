@@ -75,8 +75,8 @@ export type { MenuItem } from '@visvine/ui';
 // ── page blocks and records by schema (2026-09) ──
 export { Icon, ICON_NAMES } from './Icon';
 export type { IconName, IconProps } from './Icon';
-export { ListDetail, MonthCalendar, Page, Progress, Stat, StatRow, Toolbar, todayIso } from './blocks';
-export type { CalendarItem, ListDetailProps, MonthCalendarProps, PageProps, ProgressProps, StatProps, ToolbarProps, ToolbarView } from './blocks';
+export { ChoiceList, ListDetail, MonthCalendar, Page, Progress, Stat, StatRow, Toolbar, todayIso } from './blocks';
+export type { CalendarItem, ChoiceListProps, ChoiceOption, ListDetailProps, MonthCalendarProps, PageProps, ProgressProps, StatProps, ToolbarProps, ToolbarView } from './blocks';
 export {
   daysFrom,
   FieldInput,

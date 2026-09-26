@@ -37,7 +37,7 @@ import { featureAccessForbidden } from '@/lib/auth'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
 import { toBuildSummary, rebuildTool, toolDiagnosticLine, type BuildSummary } from '@/lib/tools/builds'
-import { manifestOf, TOOL_MODULE_RE, type ToolConfig } from '@/lib/tools/config'
+import { manifestOf, TOOL_MODULE_RE, TOOL_RAIL_ICONS, type ToolConfig } from '@/lib/tools/config'
 import { checkPackage, pushPackage } from '@/lib/tools/package'
 import { PACKAGE_LIMITS } from '@/lib/tools/package/shared/layout'
 import { appOrigin as liveAppOrigin } from '@/lib/tools/origin'
@@ -54,16 +54,17 @@ import { recordReport } from '@/lib/tools/checks/runs'
 import { snapshotPreviewRows } from '@/lib/tools/collections'
 import { snapshotPreviewToolState } from '@/lib/tools/state'
 import { advisoriesFor } from '@/lib/tools/advisories'
+import { namedIconSvg, sanitizeToolIcon } from '@/lib/tools/iconSvg'
 import { BRIDGE_METHODS } from '@/lib/tools/protocol'
 import { TOOL_PHONE_REFUSAL } from '@/lib/tools/clientClass'
 import { describeRequirements, isDegraded, sourceRequirements } from '@/lib/tools/requirements'
 import { TOOL_AUTHOR_GUIDE, TOOL_KIT_DTS } from '@/lib/tools/sdkDocs'
-import { renderCatalog, TOOL_CATALOG } from '@/lib/tools/catalog'
+import { renderCatalog, TOOL_CATALOG, TOOL_DESIGN_RULES } from '@/lib/tools/catalog'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { reviewModel, reviewScreens, visualReviewAvailable } from '@/lib/tools/visualReview'
 import { passes } from '@/lib/tools/shared/visualRubric'
 import { TOOL_FACT_KEYS } from '@/lib/tools/indexFacts'
-import { applySpec, checkSpec, templateById, TOOL_TEMPLATES, type ToolTemplate } from '@/lib/tools/templates'
+import { applySpec, checkSpec, factsForEdit, readAppliedSpec, templateById, TOOL_TEMPLATES, type ToolTemplate } from '@/lib/tools/templates'
 import { bindableSpace as bindableSpaceService } from '@/lib/tools/bindable'
 import { bindingChoices, type BindableSpace, type BindingValues } from '@visvine/tool-protocol/bindings'
 import {
@@ -427,7 +428,8 @@ interface WriteToolArgs {
   space_id: string
   name: string
   file: ToolFileName
-  content: string
+  content?: string
+  edits?: Array<{ find: string; replace: string }>
 }
 interface CheckToolArgs {
   space_id: string
@@ -527,7 +529,7 @@ async function createTool(ctx: ActionCaller, args: CreateToolArgs, deps: AppTool
         band_actions: facts.surfaces.actions.map((a) => a.id),
         next: [
           `It is built from the ${started.template.title} template with your spec, and opens with the spec's sample rows. Before hand-over, inspect every section and band action with preview_tool { screenshot: true }, fix the concrete problems you see with write_tool, and capture again. Exercise the main action with try_tool — a try is a rehearsal, so whatever it saves is put back and there is nothing to clean up. Keep the sample rows: they are the first look, and SampleData offers the person Clear. check_tool { review: true } adds a scored review when a judge is available; aim for 9/10 and report any unverified behaviour.`,
-          'To change what it is about, edit the SPEC block in ui.tsx with read_tool and write_tool. To change how it looks or add behaviour, read_tool then write_tool ui.tsx — the SPEC block at the top holds the fields, and the kit\'s blocks (RecordBoard, RecordTable, RecordDialog, StatRow, Toolbar) draw everything else.',
+          'To change what it is about — a field, an option, a stage — edit the SPEC block in ui.tsx with read_tool and write_tool { edits: [{ find, replace }] }: the collection, sections and band buttons follow it on the write (`facts_synced` says what moved; `spec_problems` says what to fix). To change how it looks or add behaviour, edit the rest of ui.tsx — the kit\'s blocks (RecordBoard, RecordTable, RecordDialog, StatRow, Toolbar) draw everything the SPEC describes.',
         ],
       }
     }
@@ -541,6 +543,7 @@ async function createTool(ctx: ActionCaller, args: CreateToolArgs, deps: AppTool
         'configure_tool: surfaces (nav sections, band actions), collections, bindings and permissions — everything the plan decided. The bridge refuses anything undeclared.',
         'set_tool_icon: a built-in name or your own 24×24 stroke SVG.',
         `write_tool { name: "${result.name}", file: "ui.tsx", content } and read the build it hands back — kit components and Tailwind layout classes, never a painted page background.`,
+        'Every section opens showing the Tool in use: seed each collection with realistic rows through useSampleRows — what people add AND what the Tool records (answers, attempts, votes, results) — so no screen is an empty state on first look.',
         'Then the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action, then try_tool through the main act.',
       ],
     }
@@ -607,19 +610,35 @@ async function readTool(ctx: ActionCaller, args: ReadToolArgs, deps: AppToolDeps
 async function writeTool(ctx: ActionCaller, args: WriteToolArgs, deps: AppToolDeps = liveDeps) {
   const target = await deps.resolveTarget(ctx, args.space_id)
   await requireToolsFeature(ctx, target, deps)
+  if ((args.content === undefined) === (args.edits === undefined)) throw new ActionError(400, 'Give exactly one of `content` (the whole file) or `edits` (find → replace).')
+  let content = args.content
+  if (args.edits) {
+    const detail = await deps.describeAuthoredTool(target.principal, target.context, args.name)
+    if (!detail) throw new ActionError(404, `No tool named "${args.name}".`)
+    const current = (args.file.startsWith('src/') ? detail.modules[args.file] : detail.sources[args.file as keyof typeof detail.sources]) ?? null
+    if (current === null) throw new ActionError(404, `${args.file} does not exist yet — write it whole with \`content\`.`)
+    const applied = applyEdits(current, args.edits)
+    if (!applied.ok) throw new ActionError(400, `${applied.error} Nothing was written; read_tool returns the file as it is.`)
+    content = applied.text
+  }
   const result = await deps.writeToolFile(
     target.principal,
     target.context,
     args.name,
     args.file,
-    args.content,
+    content!,
   )
   if (!result.ok) refuse(result)
-  const report = buildReport(result.build)
+  const synced = args.file === 'ui.tsx' ? await syncTemplateFacts(ctx, target, args.name, content!, deps) : null
+  const report = buildReport(synced?.build ?? result.build)
   return {
     status: 'applied',
     path: result.path,
     file: args.file,
+    ...(synced?.changed.length ? { facts_synced: synced.changed } : {}),
+    ...(synced?.problems.length
+      ? { spec_problems: synced.problems, spec_fix: 'The SPEC was written but the Tool\'s facts were left as they were, so a new field may not save. Fix these and write ui.tsx again.' }
+      : {}),
     // On every write, not only on create: the person you are working for asked
     // for something they can LOOK at, and a link they already have is one they
     // do not have to ask for again.
@@ -633,6 +652,56 @@ async function writeTool(ctx: ActionCaller, args: WriteToolArgs, deps: AppToolDe
           fix: 'The tool will not run until this compiles. Each error is `file:line:column message`; read_tool returns the current source.',
         }),
   }
+}
+
+/**
+ * A template-built Tool whose SPEC was edited: its collections, sections and
+ * band buttons follow the spec, so a field added in the source is one its
+ * collection accepts. Null for a source no template made.
+ */
+async function syncTemplateFacts(ctx: ActionCaller, target: Target, name: string, source: string, deps: AppToolDeps) {
+  const applied = readAppliedSpec(source)
+  if (!applied) return null
+  if ('error' in applied) return { changed: [] as string[], problems: [applied.error], build: null }
+  const checked = checkSpec(applied.template, applied.spec, { creating: false })
+  if (!checked.ok) return { changed: [] as string[], problems: checked.problems, build: null }
+  const detail = await deps.describeAuthoredTool(target.principal, target.context, name)
+  const config = detail?.config
+  if (!config) return null
+  const current = { nav: config.surfaces.nav ?? null, actions: config.surfaces.actions ?? [], collections: manifestOf(config).collections ?? {} }
+  const next = factsForEdit(applied.template, checked.spec, current)
+  // Stored facts come back with their keys in another order: compare the data, not the spelling.
+  const same = (a: unknown, b: unknown) => stableJson(a) === stableJson(b)
+  const changed = [
+    ...(same(next.collections, current.collections) ? [] : ['collections']),
+    ...(same(next.nav, current.nav) ? [] : ['sections']),
+    ...(same(next.actions, current.actions) ? [] : ['band actions']),
+  ]
+  if (!changed.length) return { changed, problems: [] as string[], build: null }
+  const configured = await deps.configureTool(target.principal, target.context, name, {
+    surfaces: { ...config.surfaces, nav: next.nav, actions: next.actions },
+    collections: next.collections,
+  })
+  if (!configured.ok) return { changed: [] as string[], problems: [`The Tool's facts could not follow the spec: ${configured.error}`], build: null }
+  return { changed, problems: [] as string[], build: configured.build }
+}
+
+/** Find → replace edits over a file, each find unique, in order; or the first that cannot apply. */
+export function applyEdits(text: string, edits: Array<{ find: string; replace: string }>): { ok: true; text: string } | { ok: false; error: string } {
+  let out = text
+  for (const [i, e] of edits.entries()) {
+    const at = out.indexOf(e.find)
+    if (at === -1) return { ok: false, error: `Edit ${i + 1}: its \`find\` is not in the file.` }
+    if (out.indexOf(e.find, at + 1) !== -1) return { ok: false, error: `Edit ${i + 1}: its \`find\` occurs more than once — include more of the surrounding text.` }
+    out = out.slice(0, at) + e.replace + out.slice(at + e.find.length)
+  }
+  return { ok: true, text: out }
+}
+
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([x], [y]) => x.localeCompare(y))) : v,
+  )
 }
 
 async function checkTool(ctx: ActionCaller, args: CheckToolArgs, deps: AppToolDeps = liveDeps) {
@@ -842,6 +911,8 @@ async function getToolSdk(_ctx: ActionCaller, args: { section?: string }) {
   const start = sections.find((s) => s.id === 'start-from-a-template')
   return {
     read_first: [intro, start?.body].filter(Boolean).join('\n\n'),
+    // Short, and what every build is judged by — so they come with the index, not only inside `catalog`.
+    design_rules: TOOL_DESIGN_RULES,
     components: catalogIndex(),
     sections: [
       ...sections.filter((s) => s.id !== 'start-from-a-template').map((s) => ({ section: s.id, title: s.title })),
@@ -1153,6 +1224,20 @@ async function configureTool(ctx: ActionCaller, args: ConfigureToolArgs, deps: A
     if (!written.ok) refuse(written)
   }
   const facts = Object.fromEntries(Object.entries(args.facts).filter(([k]) => !(NOTE_KEYS as readonly string[]).includes(k)))
+  // Two spellings a model reaches for, taken as meant: sections as a plain
+  // list, and a rail icon named from the app's set (drawn as the Tool's own).
+  const surfaces = facts.surfaces as ({ nav?: unknown; rail?: { label?: string; icon?: string } | null } & Record<string, unknown>) | undefined
+  if (surfaces && Array.isArray(surfaces.nav)) surfaces.nav = { style: 'tabs', sections: surfaces.nav }
+  const railIcon = surfaces?.rail?.icon
+  if (surfaces?.rail && railIcon && railIcon !== 'custom' && !(TOOL_RAIL_ICONS as readonly string[]).includes(railIcon)) {
+    const named = namedIconSvg(railIcon)
+    const clean = named ? sanitizeToolIcon(named) : null
+    if (clean?.ok) {
+      const drawn = await deps.writeToolFile(target.principal, target.context, args.name, 'icon.svg', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">${clean.svg}</svg>`)
+      if (!drawn.ok) refuse(drawn)
+      surfaces.rail = { ...surfaces.rail, icon: 'custom' }
+    }
+  }
   if (Object.keys(facts).length === 0) {
     const build = await deps.rebuild(target.context.spaceId, args.name)
     const config = build.config
@@ -1468,7 +1553,13 @@ export const APP_ACTIONS = [
       space_id: spaceArg,
       name: nameArg,
       file: fileArg,
-      content: z.string().describe('The complete new contents of that file'),
+      content: z.string().optional().describe('The complete new contents of that file — or give `edits` instead'),
+      edits: z
+        .array(z.object({ find: z.string().min(1).describe('Text that occurs exactly once in the file now'), replace: z.string().describe('What it becomes') }))
+        .min(1)
+        .max(40)
+        .optional()
+        .describe('Change part of the file: each `find` must occur exactly once, applied in order. For a follow-up edit, cheaper and safer than resending the whole file.'),
     },
     run: (ctx, args) => writeTool(ctx, args),
   }),

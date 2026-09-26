@@ -17,7 +17,7 @@ import type { CheckReport } from '@/lib/tools/checks/findings'
 import { runStaticChecks } from '@/lib/tools/checks/analyze'
 import assert from 'node:assert/strict'
 import { ActionError, type ActionCaller } from '@/lib/actions/types'
-import { appToolHandlers, type AppToolDeps } from '@/lib/actions/defs/apps'
+import { appToolHandlers, applyEdits, type AppToolDeps } from '@/lib/actions/defs/apps'
 import type { BuildSummary } from '@/lib/tools/builds'
 import type { ToolConfig } from '@/lib/tools/config'
 import { defaultSpecText } from '@/lib/tools/templates'
@@ -1205,4 +1205,10 @@ test('a missing index while saving the creation plan cleans up only the new scaf
     deleteTool: async (_principal, _context, name) => { removed.push(name); return { ok: true } },
   })), /no index/)
   assert.deepEqual(removed, ['board'])
+})
+
+test('write_tool edits change only what they find, and refuse an edit that is missing or ambiguous', () => {
+  assert.deepEqual(applyEdits('a b c', [{ find: 'b', replace: 'B' }, { find: 'c', replace: 'C' }]), { ok: true, text: 'a B C' })
+  assert.equal(applyEdits('a b c', [{ find: 'x', replace: 'y' }]).ok, false)
+  assert.equal(applyEdits('a a', [{ find: 'a', replace: 'b' }]).ok, false)
 })

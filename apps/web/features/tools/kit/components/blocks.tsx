@@ -195,6 +195,84 @@ export function Progress({ value, max = 1, hue = 'blue', label, className }: Pro
   );
 }
 
+// ── choosing ──
+
+export interface ChoiceOption {
+  value: string;
+  label: ReactNode;
+  /** A muted second line. */
+  hint?: ReactNode;
+}
+
+export interface ChoiceListProps {
+  options: ChoiceOption[];
+  /** The chosen value — an array when `multiple`. */
+  value: string | string[] | null;
+  onChange: (value: string | string[]) => void;
+  multiple?: boolean;
+  disabled?: boolean;
+  /** After an answer is checked: which options were right and which wrong. */
+  marks?: Record<string, 'correct' | 'wrong'>;
+  /** What is being chosen, for a screen reader. */
+  label: string;
+  className?: string;
+}
+
+/**
+ * Options you pick from, each a full-width row with its marker — a radio for
+ * one, a box for many. For quizzes, surveys, a form's question, a checklist.
+ */
+export function ChoiceList({ options, value, onChange, multiple = false, disabled = false, marks, label, className }: ChoiceListProps) {
+  const chosen = new Set(Array.isArray(value) ? value : value ? [value] : []);
+  const pick = (v: string) => {
+    if (disabled) return;
+    if (!multiple) return onChange(v);
+    const next = new Set(chosen);
+    if (next.has(v)) next.delete(v);
+    else next.add(v);
+    onChange([...next]);
+  };
+  return (
+    <div role={multiple ? 'group' : 'radiogroup'} aria-label={label} className={clsx('flex flex-col gap-2', className)}>
+      {options.map((o) => {
+        const on = chosen.has(o.value);
+        const mark = marks?.[o.value];
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role={multiple ? 'checkbox' : 'radio'}
+            aria-checked={on}
+            disabled={disabled}
+            onClick={() => pick(o.value)}
+            className={clsx(
+              'flex w-full items-start gap-3 rounded-lg border px-3.5 py-3 text-left text-sm transition-colors',
+              mark === 'correct' ? 'border-success bg-success-wash' : mark === 'wrong' ? 'border-danger bg-danger-wash' : on ? 'border-accent bg-accent-soft' : 'border-line-subtle hover:border-line hover:bg-surface-subtle',
+              disabled ? 'cursor-default' : 'cursor-pointer',
+            )}
+          >
+            <span
+              aria-hidden
+              className={clsx(
+                'mt-0.5 flex size-4 shrink-0 items-center justify-center border',
+                multiple ? 'rounded' : 'rounded-full',
+                on ? 'border-accent-strong bg-accent-strong text-fg-inverse' : 'border-line bg-surface',
+              )}
+            >
+              {on && (multiple ? <Icon name="check" size={12} /> : <span className="size-1.5 rounded-full bg-surface" />)}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className={clsx('text-fg', on && 'font-medium')}>{o.label}</span>
+              {o.hint && <span className="text-xs text-fg-muted">{o.hint}</span>}
+            </span>
+            {mark && <Icon name={mark === 'correct' ? 'check' : 'x'} size={16} className={mark === 'correct' ? 'text-success' : 'text-danger'} />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── a list beside what it opens ──
 
 export interface ListDetailProps<T> {

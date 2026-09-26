@@ -52,6 +52,8 @@ const eslintConfig = defineConfig([
     "scripts/fixtures/**",
     // Tool sources, compiled by the Tool compiler and typed against the kit's .d.ts (tests/tools-templates.test.ts).
     "lib/tools/templates/sources/**",
+    // Local `pnpm eval:tools` runs (gitignored): screenshots and the ui.tsx each builder wrote.
+    ".eval/**",
   ]),
   {
     rules: {

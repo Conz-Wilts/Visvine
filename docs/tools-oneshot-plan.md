@@ -368,3 +368,23 @@ refinement (inventory quantities, OKR key results, nudges, reactions) rather
 than a shared defect, and the judge's 10 is "indistinguishable from Linear".
 **Target 9 not reached; measured 7.4.** Further gains need per-archetype
 templates (inventory, OKRs, content calendar) rather than kit fixes.
+
+### Beyond the benchmark — any Tool, edited over time
+
+The 20 prompts are a regression gate, not the goal: people build every kind of
+Tool and keep changing it. Changes since measure what generalises, on requests
+outside the set (`pnpm eval:tools --prompts "a|b|c"`, never a benchmark row):
+
+- Editing: `write_tool { edits }`; a template's SPEC edit carries collections,
+  sections and band buttons; untouched sample rows follow a changed spec.
+  Checked live: a follow-up "add a priority and filter by it" session made the
+  change with two small edits, and the new field saved.
+- Freeform builds: the design rules come with `get_tool_sdk`'s index (they were
+  only inside `catalog`); every section must open showing the Tool in use,
+  including what it records (attempts, votes). A security quiz's Results went
+  from an empty state (1.3) to 6.8.
+- Kit: `ChoiceList` (pick one or many, right/wrong marks). Host: the band's
+  plus only on adding verbs; `configure_tool` accepts sections as a list and
+  app icon names. Tracker: finished stages inferred from option names when a
+  spec names none.
+

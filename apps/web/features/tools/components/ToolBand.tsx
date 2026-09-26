@@ -59,6 +59,9 @@ export function ToolSectionTabs({ nav, title }: { nav: ToolSections; title: stri
   );
 }
 
+/** A button that makes something new wears a plus; "Start over" or "Export" does not. */
+const ADDS = /^(?:\+\s*)?(?:new|add|create|log|post|give|record|invite|book|submit|request|report)\b/i
+
 /**
  * The Tool's band buttons. The first is its main act — New deal, Give kudos —
  * and stands as the page's one primary button, in the accent's strong shade
@@ -78,7 +81,7 @@ export function ToolActionButtons({ actions, onAction }: { actions: ToolBandActi
             i === 0 ? 'bg-accent-strong text-fg-inverse hover:opacity-90' : 'text-fg hover:bg-surface-subtle',
           )}
         >
-          {i === 0 && (
+          {i === 0 && ADDS.test(action.label) && (
             <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round">
               <path d="M12 5v14M5 12h14" />
             </svg>

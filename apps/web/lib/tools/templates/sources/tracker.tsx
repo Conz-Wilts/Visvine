@@ -102,6 +102,9 @@ function resolveDates(rows: RecordData[]): RecordData[] {
   })
 }
 
+/** A stage that means finished, for a spec that did not say which: these are never open, never late. */
+const FINISHED = /^(?:done|complete[d]?|closed|cancel+ed|won|lost|resolved|fixed|shipped|published|archived|rejected|declined|hired|finished|paid|delivered|dropped|abandoned|passed|not a fit|won't fix|wont fix)$/i
+
 const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function App() {
@@ -134,7 +137,8 @@ export default function App() {
 
   useBandAction('new', () => startNew())
 
-  const done = new Set(SPEC.doneValues ?? [])
+  const doneValues = SPEC.doneValues ?? (group ? optionsOf(group).map((o) => o.value).filter((v) => FINISHED.test(v)) : [])
+  const done = new Set(doneValues)
   const isDone = (r: Row) => Boolean(group) && done.has(String(r.data[group!.key] ?? ''))
   const isLate = (r: Row) => Boolean(dateField) && !isDone(r) && (daysFrom(r.data[dateField!.key]) ?? 0) < 0
 
@@ -159,11 +163,11 @@ export default function App() {
     return averaged ? (values.length ? sum / values.length : 0) : sum
   }
   const fmt = (n: number) => (sumField?.kind === 'money' ? formatMoney(n, sumField.currency) : averaged ? `${Math.round(n)}${sumField?.kind === 'percent' ? '%' : ''}` : formatNumber(n))
-  const firstDone = group && SPEC.doneValues?.[0]
+  const firstDone = group && doneValues[0]
   const doneCount = firstDone ? rows.filter((r) => String(r.data[group.key] ?? '') === firstDone).length : 0
   const closedCount = rows.filter(isDone).length
   // The first finish (Won, Fixed) out of everything closed, when there is more than one way to finish.
-  const rate = (SPEC.doneValues?.length ?? 0) > 1 && closedCount ? Math.round((doneCount / closedCount) * 100) : null
+  const rate = doneValues.length > 1 && closedCount ? Math.round((doneCount / closedCount) * 100) : null
   const openTotal = total(open)
   const openCount = open.filter((r) => Number.isFinite(Number(r.data[sumField?.key ?? '']))).length
 
@@ -197,8 +201,8 @@ export default function App() {
         {sumField ? (
           <Stat
             lead
-            label={averaged ? `Average ${sumField.label.toLowerCase()}` : SPEC.doneValues?.length ? `Open ${sumField.label.toLowerCase()}` : `Total ${sumField.label.toLowerCase()}`}
-            value={fmt(total(SPEC.doneValues?.length ? open : rows))}
+            label={averaged ? `Average ${sumField.label.toLowerCase()}` : doneValues.length ? `Open ${sumField.label.toLowerCase()}` : `Total ${sumField.label.toLowerCase()}`}
+            value={fmt(total(doneValues.length ? open : rows))}
             hint={!averaged && openCount > 0 ? `avg ${fmt(openTotal / openCount)} per ${SPEC.noun}` : `across ${open.length} open`}
           />
         ) : (
@@ -260,7 +264,7 @@ export default function App() {
             onOpen={setEditing}
             sumField={sumField?.key}
             dueField={dateField?.key}
-            doneValues={SPEC.doneValues}
+            doneValues={doneValues}
             onAdd={(value) => startNew({ [group.key]: value })}
           />
         </div>

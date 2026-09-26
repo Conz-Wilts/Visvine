@@ -244,7 +244,7 @@ that looks designed and works on first open. Three pieces do that:
   (committed, `--check`ed) and typed against the kit's published `.d.ts` by
   `tests/tools-templates.test.ts`. The kit stylesheet scans `sources/` too.
 - **Page blocks** in the kit: `Page`, `Toolbar`, `StatRow`/`Stat`, `Progress`,
-  `ListDetail`, `MonthCalendar`, `Icon`, and records by schema — describe a
+  `ListDetail`, `MonthCalendar`, `ChoiceList`, `Icon`, and records by schema — describe a
   record's fields once and `FieldValue`, `FieldInput`, `RecordForm`,
   `RecordDialog`, `RecordTable` and `RecordBoard` draw it. `useSampleRows` seeds
   an empty collection once per install, so the first look is never empty — in
@@ -252,6 +252,17 @@ that looks designed and works on first open. Three pieces do that:
   at once never seed twice. A form's person fields offer the people already in
   the records (`peopleOf`), and a sample row becomes its "e.g." placeholders. A
   Tool the templates do not cover is built from these rather than from divs.
+- **A Tool keeps changing after its first build.** `write_tool` takes the whole
+  file (`content`) or `edits` — find → replace, each find unique — so a
+  follow-up request costs a few lines, not the file. A template-built Tool's
+  source carries `// @template <id>` over its `SPEC`; writing a changed SPEC
+  re-checks it (read as literals, never run — `readAppliedSpec`) and carries
+  the collection schema, sections and band buttons with it (`factsForEdit`:
+  labels and a side-list layout the author chose stay), so a new field is one
+  its collection accepts. Sample rows are versioned: while the collection
+  still holds exactly the rows seeded, untouched, a changed spec swaps them
+  for the new ones. `configure_tool` takes sections as a plain list and any
+  app icon name for the rail.
 - **`try_tool` rehearses.** What its steps add, change or delete in the Tool's
   own collections and preview state is put back after the capture
   (`snapshotPreviewRows`, `snapshotPreviewToolState`), so a builder's test

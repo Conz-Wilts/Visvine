@@ -14,10 +14,9 @@ import { CONTEXT_ACTIONS } from '@/lib/actions/defs/context'
 import { appToolHandlers } from '@/lib/actions/defs/apps'
 import { requireVisibleResource } from '@/lib/resources/visibility'
 import { downloadResourceFile } from '@/lib/gcs'
-import { sanitizeToolIcon } from '@/lib/tools/iconSvg'
+import { namedIconSvg, sanitizeToolIcon } from '@/lib/tools/iconSvg'
 import { TOOL_RAIL_ICONS } from '@/lib/tools/config'
-import { TOOL_ICON_NAMES, resolveToolIconName } from '@/lib/icons/toolIcons'
-import { ICON_SVGS } from '@/lib/icons/svg.generated'
+import { TOOL_ICON_NAMES } from '@/lib/icons/toolIcons'
 import { buildPlanBrief, type SpaceTypeFact } from '@/lib/tools/shared/planBrief'
 import { buildTool, DEFAULT_BUILD_BUDGET_S } from '@/lib/tools/builder'
 import { TOOL_TEMPLATES } from '@/lib/tools/templates'
@@ -84,10 +83,6 @@ async function iconSource(ctx: ActionCaller, args: SetIconArgs): Promise<string>
   return (await downloadResourceFile(row.gcsPath)).toString('utf8')
 }
 
-export function namedIconSvg(name: string): string | null {
-  const resolved = resolveToolIconName(name)
-  return resolved ? ICON_SVGS[resolved] : null
-}
 
 async function setToolIcon(ctx: ActionCaller, args: SetIconArgs) {
   const given = [args.icon, args.svg, args.resource_id].filter(Boolean).length

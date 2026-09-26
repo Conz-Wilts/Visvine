@@ -11,7 +11,7 @@ person it is for asks for one; these are the default, not a wall.
 ## Design rules
 
 - Build from blocks, not from divs. A page is `Page` holding a `Toolbar`, a `StatRow`, and a `RecordBoard` / `RecordTable` / `ListDetail` / `MonthCalendar` over rows described once as `FieldDef[]`; adding and editing is `RecordDialog`. Write your own layout only for what no block draws.
-- Never an empty first look: seed a collection with 8–15 fictional, realistic rows through `useSampleRows` (plausible people, complete fields, dates around today). `SampleData` labels them once and offers Clear; no Sample/Example prefixes in names. Preserve the demo rows at hand-over and remove only temporary interaction-test rows.
+- Never an empty first look — on ANY section. Seed every collection with 8–15 fictional, realistic rows through `useSampleRows` (plausible people, complete fields, dates around today), including what the Tool itself produces: a quiz's attempts, a poll's votes, a booking list's bookings, a log's entries. `SampleData` labels them once and offers Clear; no Sample/Example prefixes in names. `try_tool` is a rehearsal, so testing leaves nothing behind.
 - The app draws the chrome. The rail row, the band (your sections as tabs, your band buttons, the ⋯ menu) and every state are the app's. Draw only content: never a page title, a top tab strip or a header that repeats what the band says.
 - Lay out with Tailwind classes: grid, flex, gap, padding, widths and text sizes (with sm:/md:/lg: variants) are all compiled in, and the role colours (`text-fg-muted`, `bg-surface-subtle`, `border-line-subtle`, `bg-accent`). A grid of cards is `grid gap-4 sm:grid-cols-2 lg:grid-cols-3`.
 - Flat surfaces: sections separated by hairlines, no cards around everything, no shadows except on things that float.
@@ -21,7 +21,9 @@ person it is for asks for one; these are the default, not a wall.
 - Colour comes from the theme: the kit, or `var(--vv-*)` in your own styles — never a hex, never a painted page background (the frame is transparent over the app's own).
 - Full bleed. The frame IS the page: the root fills it with the app's page gutter (`px-6 py-5`) and nothing else — never an outer border, a rounded box, a card or a max-width container around the whole Tool.
 - Views are sections. Two or more screens (a board and a detail, companies and predictions) are `surfaces.nav` sections read with `useSection` — the app draws them as tabs on its band. Never draw your own tab strip at the top of the frame. Two looks at the SAME rows (Board · Table) are the Toolbar's view switch.
-- The main act is always one press away. A Tool that adds things declares that act in `surfaces.actions` and handles it with `useBandAction`, so it works on the first item and the fiftieth — an empty state may offer it too, never only there.
+- The main act is always one press away. A Tool that adds things declares that act in `surfaces.actions` and handles it with `useBandAction`, so it works on the first item and the fiftieth — an empty state may offer it too, never only there. That band button IS the screen's primary button: never repeat it as a second primary in the content.
+- Readable colour: a coloured label is a `HueChip` (the hue's own ink on its wash), a number that is good or bad is `text-success` / `text-danger` on the page — never white text on a pale fill.
+- Dates read as dates: `formatDate` ("Sep 23") in lists and cards, never an ISO string; money is `formatMoney`, one notation per screen.
 - Pick the control for the data. A known set of values is a Select (or Segmented for two to five shown at once), a date a DatePicker, a yes/no a Toggle, a share of a whole a PieChart, a tally a BarChart — free text only for what is truly free.
 - The page scrolls. The frame grows to the Tool's height up to the pane and then scrolls, so let content take its natural height: never squeeze a screen to fit (`h-full`, `h-screen`, `overflow-hidden` on the root, flex children forced to share one viewport). A long list is just long.
 - One size, one shape. Sizes come from the kit and Tailwind's scale (text-sm body, text-xs muted meta, controls at their own height), and a thing drawn in two places is drawn by one component: a piece used twice — a legend row, a vote bar, a company header — is a component in `src/<module>.tsx` imported by both, never copied.
@@ -420,6 +422,16 @@ Props: label · value · delta? · deltaLabel? · invert? · icon?: IconName · 
 
 ```tsx
 <Stat label="Overdue" value={3} icon="clock" hint="of 24 open" />
+```
+
+### ChoiceList
+
+Options to pick from, each a row with a radio or a box; right and wrong marks once checked. A quiz question, a survey, a vote, a checklist — any "pick one or several" that deserves more than a Select.
+
+Props: options: {value,label,hint?}[] · value · onChange · label · multiple? · disabled? · marks?: {value: correct|wrong}
+
+```tsx
+<ChoiceList label="Which link is safe?" options={[{ value: 'a', label: 'bank-login.example.net' }, { value: 'b', label: 'Our intranet, typed by hand' }]} value="b" onChange={() => {}} marks={{ b: 'correct' }} />
 ```
 
 ### Progress

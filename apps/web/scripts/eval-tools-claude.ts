@@ -18,6 +18,7 @@
  * results.json, summary.json, report.md.
  *
  *   pnpm --filter @visvine/web eval:tools --provider codex --new-space [--label after] [--only crm,kudos] [--limit 5] [--concurrency 3]
+ *   pnpm --filter @visvine/web eval:tools --new-space --prompts "split the lunch bill|book meeting rooms" --label adhoc
  */
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync, copyFileSync, readdirSync, readFileSync } from 'node:fs'
@@ -499,7 +500,7 @@ function finish(dir: string, label: string, results: Array<Record<string, unknow
     prompts: results.length,
     mean: Math.round((scored.reduce((a, b) => a + b, 0) / results.length) * 100) / 100,
     min: Math.min(...scored),
-    target_reached: results.length === TOOL_PROMPTS.length && scored.reduce((a, b) => a + b, 0) / results.length >= 9 && scored.every((n) => n >= 8) && results.every((r) => Number(r.minimum_category ?? 0) >= 6 && !r.error && !((r.broken as unknown[] | undefined)?.length)),
+    target_reached: !arg('prompts') && results.length === TOOL_PROMPTS.length && scored.reduce((a, b) => a + b, 0) / results.length >= 9 && scored.every((n) => n >= 8) && results.every((r) => Number(r.minimum_category ?? 0) >= 6 && !r.error && !((r.broken as unknown[] | undefined)?.length)),
     passing: results.filter((r) => r.passes).length,
     from_template: results.filter((r) => r.from_template).length,
     failed: results.filter((r) => r.error).length,
@@ -545,7 +546,9 @@ async function main() {
   const before = await act<{ authored: Array<{ name: string }> }>('list_tools', { space_id: SPACE })
   if (before.authored.length) throw new Error('Use an empty EVAL_SPACE for a fresh run; existing Tools are preserved. Use --rejudge to score them again.')
 
-  const prompts = TOOL_PROMPTS.filter((p) => !ONLY || ONLY.some((o) => p.includes(o))).slice(0, LIMIT)
+  // `--prompts "a|b"` tries requests outside the fixed set; they are never a benchmark row.
+  const own = arg('prompts')?.split('|').map((p) => p.trim()).filter(Boolean)
+  const prompts = (own ?? TOOL_PROMPTS.filter((p) => !ONLY || ONLY.some((o) => p.includes(o)))).slice(0, LIMIT)
   const results: Array<Record<string, unknown>> = new Array(prompts.length)
   let next = 0
   const worker = async () => {

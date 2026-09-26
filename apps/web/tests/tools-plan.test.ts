@@ -9,7 +9,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildPlanBrief, takenTypeWords, PLAN_TEMPLATE } from '@/lib/tools/shared/planBrief'
 import { withDesignSection } from '@/lib/actions/defs/apps'
-import { droppedFromIcon, namedIconSvg } from '@/lib/actions/defs/toolPlan'
+import { droppedFromIcon } from '@/lib/actions/defs/toolPlan'
+import { namedIconSvg } from '@/lib/tools/iconSvg'
 import { ICON_SVGS } from '@/lib/icons/svg.generated'
 
 const TYPES = [
