@@ -61,14 +61,6 @@ export const UI_CATALOG: readonly CatalogEntry[] = [
     "snippet": "<Menu label=\"Deal actions\" items={[{ id: 'archive', label: 'Archive', onSelect: () => {} }]} trigger={({ toggle }) => <button type=\"button\" onClick={toggle}>⋯</button>} />"
   },
   {
-    "name": "Modal",
-    "kind": "component",
-    "what": "Generic modal shell: fixed backdrop, centered panel, Escape + backdrop-click dismissal.",
-    "when": "A focused task over the page — an edit form, a picker. It floats, so it casts the shadow. In the app: admin, agents, discover and 8 more.",
-    "props": "onClose: () => void · open?: boolean · title?: React.ReactNode · footer?: React.ReactNode · size?: 'sm' | 'md' | 'lg' · maxWidth?: string · closeOnBackdrop?: boolean · closeOnEscape?: boolean · overlayClassName?: string · overlayStyle?: React.CSSProperties · panelClassName?: string · panelStyle?: React.CSSProperties · ariaLabel?: string",
-    "snippet": "<Modal open={false} title=\"Edit deal\" onClose={() => {}}>\n  <p>Form here</p>\n</Modal>"
-  },
-  {
     "name": "Row",
     "kind": "component",
     "what": "Children side by side, a fixed step apart, centred on one line.",

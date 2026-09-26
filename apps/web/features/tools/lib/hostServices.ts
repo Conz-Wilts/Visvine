@@ -1,6 +1,6 @@
 /**
  * The host's own services to a Tool — `ui.toast`, `ui.confirm`, `ui.download`,
- * `ui.openRecord`, `ui.openResource` — answered by the page around the frame,
+ * `ui.openRecord`, `ui.openResource`, `ui.scrim` — answered by the page around the frame,
  * never the server. The frame has no popups, no downloads and no navigation of
  * its own (`sandbox="allow-scripts"`), so each of these is the app acting on
  * the Tool's behalf, in the app's own chrome, where the viewer can see who is
@@ -23,6 +23,8 @@ export interface HostServiceEnv {
   confirm: (question: { title: string; body?: string; confirmLabel?: string; destructive?: boolean }) => Promise<boolean> | null
   save: (file: { filename: string; content: string; mimeType: string }) => void
   navigate: (path: string) => void
+  /** Dim (or stop dimming) the app around the frame while a dialog is open inside it. */
+  scrim: (open: boolean) => void
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -96,6 +98,10 @@ export async function hostServiceCall(method: HostMethod, params: unknown, env: 
       const id = text(p.id, 200)
       if (!id) return invalid('ui.openResource needs an id')
       env.navigate(`/directory?view=resources&resource=${encodeURIComponent(id)}`)
+      return { ok: true, value: null }
+    }
+    case 'ui.scrim': {
+      env.scrim(p.open === true)
       return { ok: true, value: null }
     }
   }

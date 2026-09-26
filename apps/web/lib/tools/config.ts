@@ -785,12 +785,8 @@ export function newToolIndexNote(input: {
       ? `  rail: { label: ${JSON.stringify(railLabel)}, icon: ${DEFAULT_RAIL_ICON} }`
       : `  rail: null`,
     `  types: []`,
-    `perimeter:`,
-    `  read: []`,
-    `  write: []`,
-    `  types: []`,
-    `  connectors: []`,
-    `  agents: []`,
+    `sdk: "^2.0.0"`,
+    `permissions: {}`,
   ]
   const body = [
     `# ${title}`,
@@ -803,10 +799,9 @@ export function newToolIndexNote(input: {
     `main content area only. Data logic lives in ${TOOL_SOURCE_FILES.data.authorName}, which runs`,
     `server-side and reads space data through the bridge.`,
     ``,
-    `Nothing is reachable until it is declared: add note globs to \`perimeter.read\``,
-    `and \`perimeter.write\`, node types to \`perimeter.types\`, and connector or agent`,
-    `names to the lists beside them. A reader can see the whole reach of this tool`,
-    `in that block, and the bridge refuses anything it does not name.`,
+    `Nothing is reachable until it is declared in \`permissions\` — note globs,`,
+    `record types, connectors, agents, collections. A reader can see the whole reach`,
+    `of this tool there, and the bridge refuses anything it does not name.`,
   ]
   return `---\n${front.join('\n')}\n---\n\n${body.join('\n')}\n`
 }

@@ -6,22 +6,23 @@
  * built a Tool for can open it and look before anything is published.
  *
  * Tools are made over MCP, from a repo with `visvine-tool`, or from a file;
- * this page only shows what was made: the working copy running, its files as
- * written, its checks, and Publish on the band for someone who may edit it.
+ * this page only shows what was made: the working copy running exactly as it
+ * will on its own page — full bleed, its own sections and band buttons on the
+ * band — with its files, its checks and Publish behind one ⋯ menu, so the
+ * authoring chrome never takes the band a Tool's own views stand on.
  * Someone who can read the Tool but not edit it gets the preview alone
  * (ToolPreview).
  */
 
 import { createPortal } from 'react-dom';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Button, Skeleton } from '@visvine/ui';
+import { Button, IconButton, Menu, Skeleton, type MenuItem } from '@visvine/ui';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useShellBand } from '@/features/desktop/lib/chrome';
-import BandTabList from '@/features/shared/components/pane/BandTabList';
-import { RotateCwIcon } from '@/features/shared/icons';
+import { EllipsisIcon } from '@/features/shared/icons';
 import type { AuthoredToolView } from '@/lib/tools/api';
 import type { BuildSummary } from '@/lib/tools/builds';
 import { fetchAuthoredTool, runToolChecks } from '../lib/client';
@@ -30,6 +31,7 @@ import CheckReport from './CheckReport';
 import PublishDialog from './PublishDialog';
 import ToolFrame from './ToolFrame';
 import ToolPreview, { NotBuilding, RunGate } from './ToolPreview';
+import { ToolActionButtons, ToolSectionTabs, ToolSectionsLayout, useToolSections } from './ToolBand';
 
 /** The files in the order they are read: the interface, its modules, the data layer, the index. */
 function filesOf(modules: Record<string, string> | undefined): string[] {
@@ -50,6 +52,7 @@ function buildFor(build: BuildSummary | null, file: string): BuildSummary | null
 export default function PreviewPage({ name }: { name: string }) {
   const { currentSpace, loading: spaceLoading } = useSpace();
   const { user } = useAuth();
+  const { isAdmin } = useSpace();
   const spaceId = currentSpace?.id ?? null;
   const searchParams = useSearchParams();
   const { shellTabsHost, shellTrailHost } = useContextPanel();
@@ -62,6 +65,8 @@ export default function PreviewPage({ name }: { name: string }) {
   const [notice, setNotice] = useState<{ text: string; tone: 'error' | 'info' } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [runRequested, setRunRequested] = useState(false);
+  const actionRef = useRef<((id: string) => void) | null>(null);
+  const nav = useToolSections(view?.tool.config?.surfaces.nav, isAdmin);
 
   const files = useMemo(() => filesOf(view?.tool.modules), [view]);
   const views = [{ id: 'preview', label: 'Preview' }, ...files.map((file) => ({ id: file, label: file })), { id: 'checks', label: 'Checks' }];
@@ -69,8 +74,10 @@ export default function PreviewPage({ name }: { name: string }) {
   const active = views.find((v) => v.id === requested)?.id ?? 'preview';
   const select = (id: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set('view', id);
-    window.history.replaceState(null, '', `?${params.toString()}`);
+    if (id === 'preview') params.delete('view');
+    else params.set('view', id);
+    const query = params.toString();
+    window.history.replaceState(null, '', query ? `?${query}` : window.location.pathname);
   };
 
   const refresh = useCallback(async () => {
@@ -125,15 +132,29 @@ export default function PreviewPage({ name }: { name: string }) {
   const isAuthor = !!user && tool.draft.authors.some((author) => author.userId === user.id);
   const sources: Record<string, string | null> = { ...tool.sources, ...tool.modules };
 
-  const tabs = (
-    <BandTabList tabs={views} activeId={active} onSelect={select} ariaLabel="Preview" handoffKey="pane-top" inBand={!!shellTabsHost} />
-  );
+  const inTool = active === 'preview';
+  const tabs = inTool ? <ToolSectionTabs nav={nav} title={tool.title} /> : null;
+  const menu: MenuItem[] = [
+    ...(inTool ? [] : [{ id: 'preview', label: 'Back to the tool', onSelect: () => select('preview') }]),
+    ...(inTool && runnable ? [{ id: 'reload', label: 'Reload', onSelect: () => setAttempt((n) => n + 1) }] : []),
+    ...files.map((file) => ({ id: file, label: file, onSelect: () => select(file) })),
+    { id: 'checks', label: blocked ? 'Checks · blocked' : 'Checks', onSelect: () => select('checks') },
+    { id: 'publish', label: 'Publish', onSelect: () => setPublishing(true), disabled: !runnable },
+  ];
   const trail = (
-    <div className="flex items-center gap-3 pr-2">
-      <span className="whitespace-nowrap text-xs text-fg-muted">{[tool.title, status].join(' · ')}</span>
-      <Button size="sm" variant="brand" onClick={() => setPublishing(true)} disabled={!runnable}>
-        Publish
-      </Button>
+    <div className="flex items-center gap-1 pr-2">
+      {inTool ? (
+        <ToolActionButtons actions={runnable ? (tool.config?.surfaces.actions ?? []) : []} onAction={(id) => actionRef.current?.(id)} />
+      ) : (
+        <span className="whitespace-nowrap px-2 text-xs text-fg-muted">{[active === 'checks' ? 'Checks' : active, status].join(' · ')}</span>
+      )}
+      <Menu
+        label={`${tool.title} source`}
+        items={menu}
+        trigger={({ open, toggle }) => (
+          <IconButton size="sm" label={`${tool.title} source`} icon={<EllipsisIcon />} active={open} onClick={toggle} />
+        )}
+      />
     </div>
   );
 
@@ -159,34 +180,29 @@ export default function PreviewPage({ name }: { name: string }) {
         </div>
       );
     }
+    if (!runnable) return <NotBuilding tool={tool} />;
+    if (!isAuthor && !runRequested) return <RunGate tool={tool} onRun={() => setRunRequested(true)} />;
     return (
-      <div className="relative p-4">
-        {runnable && (
-          <button
-            type="button"
-            onClick={() => setAttempt((n) => n + 1)}
-            aria-label="Reload the preview"
-            className="absolute right-6 top-6 z-10 rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-subtle hover:text-fg"
-          >
-            <RotateCwIcon className="h-4 w-4" />
-          </button>
-        )}
-        {!runnable ? (
-          <NotBuilding tool={tool} />
-        ) : isAuthor || runRequested ? (
-          <ToolFrame key={attempt} target={{ kind: 'preview', spaceId, name: tool.name }} title={tool.title} mode="preview" />
-        ) : (
-          <RunGate tool={tool} onRun={() => setRunRequested(true)} />
-        )}
-      </div>
+      <ToolSectionsLayout nav={nav} title={tool.title}>
+        <ToolFrame
+          key={attempt}
+          target={{ kind: 'preview', spaceId, name: tool.name }}
+          title={tool.title}
+          mode="page"
+          className="h-full"
+          section={nav.active}
+          onSection={nav.select}
+          actionRef={actionRef}
+        />
+      </ToolSectionsLayout>
     );
   })();
 
   return (
     <>
-      {shellTabsHost && createPortal(tabs, shellTabsHost)}
+      {tabs && shellTabsHost && createPortal(tabs, shellTabsHost)}
       {shellTrailHost && createPortal(trail, shellTrailHost)}
-      <div className="h-full min-h-0 overflow-y-auto">
+      <div className={inTool ? 'flex h-full min-h-0 flex-col' : 'h-full min-h-0 overflow-y-auto'}>
         {!shellTabsHost && (
           <div className="flex items-center justify-between gap-3 border-b border-line-subtle px-4">
             {tabs}
@@ -198,7 +214,7 @@ export default function PreviewPage({ name }: { name: string }) {
             {notice.text}
           </p>
         )}
-        {body}
+        {inTool ? <div className="min-h-0 flex-1">{body}</div> : body}
       </div>
       {publishing && (
         <PublishDialog

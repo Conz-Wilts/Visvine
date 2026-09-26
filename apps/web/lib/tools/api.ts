@@ -194,8 +194,8 @@ export interface AuthoredToolsResponse {
 
 /**
  * What a scaffold answers with: the new working copy, where to look at it, and
- * the creator MCP server address the success screen hands to a coding agent
- * (the same value Settings → MCP shows — `mcpResourceUrl('creator')`).
+ * the Visvine Tools MCP server address the success screen hands to a coding agent
+ * (the same value Settings → MCP shows — `mcpResourceUrl('tools')`).
  */
 export interface CreateToolResponse {
   tool: { name: string; path: string; nodeId: string; title: string }

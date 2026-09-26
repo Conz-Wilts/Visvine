@@ -443,6 +443,21 @@ declare module '@visvine/tool-kit' {
   }
   export function Select(props: SelectProps): JSX.Element
 
+  export interface SegmentedOption {
+    value: string
+    label: string
+  }
+  export interface SegmentedProps {
+    options: SegmentedOption[]
+    value: string | null
+    onChange: (value: string) => void
+    label: string
+    disabled?: boolean
+    className?: string
+  }
+  /** Two to five joined buttons, one on — a vote on a scale, a view switch. */
+  export function Segmented(props: SegmentedProps): JSX.Element
+
   export type ChipTone = 'neutral' | 'accent' | 'danger' | 'warn' | 'info'
   export interface ChipProps {
     tone?: ChipTone

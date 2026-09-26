@@ -11,8 +11,9 @@ import assert from 'node:assert/strict'
 import { DOWNLOAD_MAX_CHARS, hostServiceCall, safeFilename, type HostServiceEnv } from '@/features/tools/lib/hostServices'
 import { HOST_METHODS, isFrameMessage, isHostMethod } from '@/lib/tools/protocol'
 
-function env(over: Partial<HostServiceEnv> = {}): HostServiceEnv & { toasts: string[]; saved: string[]; went: string[] } {
+function env(over: Partial<HostServiceEnv> = {}): HostServiceEnv & { toasts: string[]; saved: string[]; went: string[]; scrims: boolean[] } {
   const toasts: string[] = []
+  const scrims: boolean[] = []
   const saved: string[] = []
   const went: string[] = []
   return {
@@ -21,6 +22,8 @@ function env(over: Partial<HostServiceEnv> = {}): HostServiceEnv & { toasts: str
     confirm: () => Promise.resolve(true),
     save: (file) => saved.push(file.filename),
     navigate: (path) => went.push(path),
+    scrim: (open) => scrims.push(open),
+    scrims,
     toasts,
     saved,
     went,
@@ -79,4 +82,12 @@ test('a file name never carries a folder or a control character', () => {
   assert.equal(safeFilename('q?1.csv'), 'q-1.csv')
   assert.equal(safeFilename('\u0000\u0007.hidden'), 'hidden')
   assert.equal(safeFilename('   '), 'download.txt')
+})
+
+test('a dialog in the frame dims the app around it, and only a real true opens it', async () => {
+  const e = env()
+  await hostServiceCall('ui.scrim', { open: true }, e)
+  await hostServiceCall('ui.scrim', { open: 'yes' }, e)
+  await hostServiceCall('ui.scrim', { open: false }, e)
+  assert.deepEqual(e.scrims, [true, false, false])
 })

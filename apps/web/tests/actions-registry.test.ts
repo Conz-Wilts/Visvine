@@ -21,8 +21,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { McpServer } from '@modelcontextprotocol/server'
 import { DEFAULT_SCOPES, MCP_SCOPES, SCOPE_DESCRIPTIONS } from '@/lib/mcp/scopes'
-import { actionByName, allActions, scopeForAction, schemaOf } from '@/lib/actions/registry'
-import { registerTools } from '@/lib/mcp/register'
+import { actionByName, actionsOn, allActions, isOnSurface, scopeForAction, schemaOf } from '@/lib/actions/registry'
+import { registerToolTools, registerTools } from '@/lib/mcp/register'
 import { TOOL_NAME, actionAnnotations, actionFromToolName, actionToolName } from '@/lib/mcp/gateway'
 import { mcpServerInfo } from '@/lib/mcp/config'
 import { GUIDES, guideById } from '@/lib/actions/shared/guides'
@@ -47,12 +47,31 @@ function recordingServer(): { server: McpServer; names: string[]; tools: Map<str
   return { server: server as unknown as McpServer, names, tools }
 }
 
-test('the server registers the router, then one tool per action', () => {
+test('each server registers the router, then one tool per action it offers', () => {
   // Two doors from one registry: the router for discovery and a named tool per
   // action so a client can permit, deny and log each one by name.
-  const { server, names } = recordingServer()
-  registerTools(server)
-  assert.deepEqual(names, [TOOL_NAME, ...allActions().map((a) => actionToolName(a.name))])
+  const main = recordingServer()
+  registerTools(main.server)
+  assert.deepEqual(main.names, [TOOL_NAME, ...actionsOn('visvine').map((a) => actionToolName(a.name))])
+  const tools = recordingServer()
+  registerToolTools(tools.server)
+  assert.deepEqual(tools.names, [TOOL_NAME, ...actionsOn('tools').map((a) => actionToolName(a.name))])
+})
+
+test('the Tool actions are on Visvine Tools alone, and every action is on one server or both', () => {
+  for (const name of ['create_tool', 'write_tool', 'preview_tool', 'publish_tool', 'install_tool', 'get_tool_sdk']) {
+    assert.equal(isOnSurface(name, 'tools'), true, name)
+    assert.equal(isOnSurface(name, 'visvine'), false, name)
+  }
+  for (const name of ['edit_context', 'create_agent', 'create_event']) {
+    assert.equal(isOnSurface(name, 'visvine'), true, name)
+    assert.equal(isOnSurface(name, 'tools'), false, name)
+  }
+  // An author finds the space and its data from the Tools server too.
+  for (const name of ['list_spaces', 'read_context', 'search_context']) {
+    assert.ok(isOnSurface(name, 'visvine') && isOnSurface(name, 'tools'), name)
+  }
+  for (const def of allActions()) assert.ok(isOnSurface(def.name, 'visvine') || isOnSurface(def.name, 'tools'), def.name)
 })
 
 test('the real SDK accepts every tool', () => {
@@ -62,7 +81,11 @@ test('the real SDK accepts every tool', () => {
   const server = new McpServer(mcpServerInfo())
   registerTools(server)
   const registered = (server as unknown as { _registeredTools?: Record<string, unknown> })._registeredTools
-  assert.deepEqual(Object.keys(registered ?? {}), [TOOL_NAME, ...allActions().map((a) => actionToolName(a.name))])
+  assert.deepEqual(Object.keys(registered ?? {}), [TOOL_NAME, ...actionsOn('visvine').map((a) => actionToolName(a.name))])
+  const toolServer = new McpServer(mcpServerInfo('tools'))
+  registerToolTools(toolServer)
+  const toolRegistered = (toolServer as unknown as { _registeredTools?: Record<string, unknown> })._registeredTools
+  assert.deepEqual(Object.keys(toolRegistered ?? {}), [TOOL_NAME, ...actionsOn('tools').map((a) => actionToolName(a.name))])
 })
 
 test('a tool name round-trips to its action, and nothing else does', () => {
@@ -78,6 +101,7 @@ test('a tool name round-trips to its action, and nothing else does', () => {
 test('a named tool carries the action\'s own schema, scope and hints', () => {
   const { server, tools } = recordingServer()
   registerTools(server)
+  registerToolTools(server)
   for (const def of allActions()) {
     const tool = tools.get(actionToolName(def.name))
     assert.ok(tool, `${def.name} has no tool`)

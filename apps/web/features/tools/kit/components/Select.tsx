@@ -12,10 +12,10 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   children?: ReactNode;
 }
 
-/** The app's own select (@visvine/ui). */
+/** The app's own select (@visvine/ui), drawn as a form field — the same box as the Input beside it. */
 export function Select({ options, children, ...rest }: SelectProps) {
   return (
-    <UISelect {...rest}>
+    <UISelect look="field" {...rest}>
       {options
         ? options.map((o) => (
             <option key={o.value} value={o.value}>

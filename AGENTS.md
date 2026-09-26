@@ -933,7 +933,7 @@ use measured. The invariants:
   space's own notes — a brief reads as one); implied services in `needs`;
   `suggested` on MCP tools and on an empty select cell.
 
-## Actions, and the one MCP tool
+## Actions, and the MCP servers
 
 **Everything Visvine can be asked to do is an Action** — one definition, three
 doors, all through `runAction` (`lib/actions/run.ts`) with the same registry
@@ -994,18 +994,26 @@ routes. Syncing makes the content editable in-app by the Visvine space's admin.
    argument.
 4. Run `db:actions:sync`.
 
-### One server
+### Two servers
 
-**One endpoint, `/api/mcp`**, on `mcp-handler` 2 + the official TS SDK v2
-(FastMCP was evaluated and rejected), one OAuth protected resource. Every action
-is behind the router AND is its own named tool.
+**Two endpoints under one OAuth authorization server**, on `mcp-handler` 2 +
+the official TS SDK v2 (FastMCP was evaluated and rejected): **Visvine** at
+`/api/mcp` (context, connectors, agents, events, spaces) and **Visvine Tools**
+at `/api/mcp/tools` (the Tool authoring loop, listings, installs, plus the four
+reads an author needs — `list_spaces`, `list_context`, `read_context`,
+`search_context`). `lib/actions/registry.ts#isOnSurface` / `actionsOn` is the
+split; each server's router and named tools cover its own actions, its
+instructions and plan are its own, and naming the other server's action says
+where it lives rather than running it. It is about what a client is SHOWN, never
+authority: each is its own protected resource with its own metadata, a token is
+accepted by both (`tokens.ts#verifyAccessToken`), and HTTP reaches every action.
 
 **Scopes carry the boundary, and nothing else does.** Authoring rides
 `tools:author`, never `context:write`; a client must ASK for a scope; the person
 approving sees each spelled out (`SCOPE_DESCRIPTIONS`). `DEFAULT_SCOPES` is
 read-only. There is no per-server ceiling above `negotiateScopes`.
 
-- `/api/mcp/creator` 308s to `/api/mcp`; `legacyResourceUrl()` keeps pre-merge
+- `/api/mcp/creator` 308s to `/api/mcp/tools`; `legacyResourceUrl()` keeps its
   tokens verifying. Both are deletable once nothing is configured that way.
 - Client-facing identity is `lib/mcp/config.ts#mcpServerInfo`. The logo is
   served from `public/images/brand-icon.png`, not Next's hashed `app/icon.png`

@@ -76,16 +76,16 @@ export interface VerifiedAccessToken {
  * Verify a bearer. Anything not minted for this resource — a web session
  * cookie, a token for some other audience entirely — is null.
  *
- * The legacy identifier is accepted alongside the canonical one so a connection
- * made before the surfaces were one keeps working on its existing token rather
- * than failing until someone notices. Both name the same single resource, so
- * there is no cross-resource confusion to create; the scopes on the token are
- * what decide what it can do, exactly as before.
+ * Both servers — Visvine and Visvine Tools — accept a token minted for either,
+ * and the old authoring endpoint's identifier too, so a connection made there
+ * keeps working on its existing token. The servers differ in which actions they
+ * show, not in authority: the scopes on the token decide what it can do, on
+ * either one, exactly as before.
  */
 export async function verifyAccessToken(token: string): Promise<VerifiedAccessToken | null> {
   try {
     const { payload } = await jwtVerify(token, secret(), {
-      audience: [mcpResourceUrl(), legacyResourceUrl()],
+      audience: [mcpResourceUrl(), mcpResourceUrl('tools'), legacyResourceUrl()],
     })
     if (payload.typ !== TOKEN_TYPE) return null
     if (!payload.sub) return null

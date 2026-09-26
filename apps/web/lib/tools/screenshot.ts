@@ -79,6 +79,10 @@ export interface ScreenshotRequest {
   viewer: ScreenshotViewer
   /** Skip the image and just collect console errors — `check_tool { render }`. */
   image?: boolean
+  /** Open this one of the Tool's sections (`surfaces.nav`) before capturing. */
+  section?: string
+  /** Press this band button (`surfaces.actions` id) before capturing — the dialog it opens is what is shot. */
+  action?: string
   budgetMs?: number
 }
 
@@ -98,6 +102,10 @@ export type ScreenshotResult =
       rendered: boolean
       /** `console.error` lines and uncaught errors from the page and every frame, in order. */
       console_errors: string[]
+      /** The named band button was not on the band — the Tool does not declare it. */
+      action_missing?: boolean
+      /** The Tool's content is wider than its frame: something is cut off or scrolls sideways. */
+      horizontal_overflow?: boolean
     }
 
 /**
@@ -116,8 +124,12 @@ export function screenshotEnabled(env: NodeJS.ProcessEnv = process.env): { ok: t
  * The URL of the preview page for one Tool — what the browser is pointed at
  * and the only main-frame destination it may reach.
  */
-export function previewPageUrl(appOrigin: string, name: string): string {
-  return `${appOrigin.replace(/\/+$/, '')}/tools/preview/${encodeURIComponent(name)}`
+export function previewPageUrl(appOrigin: string, name: string, section?: string, spaceId?: string): string {
+  // Addressed in its space, as every page inside one is: the unprefixed path is
+  // answered with a redirect under the space, which the pin would refuse.
+  const space = spaceId ? `/s/${encodeURIComponent(spaceId)}` : ''
+  const base = `${appOrigin.replace(/\/+$/, '')}${space}/tools/preview/${encodeURIComponent(name)}`
+  return section ? `${base}?section=${encodeURIComponent(section)}` : base
 }
 
 /**
@@ -139,7 +151,13 @@ export function previewNavigationAllowed(previewUrl: string, requestUrl: string)
   }
   if (got.protocol !== 'http:' && got.protocol !== 'https:') return false
   const strip = (p: string) => p.replace(/\/+$/, '') || '/'
-  return want.origin === got.origin && strip(want.pathname) === strip(got.pathname)
+  if (want.origin !== got.origin) return false
+  const w = strip(want.pathname)
+  const g = strip(got.pathname)
+  if (w === g) return true
+  // A room is re-addressed under its house: `/s/<room>/…` → `/s/<house>/<room>/…`.
+  const room = /^\/s\/([^/]+)(\/tools\/preview\/[^/]+)$/.exec(w)
+  return !!room && new RegExp(`^/s/[^/.]+/${room[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${room[2].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`).test(g)
 }
 
 /** The slice of Playwright this file touches — typed locally so the package stays optional. */
@@ -160,6 +178,7 @@ interface ContextLike {
 interface FrameLike {
   url(): string
   waitForFunction(fn: string, arg?: unknown, opts?: { timeout?: number }): Promise<unknown>
+  evaluate(fn: string): Promise<unknown>
 }
 interface RouteLike {
   request(): { url(): string; isNavigationRequest(): boolean; frame(): FrameLike }
@@ -176,6 +195,7 @@ interface PageLike {
   frames(): FrameLike[]
   waitForSelector(selector: string, opts: { timeout: number; state?: 'attached' }): Promise<unknown>
   waitForTimeout(ms: number): Promise<void>
+  click(selector: string, opts: { timeout: number }): Promise<void>
   screenshot(opts: { type: 'png' } | { type: 'jpeg'; quality: number }): Promise<Buffer>
 }
 
@@ -256,7 +276,7 @@ export async function captureToolPreview(req: ScreenshotRequest): Promise<Screen
     })
     page.on('pageerror', (err) => record(`uncaught: ${err.message}`))
 
-    const url = previewPageUrl(req.appOrigin, req.name)
+    const url = previewPageUrl(req.appOrigin, req.name, req.section, req.spaceId)
 
     // Pin the top-level document to the preview URL. Only main-frame
     // navigations are judged; every sub-resource, /api/* call and child frame
@@ -285,9 +305,11 @@ export async function captureToolPreview(req: ScreenshotRequest): Promise<Screen
     // Both are best-effort within the budget: an unmounted frame is a finding
     // (rendered: false), not a failure of the capture.
     let rendered = false
+    let toolFrame: FrameLike | undefined
     try {
       await page.waitForSelector('iframe', { timeout: Math.min(remaining(), 6000), state: 'attached' })
       const frame = page.frames().find((f) => f.url().includes('/api/tools/runtime/frame'))
+      toolFrame = frame
       if (frame) {
         await frame.waitForFunction(
           '() => { const r = document.getElementById("root"); return !!r && r.childElementCount > 0 }',
@@ -295,11 +317,38 @@ export async function captureToolPreview(req: ScreenshotRequest): Promise<Screen
           { timeout: Math.min(remaining(), 6000) },
         )
         rendered = true
-        // One more beat for effects and first data to paint.
-        await page.waitForTimeout(Math.min(remaining(), 500))
+        // A beat for effects and the first reads to land and paint — a capture
+        // taken mid-load shows an empty page the author would then "fix".
+        await page.waitForTimeout(Math.min(remaining(), 1500))
       }
     } catch {
       rendered = false
+    }
+
+    // Press the band button the author named, as a person would, and give the
+    // dialog it opens a beat to draw. The selector is built from the id, which
+    // is quoted, so nothing the caller passes becomes a selector of its own.
+    let actionMissing = false
+    if (rendered && req.action) {
+      try {
+        await page.click(`[data-tool-action=${JSON.stringify(req.action)}]`, { timeout: Math.min(remaining(), 2000) })
+        await page.waitForTimeout(Math.min(remaining(), 600))
+      } catch {
+        actionMissing = true
+      }
+    }
+
+    // Content wider than the frame is cut off or scrolls sideways — a layout
+    // fault the author may not spot in a small capture.
+    let horizontalOverflow = false
+    if (rendered && toolFrame) {
+      try {
+        horizontalOverflow = (await toolFrame.evaluate(
+          '() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1',
+        )) === true
+      } catch {
+        horizontalOverflow = false
+      }
     }
 
     if (navigatedAway !== null || !previewNavigationAllowed(url, main.url())) {
@@ -325,6 +374,8 @@ export async function captureToolPreview(req: ScreenshotRequest): Promise<Screen
       height: SCREENSHOT_HEIGHT,
       rendered,
       console_errors: consoleErrors,
+      ...(actionMissing ? { action_missing: true } : {}),
+      ...(horizontalOverflow ? { horizontal_overflow: true } : {}),
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

@@ -204,6 +204,39 @@ async function dependencyEntry(name: CuratedDependencyName): Promise<string> {
 }
 
 /**
+ * The layout utilities a Tool's own markup reaches for, compiled in whether or
+ * not the kit happens to use them. The stylesheet is built from the kit's
+ * sources, not the Tool's, so without this a Tool's `grid-cols-3` or `text-2xl`
+ * would name a class that does not exist and silently draw nothing — rows that
+ * never become a grid, spacing that never lands. Layout and type only: colour
+ * comes from the role utilities the kit already carries.
+ */
+/** Tailwind's spacing scale, every step — a Tool may reach for any of them. */
+const SCALE = '{0,px,0.5,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10,11,12,14,16,20,24,28,32,36,40,44,48,52,56,60,64,72,80,96}'
+
+const TOOL_LAYOUT_UTILITIES: readonly string[] = [
+  '{sm:,md:,lg:,xl:,}grid-cols-{1,2,3,4,5,6,7,8,9,10,11,12}',
+  '{sm:,md:,lg:,xl:,}col-span-{1,2,3,4,5,6,7,8,9,10,11,12,full}',
+  '{sm:,md:,lg:,xl:,}{grid,flex,inline-flex,block,inline-block,hidden,contents}',
+  '{sm:,md:,lg:,}flex-{row,col,wrap,1,none,auto}',
+  '{sm:,md:,lg:,}{items,self}-{start,center,end,stretch,baseline}',
+  '{sm:,md:,lg:,}justify-{start,center,end,between,around}',
+  `{sm:,md:,lg:,}{gap,gap-x,gap-y,space-y,space-x}-${SCALE}`,
+  `{sm:,md:,lg:,}{p,px,py,pt,pb,pl,pr,m,mx,my,mt,mb,ml,mr,-mt,-mb,-ml,-mr}-${SCALE}`,
+  `{sm:,md:,lg:,}{w,h,min-w,min-h,max-h,size,top,bottom,left,right}-${SCALE}`,
+  '{sm:,md:,lg:,}{w,h,min-w,min-h,max-w,max-h}-{full,fit,min,max,auto,screen}',
+  '{sm:,md:,lg:,}w-{1/2,1/3,2/3,1/4,3/4}',
+  'max-w-{xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,6xl,prose}',
+  'shrink-0 grow min-w-0 truncate break-words whitespace-nowrap overflow-{hidden,auto,x-auto,y-auto}',
+  '{sm:,md:,lg:,}text-{xs,sm,base,lg,xl,2xl,3xl,4xl,5xl} {text-left,text-center,text-right}',
+  'font-{normal,medium,semibold,bold} leading-{none,tight,snug,normal,relaxed} tracking-{tight,wide} tabular-nums uppercase',
+  'rounded{,-sm,-md,-lg,-xl,-2xl,-full} border{,-2,-t,-b,-l,-r,-0} divide-{y,x}',
+  '{border,divide}-{line,line-subtle,accent,danger}',
+  '{text,bg}-{fg,fg-secondary,fg-muted,fg-subtle,accent,danger,surface,surface-subtle,surface-muted,accent-soft,danger-wash}',
+  '{relative,absolute,sticky} inset-0 {z-0,z-10} aspect-{square,video} opacity-{50,60,70}',
+]
+
+/**
  * The kit's stylesheet: the design tokens, the @theme that names Tailwind's
  * utilities after them, and every utility `@visvine/ui` and the kit use —
  * compiled the way the app's own globals.css is, so a Tool's components are
@@ -220,6 +253,7 @@ async function buildKitStylesheet(): Promise<string> {
     '@import "@visvine/tokens/theme.css";',
     '@source "../../packages/ui/src";',
     `@source "./${KIT_DIR.split('\\').join('/')}";`,
+    ...TOOL_LAYOUT_UTILITIES.map((set) => `@source inline("${set}");`),
   ].join('\n')
   const compiler = await compile(input, { base: root, onDependency: () => {} })
   const scanner = new Scanner({ sources: compiler.sources })

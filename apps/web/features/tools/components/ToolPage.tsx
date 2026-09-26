@@ -23,8 +23,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'next/navigation';
-import { clsx } from 'clsx';
 import Link from '@/features/shared/components/SpaceLink';
 import { useHeader } from '@/features/shared/contexts/HeaderContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -33,16 +31,13 @@ import { useShellBand } from '@/features/desktop/lib/chrome';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { canAccessFeature, toolRailKey } from '@/features/shared/lib/features';
 import { EllipsisIcon } from '@/features/shared/icons';
-import BandTabList from '@/features/shared/components/pane/BandTabList';
 import { IconButton, Menu, Skeleton, useToasts, ToastHost, type MenuItem } from '@visvine/ui';
 import type { SpaceFeatureConfig } from '@/lib/types';
 import type { InstalledToolDto } from '@/lib/tools/installs';
 import ToolFrame, { ToolStopped } from './ToolFrame';
 import ToolAbout from './ToolAbout';
 import ToolReport from './ToolReport';
-
-/** Handoff key shared with the other band bars, so the underline slides across. */
-const HANDOFF_KEY = 'pane-top';
+import { ToolActionButtons, ToolSectionTabs, ToolSectionsLayout, useToolSections } from './ToolBand';
 
 export default function ToolPage({ slug }: { slug: string }) {
   const { currentSpace, loading, isAdmin } = useSpace();
@@ -71,26 +66,13 @@ function InstalledTool({ install, spaceId, isAdmin }: { install: InstalledToolDt
   const { setHeaderContent } = useHeader();
   const { shellTabsHost, shellTrailHost } = useContextPanel();
   const router = useSpaceRouter();
-  const searchParams = useSearchParams();
   const { toasts, push, dismiss } = useToasts();
   const actionRef = useRef<((id: string) => void) | null>(null);
   const [about, setAbout] = useState(false);
   const [report, setReport] = useState(false);
 
-  // The Tool's own sections, less the admins' ones for everyone else.
-  const sections = (install.nav?.sections ?? []).filter((s) => !s.admin || isAdmin);
-  const style = install.nav?.style ?? 'tabs';
-  const drawSections = sections.length > 1;
-  const requested = searchParams.get('section');
-  const active = sections.find((s) => s.id === requested)?.id ?? sections[0]?.id ?? null;
-  const select = (id: string) => {
-    if (!sections.some((s) => s.id === id)) return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('section', id);
-    window.history.replaceState(null, '', `?${params.toString()}`);
-  };
-
-  const onBand = drawSections && style === 'tabs';
+  const nav = useToolSections(install.nav, isAdmin);
+  const onBand = nav.onBand;
   useShellBand(true);
 
   // The band's centre names the Tool when no tabs stand there to say where
@@ -112,16 +94,7 @@ function InstalledTool({ install, spaceId, isAdmin }: { install: InstalledToolDt
     { id: 'report', label: 'Report', onSelect: () => setReport(true) },
   ];
 
-  const tabs = onBand ? (
-    <BandTabList
-      tabs={sections.map((s) => ({ id: s.id, label: s.label }))}
-      activeId={active}
-      onSelect={select}
-      ariaLabel={`${install.title} sections`}
-      handoffKey={HANDOFF_KEY}
-      inBand
-    />
-  ) : null;
+  const tabs = onBand ? <ToolSectionTabs nav={nav} title={install.title} /> : null;
 
   // A Tool from outside the space says where it came from; the space's own does not.
   const provenance = install.provenance
@@ -132,16 +105,7 @@ function InstalledTool({ install, spaceId, isAdmin }: { install: InstalledToolDt
   const trail = (
     <div className="flex items-center gap-1 pr-2">
       {provenance && <span className="hidden truncate px-2 text-xs text-fg-muted lg:inline">{provenance}</span>}
-      {install.actions.map((action) => (
-        <button
-          key={action.id}
-          type="button"
-          onClick={() => actionRef.current?.(action.id)}
-          className="h-8 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-fg transition-colors hover:bg-surface-subtle"
-        >
-          {action.label}
-        </button>
-      ))}
+      <ToolActionButtons actions={install.actions} onAction={(id) => actionRef.current?.(id)} />
       <Menu
         label={`${install.title} menu`}
         items={menu}
@@ -158,8 +122,8 @@ function InstalledTool({ install, spaceId, isAdmin }: { install: InstalledToolDt
       title={install.title}
       mode="page"
       className="h-full"
-      section={active}
-      onSection={select}
+      section={nav.active}
+      onSection={nav.select}
       actionRef={actionRef}
     />
   );
@@ -169,29 +133,9 @@ function InstalledTool({ install, spaceId, isAdmin }: { install: InstalledToolDt
       {tabs && shellTabsHost && createPortal(tabs, shellTabsHost)}
       {shellTrailHost && createPortal(trail, shellTrailHost)}
 
-      {drawSections && style === 'side' ? (
-        <div className="flex h-full min-h-0">
-          <nav aria-label={`${install.title} sections`} className="w-56 shrink-0 overflow-y-auto border-r border-line-subtle py-3">
-            {sections.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => select(s.id)}
-                aria-current={s.id === active ? 'page' : undefined}
-                className={clsx(
-                  'block w-full truncate px-4 py-1.5 text-left text-sm transition-colors hover:bg-surface-subtle',
-                  s.id === active ? 'font-semibold text-fg' : 'text-fg-secondary',
-                )}
-              >
-                {s.label}
-              </button>
-            ))}
-          </nav>
-          <div className="min-w-0 flex-1">{frame}</div>
-        </div>
-      ) : (
-        frame
-      )}
+      <ToolSectionsLayout nav={nav} title={install.title}>
+        {frame}
+      </ToolSectionsLayout>
 
       {about && <ToolAbout spaceId={spaceId} installId={install.id} onClose={() => setAbout(false)} />}
       {report && (

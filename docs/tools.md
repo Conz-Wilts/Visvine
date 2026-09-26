@@ -251,11 +251,29 @@ the folder, the build, and this space's own install
 deletion was already held to `canRemove`). A Tool never lingers in the console
 after its config note is gone.
 
-Visvine runs ONE MCP server at `/api/mcp`, exposing the `visvine` router and a
-named tool per action. The authoring loop is a set of actions like any other — there is no
-separate creator endpoint (`/api/mcp/creator` 308s to the one server, and the
-tokens it minted still verify). The address is shown in Settings → MCP
-(`/api/mcp/connect-info`).
+The authoring loop is its own MCP server, **Visvine Tools**, at
+`/api/mcp/tools` — the `visvine` router and a named tool per Tool action, with
+instructions that carry the design rules and the review loop, so the main
+server's catalogue stays about a space's context. `/api/mcp/creator` 308s to it
+and the tokens it minted still verify. Both addresses are shown in Settings →
+MCP (`/api/mcp/connect-info`).
+
+**A build is reviewed before it is handed over.** `create_tool` and
+`write_tool` end with the loop: `check_tool { render: true }`, then
+`preview_tool { screenshot: true }` once per section (`section`) and once with
+each band button pressed (`action`), each answer carrying `review` — the list
+the image is read against — and `horizontal_overflow` when content is cut off.
+The compatibility stage adds `design.*` findings (`lib/tools/checks/design.ts`,
+never blocking): a boxed page, 100vh/fixed, a hex or palette colour, a tab
+strip where `surfaces.nav` belongs, an Input for an `enum` field, rows added
+with no band button.
+
+**The preview is the page.** `/tools/preview/<name>` runs the working copy
+full bleed with its own sections and band buttons on the band
+(`ToolBand.tsx`, shared with `/t/<slug>`); its files, checks and Publish sit
+behind one ⋯ menu. The kit's `Modal` pads its body and footer and asks the host
+for `ui.scrim`, which dims the app around the frame so a Tool's dialog is the
+whole page's.
 
 An agent finds the loop by asking: `visvine({ request: "build a dashboard tool
 for our pipeline" })` returns the `build_tool` recipe with the ordered steps.

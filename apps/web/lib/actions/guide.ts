@@ -17,7 +17,7 @@
  * have is dropped upstream in lib/actions/notes.ts. The surface can therefore
  * never advertise a call that does not exist, however stale the notes get.
  */
-import { allActions, actionByName } from '@/lib/actions/registry'
+import { actionByName, actionsOn, type McpSurface } from '@/lib/actions/registry'
 import { readActionNotes, readRecipeNotes, readActionNote, readGuideNote } from '@/lib/actions/notes'
 import { GUIDES, guideById } from '@/lib/actions/shared/guides'
 import { scoreCandidates, confidenceOf } from '@/lib/actions/shared/match'
@@ -60,8 +60,8 @@ function scopeNote(def: ActionDef, caller: ActionCaller): string {
   return caller.scopes.includes(def.scope) ? '' : ` _(needs the \`${def.scope}\` scope, which this connection was not granted)_`
 }
 
-async function catalogue(caller: ActionCaller): Promise<string> {
-  const defs = allActions()
+async function catalogue(caller: ActionCaller, surface: McpSurface): Promise<string> {
+  const defs = actionsOn(surface)
   const notes = await readActionNotes()
   const lines = ['## Every action', '']
   for (const def of defs) {
@@ -103,6 +103,18 @@ export interface PlanRequest {
   caller: ActionCaller
   request?: string
   spaceId?: string
+  /** Which MCP server is asking; its recipes and catalogue are the ones shown. */
+  surface?: McpSurface
+}
+
+/** The recipes that belong to Visvine Tools; every other recipe is the main server's. */
+const TOOL_RECIPES: ReadonlySet<string> = new Set(['build_tool'])
+
+/** What the other server is for, said once so a request aimed there is not answered here with a guess. */
+function otherServer(surface: McpSurface): string {
+  return surface === 'tools'
+    ? 'Reading and writing notes, connectors, agents and events is the main Visvine MCP server (`/api/mcp`).'
+    : 'Building, publishing or installing a Tool (an app inside a space) is the Visvine Tools MCP server (`/api/mcp/tools`) — ask the person to connect it rather than writing a Tool by hand here.'
 }
 
 /**
@@ -111,13 +123,15 @@ export interface PlanRequest {
  * else that exists in case the recipe was the wrong read.
  */
 export async function buildGuide(req: PlanRequest): Promise<string> {
-  const [recipes, space, actions] = await Promise.all([
+  const surface = req.surface ?? 'visvine'
+  const [allRecipes, space, actions] = await Promise.all([
     readRecipeNotes(),
     spaceFactsFor(req.caller, req.spaceId),
-    catalogue(req.caller),
+    catalogue(req.caller, surface),
   ])
+  const recipes = allRecipes.filter((r) => TOOL_RECIPES.has(r.id) === (surface === 'tools'))
 
-  const out: string[] = ['# Visvine', '', HOW_IT_WORKS, '', NOTE_FIRST, '']
+  const out: string[] = [surface === 'tools' ? '# Visvine Tools' : '# Visvine', '', HOW_IT_WORKS, '', NOTE_FIRST, '', otherServer(surface), '']
 
   if (req.request) {
     const trimmed = req.request.length > 300 ? `${req.request.slice(0, 300)}…` : req.request

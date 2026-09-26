@@ -348,6 +348,14 @@ export function useVisvineMaybe(): VisvineApi | null {
   return useContext(VisvineContext)?.api ?? null;
 }
 
+/**
+ * The bridge itself, or null outside a provider. Internal — for kit components
+ * that speak to the host directly (the Modal asking for the app's scrim).
+ */
+export function useBridgeClientMaybe(): BridgeClient | null {
+  return useContext(VisvineContext)?.client ?? null;
+}
+
 /** What this Tool is being shown about, kept current as the host re-points it. */
 export function useSubject(): ToolSubject | null {
   return useVisvineContext().api.subject;

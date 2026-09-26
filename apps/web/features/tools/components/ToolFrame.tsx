@@ -166,6 +166,19 @@ export default function ToolFrame({
     });
   }, []);
 
+  // A dialog is open inside the frame. The frame dims itself; the host dims
+  // everything around it, so the scrim reads as the whole app's.
+  const [scrim, setScrim] = useState<DOMRect | null>(null);
+  const showScrim = useCallback((open: boolean) => {
+    setScrim(open && slotRef.current ? slotRef.current.getBoundingClientRect() : null);
+  }, []);
+  useEffect(() => {
+    if (!scrim) return;
+    const measure = () => { if (slotRef.current) setScrim(slotRef.current.getBoundingClientRect()); };
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [scrim !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const targetKey = useMemo(() => JSON.stringify(target), [target]);
 
   // The first-use notice: a Tool from outside the space about to act as the
@@ -311,6 +324,7 @@ export default function ToolFrame({
             setTimeout(() => URL.revokeObjectURL(url), 10_000);
           },
           navigate: (path) => router.push(path),
+          scrim: showScrim,
         }),
     });
     bridgeRef.current = bridge;
@@ -488,6 +502,7 @@ export default function ToolFrame({
           </>
         )}
       </div>
+      {scrim && <FrameScrim rect={scrim} />}
       <ToastHost toasts={toasts} onDismiss={dismiss} />
       <ConfirmDialog
         open={question !== null}
@@ -506,6 +521,24 @@ export default function ToolFrame({
         onConfirm={() => consent?.answer(true)}
         onClose={() => consent?.answer(false)}
       />
+    </div>
+  );
+}
+
+/**
+ * The app's half of a dialog open inside the frame: four panes around the
+ * frame's rectangle, at the scrim the frame paints inside it, so the dim is
+ * one surface edge to edge. They take the clicks, so nothing behind a Tool's
+ * dialog can be pressed.
+ */
+function FrameScrim({ rect }: { rect: DOMRect }) {
+  const pane = 'fixed z-40 bg-black/40';
+  return (
+    <div aria-hidden>
+      <div className={pane} style={{ left: 0, right: 0, top: 0, height: Math.max(0, rect.top) }} />
+      <div className={pane} style={{ left: 0, right: 0, top: rect.bottom, bottom: 0 }} />
+      <div className={pane} style={{ left: 0, width: Math.max(0, rect.left), top: rect.top, height: rect.height }} />
+      <div className={pane} style={{ left: rect.right, right: 0, top: rect.top, height: rect.height }} />
     </div>
   );
 }

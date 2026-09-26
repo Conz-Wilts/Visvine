@@ -13,6 +13,7 @@ import { parse, type Program } from 'acorn'
 import { transform } from 'esbuild'
 import { manifestOf, type ToolConfig } from '../config'
 import { scanCode, type CodeScan } from './codeRules'
+import { designFindings } from './design'
 import { compatibilityFindings, type CompatibilityInput } from './compatibility'
 import {
   dedupeFindings,
@@ -100,7 +101,10 @@ export async function runStaticChecks(input: StaticCheckInput): Promise<CheckRep
   const compatStarted = performance.now()
   const compatibility = stage(
     'compatibility',
-    compatibilityFindings({ build: input.build, config: input.config, hasUi: !!input.ui?.trim(), facts: input.facts }),
+    [
+      ...compatibilityFindings({ build: input.build, config: input.config, hasUi: !!input.ui?.trim(), facts: input.facts }),
+      ...designFindings({ ui: input.ui ?? null, modules: input.modules, config: input.config }),
+    ],
     compatStarted,
   )
 

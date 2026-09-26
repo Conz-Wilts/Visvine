@@ -400,6 +400,8 @@ interface PreviewToolArgs {
   name: string
   /** Render the preview headlessly and return the image + console errors. */
   screenshot?: boolean
+  section?: string
+  action?: string
 }
 interface PublishToolArgs {
   space_id: string
@@ -659,7 +661,13 @@ async function previewTool(ctx: ActionCaller, args: PreviewToolArgs, deps: AppTo
   // the answer says so and the links still stand.
   if (args.screenshot && ctx.client === 'mobile') throw new ActionError(403, TOOL_PHONE_REFUSAL)
   const screenshot = args.screenshot
-    ? screenshotReport(await deps.capturePreview(previewRequest(ctx, target, detail.name, deps, { image: true })))
+    ? screenshotReport(
+        await deps.capturePreview({
+          ...previewRequest(ctx, target, detail.name, deps, { image: true }),
+          ...(args.section ? { section: args.section } : {}),
+          ...(args.action ? { action: args.action } : {}),
+        }),
+      )
     : undefined
   return {
     name: detail.name,
@@ -740,6 +748,11 @@ function screenshotReport(result: ScreenshotResult) {
     height: result.height,
     rendered: result.rendered,
     console_errors: result.console_errors,
+    action_missing: result.action_missing ? 'No band button has that id — declare it in surfaces.actions.' : undefined,
+    horizontal_overflow: result.horizontal_overflow
+      ? 'The content is wider than the frame — something is cut off or scrolls sideways.'
+      : undefined,
+    review: REVIEW_CHECKLIST,
   }
 }
 
@@ -1021,6 +1034,26 @@ const fileArg = z
   )
 
 /** The paragraph every authoring action needs an agent to have read once. */
+/**
+ * What the author reads a capture against before handing the link over — the
+ * faults a person spots in a second and a model misses unless it is told to look.
+ */
+const REVIEW_CHECKLIST =
+  'Look at the image before you hand over the link, and fix anything that fails: ' +
+  '1) full bleed — no border, rounded box or card around the whole Tool; ' +
+  '2) spacing — every field and button sits inside the gutter, nothing touches an edge, nothing wraps mid-word; ' +
+  '3) nothing cut off or overlapping; ' +
+  '4) the main act is a band button and works again after the first time; ' +
+  '5) every known set of values is a Select or Segmented, never a text box; ' +
+  '6) each view is a section on the band, not a tab strip inside the frame; ' +
+  '7) no sentence explains the screen.'
+
+/** The loop every build ends with — said in create_tool, write_tool and preview_tool. */
+const REVIEW_LOOP =
+  'BEFORE YOU HAND OVER THE LINK: run check_tool with `render: true`, then preview_tool with `screenshot: true` ' +
+  'once per section (`section`) and once with each band button pressed (`action`) so the dialog it opens is shot. ' +
+  'Read every image against the review list in the answer and fix what fails. A Tool nobody looked at is not done.'
+
 const TOOL_SHAPE =
   'A Tool is three notes in the space: `tools/<name>/index.md` (frontmatter is the config — title, ' +
   'description, `surfaces:` and `perimeter:` — and the body is documentation), `ui.tsx` (a React ' +
@@ -1051,7 +1084,7 @@ export const APP_ACTIONS = [
       'Scaffold a new Tool in a space: the directory entity, its config note and two source files that ' +
       `already compile and render. Start here when asked to build something for a space. ${TOOL_SHAPE} ` +
       'Returns the file list, a preview link, and a pointer to get_tool_sdk. The name must be unique in ' +
-      'the space; edit the files afterwards with write_tool.',
+      `the space; edit the files afterwards with write_tool. ${REVIEW_LOOP}`,
     input: {
       space_id: spaceArg,
       name: nameArg,
@@ -1110,7 +1143,7 @@ export const APP_ACTIONS = [
       'is refused at compile time. In `data.js` assign each operation to `handlers.<name>`. ' +
       'Writes obey your own note permissions, so this is refused wherever an ordinary note write would be. ' +
       'Every write also returns the preview link — hand it to the person you are working for so they can ' +
-      'watch the tool take shape.',
+      `watch the tool take shape. ${REVIEW_LOOP}`,
     input: {
       space_id: spaceArg,
       name: nameArg,
@@ -1225,7 +1258,9 @@ export const APP_ACTIONS = [
       'back the image (`screenshot.png_base64`, or `jpeg_base64` when it had to shrink — `mime` says which), ' +
       'whether the tool mounted, and every console error the page and the frame logged. Where headless ' +
       'rendering is unavailable (no Playwright, or production without TOOLS_SCREENSHOT=on) `screenshot.available` ' +
-      'is false with a reason and the links still stand.',
+      'is false with a reason and the links still stand. `section` opens one of the Tool\'s sections first; ' +
+      '`action` presses one of its band buttons first, so the dialog it opens is in the shot. The answer carries ' +
+      '`review`, the list to read the image against, and flags `horizontal_overflow` when content is cut off.',
     input: {
       space_id: spaceArg,
       name: nameArg,
@@ -1233,6 +1268,8 @@ export const APP_ACTIONS = [
         .boolean()
         .optional()
         .describe('Render the preview headlessly and return the image plus console errors (slower — a browser launches)'),
+      section: z.string().max(64).optional().describe('With screenshot: the surfaces.nav section id to open before capturing'),
+      action: z.string().max(64).optional().describe('With screenshot: the surfaces.actions id to press before capturing'),
     },
     annotations: { readOnlyHint: true },
     run: (ctx, args) => previewTool(ctx, args),

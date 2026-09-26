@@ -378,6 +378,8 @@ export interface HostMethods {
   'ui.download': { params: { filename: string; content: string; mimeType?: string }; result: { saved: boolean } }
   'ui.openRecord': { params: { path?: string; nodeId?: string }; result: null }
   'ui.openResource': { params: { id: string }; result: null }
+  /** A dialog opened in the frame; the host dims its own chrome around it so the scrim is the whole app's. */
+  'ui.scrim': { params: { open: boolean }; result: null }
 }
 
 export type HostMethod = keyof HostMethods
@@ -388,6 +390,7 @@ export const HOST_METHODS = [
   'ui.download',
   'ui.openRecord',
   'ui.openResource',
+  'ui.scrim',
 ] as const satisfies readonly HostMethod[]
 
 export function isHostMethod(value: unknown): value is HostMethod {

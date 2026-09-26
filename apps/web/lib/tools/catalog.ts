@@ -140,9 +140,43 @@ const KIT_CATALOG: readonly CatalogEntry[] = [
     name: 'Select',
     kind: 'component',
     what: 'A native select.',
-    when: 'Choosing one of a few known values.',
+    when: 'Any field whose values are a known set — a stage, a round, a status. Never an Input for these: declare the set as the field\'s `enum` and draw it here.',
     props: 'options?: { value, label }[] · any select attribute',
     snippet: `<Select options={[{ value: 'lead', label: 'Lead' }, { value: 'won', label: 'Won' }]} onChange={() => {}} />`,
+  },
+  {
+    name: 'Segmented',
+    kind: 'component',
+    what: 'Joined buttons, one of which is on.',
+    when: 'Two to five values seen at once — a vote on a scale, a view switch, a filter. More than five, or a form field, is a Select.',
+    props: 'options: { value, label }[] · value: string | null · onChange(value) · label · disabled?',
+    snippet: `<Segmented label="Vote" value={null} onChange={() => {}} options={[{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }]} />`,
+  },
+  {
+    name: 'Modal',
+    kind: 'component',
+    what: 'A dialog over the page, with the app\'s gutter on its body and its buttons in a footer.',
+    when: 'An add or edit form: Fields straight in it (short ones in a grid), buttons in `footer`. Open it from a band button (`surfaces.actions`) so it opens every time, not only from an empty state.',
+    props: "onClose · open? · title? · footer? · size?: 'sm' | 'md' | 'lg'",
+    snippet: `<Modal
+  open={false}
+  title="Add company"
+  onClose={() => {}}
+  footer={<><Button variant="ghost">Cancel</Button><Button variant="primary">Add</Button></>}
+>
+  <Field label="Name" htmlFor="name">
+    <Input id="name" />
+  </Field>
+  <div className="grid grid-cols-2 gap-4">
+    <Field label="Stage" htmlFor="stage">
+      <Select id="stage" options={[{ value: 'seed', label: 'Seed' }, { value: 'a', label: 'Series A' }]} />
+    </Field>
+    <Field label="Raise" htmlFor="raise">
+      <Input id="raise" />
+    </Field>
+  </div>
+</Modal>`,
+    imports: ['Button', 'Field', 'Input', 'Select'],
   },
   {
     name: 'DatePicker',
@@ -343,12 +377,17 @@ export const TOOL_CATALOG: readonly CatalogEntry[] = [...KIT_CATALOG, ...UI_CATA
 /** The rules a Tool keeps to look like the app — the same ones the app keeps. */
 const TOOL_DESIGN_RULES: readonly string[] = [
   'The app draws the chrome. The rail row, the band (your sections as tabs, your band buttons, the ⋯ menu) and every state are the app\'s. Draw only content: never a page title, a top tab strip or a header that repeats what the band says.',
+  'Lay out with Tailwind classes: grid, flex, gap, padding, widths and text sizes (with sm:/md:/lg: variants) are all compiled in, and the role colours (`text-fg-muted`, `bg-surface-subtle`, `border-line-subtle`, `bg-accent`). A grid of cards is `grid gap-4 sm:grid-cols-2 lg:grid-cols-3`.',
   'Flat surfaces: sections separated by hairlines, no cards around everything, no shadows except on things that float.',
   'Labels name, they do not explain: one to three words. No sentence under a field, no caption explaining a screen — if a screen needs text to explain itself, change the screen.',
   'Say only the exceptional. Hide an empty section rather than captioning it; show a warning only when something is actually wrong.',
   'State is data, joined by ·: `12 open · 3 overdue · updated 5m ago`, one muted line.',
   'Colour comes from the theme: the kit, or `var(--vv-*)` in your own styles — never a hex, never a painted page background (the frame is transparent over the app\'s own).',
-  'No 100vh and no position: fixed — they measure the frame, not the window. The host sizes the frame to your content.',
+  'Full bleed. The frame IS the page: the root fills it with the app\'s page gutter (`px-6 py-5`) and nothing else — never an outer border, a rounded box, a card or a max-width container around the whole Tool.',
+  'Views are sections. Two or more screens (a board and a detail, companies and predictions) are `surfaces.nav` sections read with `useSection` — the app draws them as tabs on its band. Never draw your own tab strip or view switcher at the top of the frame.',
+  'The main act is always one press away. A Tool that adds things declares that act in `surfaces.actions` and handles it with `useBandAction`, so it works on the first item and the fiftieth — an empty state may offer it too, never only there.',
+  'Pick the control for the data. A known set of values is a Select (or Segmented for two to five shown at once), a date a DatePicker, a yes/no a Toggle, a share of a whole a PieChart, a tally a BarChart — free text only for what is truly free.',
+  'No 100vh and no position: fixed — they measure the frame, not the window. A dialog is the kit\'s Modal, which the app extends over the whole page.',
   'A Tool may choose its own look when a person asks for one. These rules are the default, not a wall.',
 ]
 

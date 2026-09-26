@@ -40,6 +40,10 @@
     "visvine-dev": {
       "type": "http",
       "url": "http://localhost:3000/api/mcp"
+    },
+    "visvine-tools-dev": {
+      "type": "http",
+      "url": "http://localhost:3000/api/mcp/tools"
     }
   }
 }

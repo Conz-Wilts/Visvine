@@ -343,21 +343,27 @@ export async function toolRequirementsInSpace(
 
 // ── creating ──────────────────────────────────────────────────────────────────
 
-/** The starting `ui.tsx`: renders, compiles, and shows where to type. */
-function starterUi(title: string): string {
+/**
+ * The starting `ui.tsx`: renders, compiles, and already has the shape a Tool
+ * keeps — full bleed with the page gutter, no title (the band names it), the
+ * active section from `useSection`.
+ */
+function starterUi(): string {
   return [
-    `// This is your tool's interface. It renders inside Visvine's main content`,
-    `// area, in a sandboxed frame — React and @visvine/tool-kit are importable,`,
-    `// nothing else is. The default export is what gets mounted.`,
-    ``,
-    `const TITLE = ${JSON.stringify(title)}`,
+    `// This is your tool's interface — the whole page, drawn in Visvine's main`,
+    `// pane. The app draws the band above it: your sections (surfaces.nav) as tabs`,
+    `// and your band buttons (surfaces.actions). React and @visvine/tool-kit are`,
+    `// importable, nothing else is. The default export is what gets mounted.`,
+    `import { Stack, useSection } from '@visvine/tool-kit'`,
     ``,
     `export default function App() {`,
+    `  const [section] = useSection()`,
     `  return (`,
-    `    <main style={{ padding: 24 }}>`,
-    `      <h1>{TITLE}</h1>`,
-    `      <p>Edit ui.tsx to build this tool.</p>`,
-    `    </main>`,
+    `    <div className="px-6 py-5">`,
+    `      <Stack gap="md">`,
+    `        <p className="text-sm text-fg-muted">{section ?? 'Edit ui.tsx to build this tool.'}</p>`,
+    `      </Stack>`,
+    `    </div>`,
     `  )`,
     `}`,
   ].join('\n')
@@ -455,7 +461,7 @@ export async function createTool(
   }
 
   for (const [file, content] of [
-    [TOOL_SOURCE_FILES.ui.authorName, starterUi(title)] as const,
+    [TOOL_SOURCE_FILES.ui.authorName, starterUi()] as const,
     [TOOL_SOURCE_FILES.data.authorName, starterData()] as const,
   ]) {
     const written = await writeGated(p, context, notePathOf(name, file, folder), noteContentOf(file, content))

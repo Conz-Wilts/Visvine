@@ -17,9 +17,13 @@ export type { EmptyStateProps } from './EmptyState';
 export { Field } from './Field';
 export type { FieldProps } from './Field';
 export { Input } from './Input';
+export { Modal } from './Modal';
+export type { ModalProps } from './Modal';
 export type { InputProps } from './Input';
 export { PageHeader } from './PageHeader';
 export type { PageHeaderProps } from './PageHeader';
+export { Segmented } from './Segmented';
+export type { SegmentedOption, SegmentedProps } from './Segmented';
 export { Select } from './Select';
 export type { SelectOption, SelectProps } from './Select';
 export { Spinner } from './Spinner';
@@ -54,7 +58,6 @@ export {
   IconButton,
   LoadingText,
   Menu,
-  Modal,
   Row,
   SearchInput,
   SettingsSection,

@@ -72,6 +72,17 @@ test('the page is pinned to the preview URL: same origin + path only, for main-f
   assert.equal(previewNavigationAllowed('nope', preview), false)
 })
 
+test('the capture opens the preview in its space, and follows a room to its house and no further', () => {
+  const preview = previewPageUrl('https://visvine.test', 'board', 'votes', 'deals')
+  assert.equal(preview, 'https://visvine.test/s/deals/tools/preview/board?section=votes')
+  assert.equal(previewNavigationAllowed(preview, 'https://visvine.test/s/deals/tools/preview/board'), true)
+  assert.equal(previewNavigationAllowed(preview, 'https://visvine.test/s/house/deals/tools/preview/board?section=votes'), true)
+  assert.equal(previewNavigationAllowed(preview, 'https://visvine.test/s/other/tools/preview/board'), false)
+  assert.equal(previewNavigationAllowed(preview, 'https://visvine.test/s/house/other/tools/preview/board'), false)
+  assert.equal(previewNavigationAllowed(preview, 'https://visvine.test/s/deals/admin'), false)
+  assert.equal(previewNavigationAllowed(preview, 'https://visvine.test/s/../deals/tools/preview/board'), false)
+})
+
 test('the minted preview session is minutes long, not the 30-day web session', () => {
   assert.ok(PREVIEW_SESSION_TTL_S <= 300)
   assert.ok(PREVIEW_SESSION_TTL_S * 1000 >= SCREENSHOT_BUDGET_MS)

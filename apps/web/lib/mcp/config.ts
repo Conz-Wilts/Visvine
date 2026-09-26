@@ -6,6 +6,7 @@
  * the MCP endpoints are reached at some other origin than the app's own.
  */
 import type { Implementation } from '@modelcontextprotocol/server'
+import type { McpSurface } from '@/lib/actions/registry'
 
 /** Public origin == OAuth 2.0 Authorization Server issuer (RFC 8414). */
 export function oauthIssuer(): string {
@@ -13,22 +14,23 @@ export function oauthIssuer(): string {
 }
 
 /**
- * ONE MCP server, at `/api/mcp`, and one OAuth protected resource (RFC 8707):
- * one resource URL, one metadata document, and tokens whose `aud` names it.
+ * TWO MCP servers under one OAuth authorization server: Visvine at `/api/mcp`
+ * (context, connectors, agents, events, spaces) and Visvine Tools at
+ * `/api/mcp/tools` (building, publishing and installing Tools). Each is its
+ * own protected resource with its own metadata document, so a client connects
+ * to the one it needs and is shown only that catalogue — a model asked to tidy
+ * notes is not handed forty Tool actions, and one building a Tool gets the
+ * authoring rules at initialize. What an action costs is enforced where it
+ * always was: the scope on its definition, checked before dispatch and again in
+ * `runAction`. A token is accepted by both (see tokens.ts), so connecting the
+ * second server is one more sign-in, never a second account.
  *
- * Everything the platform can do is an action behind a single `visvine` tool,
- * and which action a request needs is answered by the action notes rather than
- * by which endpoint a client happened to connect to. Separating the surfaces
- * would only make a client guess at a boundary the catalogue already explains,
- * and what an action costs is still enforced where it always was: the scope on
- * its definition, checked before dispatch and again in `runAction`.
- *
- * `/api/mcp/creator` answers with a permanent redirect for connections made
- * before the surfaces were one, and `LEGACY_RESOURCE_PATH` keeps their tokens
- * and their `resource` parameter verifying. Both are deletable once no client
- * is configured that way.
+ * `/api/mcp/creator` — where authoring lived before — redirects to Visvine
+ * Tools, and `LEGACY_RESOURCE_PATH` keeps its tokens and `resource` parameter
+ * verifying. Both are deletable once no client is configured that way.
  */
 const LEGACY_RESOURCE_PATH = '/creator'
+const TOOLS_RESOURCE_PATH = '/tools'
 
 /**
  * The identity clients show for each server: name, title, site, and logo.
@@ -44,11 +46,11 @@ const LEGACY_RESOURCE_PATH = '/creator'
  * the extra fields through TypeScript's excess-property check; at runtime
  * `createMcpHandler` passes the whole object to `new McpServer(...)` untouched.
  */
-export function mcpServerInfo(): Implementation {
+export function mcpServerInfo(surface: McpSurface = 'visvine'): Implementation {
   const origin = oauthIssuer()
   return {
-    name: 'visvine',
-    title: 'Visvine',
+    name: surface === 'tools' ? 'visvine-tools' : 'visvine',
+    title: surface === 'tools' ? 'Visvine Tools' : 'Visvine',
     version: '1.0.0',
     websiteUrl: origin,
     icons: [
@@ -73,18 +75,34 @@ export function mcpServerInfo(): Implementation {
  * This string is cached by clients for the life of a connection, so anything
  * that belongs to the product rather than the protocol does not belong here.
  */
-export function mcpInstructions(): string {
+export function mcpInstructions(surface: McpSurface = 'visvine'): string {
+  if (surface === 'tools') {
+    return (
+      'This server builds Visvine Tools — small apps that run inside a space, drawn in the main pane. It exposes ' +
+      "the `visvine` router and one tool per action, `visvine_<action>`. Start with the router, `request` set to the " +
+      "user's message verbatim: it returns the build plan. Then `get_tool_sdk` once, and the loop create_tool → " +
+      'write_tool → check_tool → preview_tool → publish_tool.\n\n' +
+      'A Tool is the page, so build it as one: full bleed with the page gutter and no box around it; its views as ' +
+      '`surfaces.nav` sections the app draws on its band; its main act (Add …) as a `surfaces.actions` band button ' +
+      'that works every time; a Select or Segmented for any known set of values; the kit Modal for forms.\n\n' +
+      'Never hand over a preview link you have not looked at. Run check_tool with `render: true`, then preview_tool ' +
+      'with `screenshot: true` for each section and with each band button pressed (`action`), read every image ' +
+      "against the answer's `review` list, and fix what fails first.\n\n" +
+      'Reading and writing notes, connectors and agents are on the main Visvine server (`/api/mcp`).'
+    )
+  }
   return (
     'This server exposes the `visvine` router and one tool per action, `visvine_<action>`. Call the ' +
     "router first with no `action` and `request` set to the user's message verbatim: it returns the plan " +
     'for that ask plus the catalogue of every action that exists — reading and writing context, calling ' +
-    'connectors, running agents, and building Tools. Then call the named tool for the action you need ' +
+    'connectors and running agents. Then call the named tool for the action you need ' +
     '(its schema carries every argument), or the router with `action` to read the manual and with ' +
     '`action` + `input` to run it.\n\n' +
     'Visvine is note-first — most things here are markdown notes at deterministic paths, not records ' +
     'behind a create_* API — so the absence of an action named for something is not evidence it cannot be ' +
     'done. The plan will tell you how it is actually done. Never report something as impossible without ' +
-    'having read it.'
+    'having read it.\n\n' +
+    'Building a Tool (an app inside a space) is the Visvine Tools server, at `/api/mcp/tools`.'
   )
 }
 
@@ -93,15 +111,15 @@ export function mcpInstructions(): string {
  * must equal this, and the protected-resource metadata advertises it.
  * MCP_RESOURCE_URL moves it when the endpoint is reached at another origin.
  */
-export function mcpResourceUrl(): string {
-  return (process.env.MCP_RESOURCE_URL || `${oauthIssuer()}/api/mcp`).replace(/\/$/, '')
+export function mcpResourceUrl(surface: McpSurface = 'visvine'): string {
+  const base = (process.env.MCP_RESOURCE_URL || `${oauthIssuer()}/api/mcp`).replace(/\/$/, '')
+  return surface === 'tools' ? `${base}${TOOLS_RESOURCE_PATH}` : base
 }
 
 /**
- * The resource identifier a connection made before the surfaces were one still
- * presents — as its token's `aud` and as its `resource` parameter. Accepted as
- * naming the same single resource, so those clients keep working without being
- * reconfigured. There is no confusion to guard against: there is one resource.
+ * The resource identifier a connection made to the old authoring endpoint still
+ * presents — as its token's `aud` and as its `resource` parameter. Accepted, so
+ * those clients keep working through the redirect without being reconfigured.
  */
 export function legacyResourceUrl(): string {
   return `${mcpResourceUrl()}${LEGACY_RESOURCE_PATH}`
@@ -142,6 +160,7 @@ export function isCanonicalResource(raw: string | null | undefined): boolean {
   if (given === null) return false
   return (
     given === canonicalizeResource(mcpResourceUrl()) ||
+    given === canonicalizeResource(mcpResourceUrl('tools')) ||
     given === canonicalizeResource(legacyResourceUrl())
   )
 }
