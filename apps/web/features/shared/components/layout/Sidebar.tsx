@@ -7,9 +7,9 @@ import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from "@/features/shared/contexts/ThemeContext";
-import { canAccessFeature, railFeatures, moreFeatures } from "@/features/shared/lib/features";
+import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
-import { CompassIcon, FeedIcon, HammerIcon } from "@/features/shared/icons";
+import { CompassIcon, FeedIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { BAND_MOTION, FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
 import { Modal } from "@visvine/ui";
@@ -138,10 +138,7 @@ export default function Sidebar() {
   const activeHref = [...GLOBAL_NAV, ...allNav, ...moreNav]
     .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
     .reduce<string | null>((best, { href }) => (href.length > (best?.length ?? -1) ? href : best), null);
-  // Build a tool rides the More sheet: the one create the rail keeps for tools,
-  // for anyone who can reach the space's tools, on a screen tools run on.
-  const canBuild = !noSpace && !phoneWidth && canAccessFeature(featureConfig, "directory", isAdmin);
-  const moreActive = moreNav.some(({ href }) => href === activeHref) || pathname.startsWith("/tools/build");
+  const moreActive = moreNav.some(({ href }) => href === activeHref);
 
   // "More" popup: a centered modal with a grid of the tucked-away tools. Modal handles Escape + backdrop dismissal.
   const [moreOpen, setMoreOpen] = useState(false);
@@ -398,7 +395,7 @@ export default function Sidebar() {
       {/* Foot — the tools the space tucked out of the rail (featureConfig.more).
           The space's own settings are not here: they hang off the space in the
           switcher at the head, the way the account's do off the avatar. */}
-      {(moreNav.length > 0 || canBuild) && (
+      {moreNav.length > 0 && (
         <div
           className="flex shrink-0 flex-col border-t"
           onClickCapture={pressRailRow}
@@ -638,20 +635,6 @@ export default function Sidebar() {
                 </li>
               );
             })}
-            {canBuild && (
-              <li className={moreNav.length > 0 ? "mt-1 border-t border-line-subtle pt-1" : undefined}>
-                <Link
-                  href="/tools/build"
-                  onClick={() => setMoreOpen(false)}
-                  className="flex items-center gap-4 rounded-[10px] px-4 py-3 text-fg-secondary transition-colors hover:bg-surface-muted"
-                >
-                  <span className="flex h-7 w-7 items-center justify-center [&>svg]:h-6 [&>svg]:w-6">
-                    <HammerIcon />
-                  </span>
-                  <span className="text-[15px]">Build a tool</span>
-                </Link>
-              </li>
-            )}
           </ul>
 
           <style>{`

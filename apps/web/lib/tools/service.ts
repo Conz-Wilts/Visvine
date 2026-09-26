@@ -716,7 +716,7 @@ export type ConfigureToolResult =
 /**
  * Change a Tool's facts — its surfaces, reach, bindings, settings and the rest
  * of its manifest — without rewriting its index note: the `configure_tool`
- * action and the Workbench's rows. Merged over what the row holds, one key at
+ * action. Merged over what the row holds, one key at
  * a time. Unlike a written index.md, a malformed value is refused here, with
  * the parser's own sentence, rather than stored for a build to report.
  *

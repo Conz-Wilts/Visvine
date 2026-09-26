@@ -666,8 +666,8 @@ export async function writeGated(
 /**
  * A Tool's manifest facts — its surfaces, reach, bindings, settings, kit and
  * dependencies — are its ROW (lib/tools/toolFacts.ts), changed through
- * `configure_tool` or by writing its index.md with `write_tool` / on the
- * Workbench, which files each key where it belongs and records who moved it.
+ * `configure_tool` or by writing its index.md with `write_tool` or
+ * `push_tool`, which files each key where it belongs and records who moved it.
  * So a plain note write may not ADD or CHANGE one in a Tool's index; taking
  * one out is fine, and a note written before the row keeps what it has until
  * the Tool hook folds it in. The system writes the older shape freely.
@@ -682,7 +682,7 @@ async function toolFactKeyDenial(p: ContextPrincipal, context: Context, path: st
   const before = current ? parseFrontmatter(current) : {}
   const changed = keys.filter((k) => JSON.stringify(after[k]) !== JSON.stringify(before[k]))
   if (changed.length === 0) return null
-  return `A tool's ${changed.map((k) => `\`${k}\``).join(', ')} ${changed.length === 1 ? 'is' : 'are'} not written in its note — set ${changed.length === 1 ? 'it' : 'them'} with configure_tool, or write the index.md with write_tool (or on the Workbench), which files each part where it belongs.`
+  return `A tool's ${changed.map((k) => `\`${k}\``).join(', ')} ${changed.length === 1 ? 'is' : 'are'} not written in its note — set ${changed.length === 1 ? 'it' : 'them'} with configure_tool, or write the index.md with write_tool, which files each part where it belongs.`
 }
 
 /**

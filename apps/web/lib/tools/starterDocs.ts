@@ -1,6 +1,6 @@
 /**
  * The files a Tool author's own repo carries about the platform — generated
- * from the one source the app, the MCP server and the builder read, so they
+ * from the one source the app and the MCP server read, so they
  * never say something the server does not:
  *
  *   packages/tool-starter/AGENTS.md      the agent's manual: the repo's loop,

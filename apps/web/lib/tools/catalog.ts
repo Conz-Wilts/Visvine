@@ -7,8 +7,8 @@
  *
  * One source, four readers: `get_tool_sdk` hands it to any AI client, the
  * `tool_design` guide carries it into `create_tool` and `write_tool`'s
- * manuals, the in-app builder has it in context from its first turn, and the
- * Workbench's Components panel inserts its snippets. So a Tool built without
+ * manuals, the starter's COMPONENTS.md is rendered from it, and
+ * `visvine-tool dev` draws every component. So a Tool built without
  * instructions looks like the app; a person who wants their own look asks for
  * it, and nothing here stops them.
  *
@@ -367,67 +367,4 @@ export function renderCatalog(): string {
     }
   }
   return lines.join('\n').trimEnd()
-}
-
-const KIT_IMPORT = /import\s*\{([^}]*)\}\s*from\s*['"]@visvine\/tool-kit['"];?/
-
-/**
- * Where a snippet goes when the author has not put the caret anywhere: on its
- * own line just inside the last closing tag of the file — the root element
- * the default export returns — indented one step past it. Null when the file
- * has no JSX to put it in.
- */
-function defaultInsertion(source: string): { at: number; indent: string } | null {
-  const lines = source.split('\n')
-  let offset = source.length
-  for (let i = lines.length - 1; i >= 0; i--) {
-    offset -= lines[i].length + (i < lines.length - 1 ? 1 : 0)
-    const match = /^(\s*)<\//.exec(lines[i])
-    if (match) return { at: offset, indent: `${match[1]}  ` }
-  }
-  return null
-}
-
-/**
- * Insert a catalog snippet into a Tool's source and make sure every kit name
- * it uses is imported — merged into the existing
- * `import { … } from '@visvine/tool-kit'`, or a new one at the top. With no
- * caret, a component lands inside the root element (`defaultInsertion`) and a
- * hook at the end. Returns the new source and where the caret lands after it.
- */
-export function insertSnippet(source: string, at: number | null, entry: CatalogEntry): { source: string; cursor: number } {
-  const fallback = at === null && entry.kind === 'component' ? defaultInsertion(source) : null
-  let position: number
-  let block: string
-  if (fallback) {
-    position = fallback.at
-    block = `${entry.snippet
-      .split('\n')
-      .map((line) => `${fallback.indent}${line}`)
-      .join('\n')}\n`
-  } else {
-    position = Math.max(0, Math.min(at ?? source.length, source.length))
-    block = entry.snippet
-  }
-  let text = `${source.slice(0, position)}${block}${source.slice(position)}`
-  let cursor = position + block.length
-  const needed = snippetImports(entry)
-  const existing = KIT_IMPORT.exec(text)
-  if (existing) {
-    const have = existing[1]
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean)
-    const missing = needed.filter((name) => !have.includes(name))
-    if (missing.length > 0) {
-      const merged = `import { ${[...have, ...missing].join(', ')} } from '@visvine/tool-kit'`
-      text = `${text.slice(0, existing.index)}${merged}${text.slice(existing.index + existing[0].length)}`
-      if (existing.index < position) cursor += merged.length - existing[0].length
-    }
-  } else {
-    const line = `import { ${needed.join(', ')} } from '@visvine/tool-kit'\n`
-    text = `${line}${text}`
-    cursor += line.length
-  }
-  return { source: text, cursor }
 }

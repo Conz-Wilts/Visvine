@@ -6,7 +6,7 @@
  * range, dependencies, collections — is `app_tool_configs.facts`. Title,
  * description, tags, docs, `share:` and the registry's `version:` stay in the
  * note. The two are read as ONE index note (`composeToolIndex`), so every
- * reader — the build, publish, the checks, `read_tool`, the Workbench —
+ * reader — the build, publish, the checks, `read_tool`, the preview page —
  * parses one shape with one parser (config.ts#parseToolConfig), and an author
  * still writes one index.md: `writeToolFile` splits it (`splitToolIndex`),
  * and a note written straight to the store is adopted by the Tool hook.

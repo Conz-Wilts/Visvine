@@ -315,12 +315,10 @@ export async function sendChatMessage(
 }
 
 /**
- * One turn of a thread whose owner has already decided the prompt, the tools
- * and the model — an agent's chat above, the Tool builder
- * (lib/tools/builder.ts). The claim, the replay, the loop, the stored answer
- * and the metering are the same for both, so they are written once.
+ * One turn of a chat thread once the prompt, the tools and the model are
+ * decided: the claim, the replay, the loop, the stored answer and the metering.
  */
-export interface ThreadTurnInput {
+interface ThreadTurnInput {
   p: ContextPrincipal
   spaceId: string
   /** The thread's name beside (space, person): an agent's, or a reserved one no agent can take. */
@@ -342,7 +340,7 @@ export interface ThreadTurnInput {
   opts: Pick<SendChatOptions, 'signal' | 'onEvent' | 'chatFn'>
 }
 
-export async function runThreadTurn(input: ThreadTurnInput): Promise<SendChatResult> {
+async function runThreadTurn(input: ThreadTurnInput): Promise<SendChatResult> {
   const { p, spaceId, threadName: agentName, text, opts } = input
   const now = new Date()
   // The claim and the two rows, in one transaction.

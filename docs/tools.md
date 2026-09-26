@@ -168,7 +168,7 @@ and no move, so it cannot free the path either. See
 A Tool's structured facts are a ROW, its note is prose — the platform's rule
 for every type. `app_tool_configs.facts` holds what a machine enforces or
 places; the index note keeps title, description, tags, `share:` and the docs.
-Every reader — the build, publish, the checks, `read_tool`, the Workbench —
+Every reader — the build, publish, the checks, `read_tool`, the preview page —
 reads ONE index composed of the two (`lib/tools/indexFacts.ts#composeToolIndex`),
 so an author still writes one `index.md`: `writeToolFile` splits it
 (`splitToolIndex`), a note written straight to the store is adopted by the
@@ -623,42 +623,24 @@ Listed Tools are watched, and monitoring can pull one back everywhere at once
   flags a version, never blocks it — the vendored version is the
   deployment's to move.
 
-### Building in the app
+### Looking before publishing
 
-**The Workbench** (`features/tools/components/workbench/Workbench.tsx`) is
-`/tools/preview/<name>` for anyone who can edit the Tool: the band carries
-**Builder · ui.tsx · data.js · index.md · Checks · Components** and, at its
-trailing end, the Tool's status and **Publish**; the working copy runs on the
-right and reloads whenever a file lands. The files are plain text — a save is
-`PUT /api/spaces/<id>/tools/authoring/<name>/files/<file>`, which is
-`writeToolFile`, the same write and compile `write_tool` makes. **Components**
-lists the kit (`lib/tools/catalog.ts`); pressing one inserts its snippet at the
-caret in `ui.tsx` with its import merged in (`insertSnippet`). **Checks** runs
-the stages a publish runs. Someone who can read a Tool but not edit it gets the
-preview alone. Edit in a Tool's ⋯ menu and on its Tool tab open it.
-
-**The builder** (`lib/tools/builder.ts`) is Build a tool in the rail's More
-sheet — `/tools/build`, the Workbench before the Tool has a name. It is agent
-chat with authoring tools: one thread per person per space
-(`:tool-builder`, a name no agent can take), one turn through
-`lib/agents/chat.ts#runThreadTurn` on the space's model, metered like any
-chat. Its tools are `list_tools`, `read_tool`, `create_tool`, `write_tool`,
-`check_tool`, `list_context` and `read_context`, each `runAction` as the
-person with `context:read` and `tools:author` only and the space id filled
-in by the server — so a draft lands only where they can write, and nothing
-is published or installed. Its prompt is the build rules, the tool intake
-(`lib/actions/shared/intake.ts`), `TOOL_AUTHOR_GUIDE` and the catalog. The
-stream (`POST …/tools/builder/stream`) adds a `workbench { tool }` event to
-agent chat's whenever a call created or wrote a Tool, and the page follows
-it: a new Tool becomes the page's own address without remounting it. With no
-model in the space the panel shows the MCP address instead. Phones are
-refused, as everywhere tools run.
+The app builds no Tools. A Tool is made over MCP (`create_tool`, `write_tool`),
+from its author's repo (`visvine-tool push`), or from a `.vvtool`
+(`import_tool`), and every one of those hands back the preview link:
+**`/tools/preview/<name>`** (`features/tools/components/PreviewPage.tsx`). For
+someone who can edit the Tool the band carries **Preview · ui.tsx · … ·
+index.md · Checks** and, at its trailing end, the Tool's status and
+**Publish**: the working copy running, each file read-only with its own
+diagnostics, and the stages a publish runs. Someone who can read a Tool but
+not edit it gets the preview alone. Edit in a Tool's ⋯ menu and on its Tool
+tab open it.
 
 **The catalog** is one list of the kit's components and hooks — what each is
 for, when the app draws that shape, its props and a snippet — plus the design
 rules in brief. `get_tool_sdk` returns it as `catalog`; the `tool_design`
 guide (named in `create_tool` and `write_tool`'s `guides:`) hands it to any AI
-client; the builder has it from its first turn. `tests/tools-catalog.test.ts`
+client, and the starter's COMPONENTS.md is rendered from it. `tests/tools-catalog.test.ts`
 fails when the kit exports something the catalog does not describe, the
 catalog names something the kit lacks, or a snippet does not compile.
 
@@ -1174,7 +1156,7 @@ share one React and one React DOM through the import map (`react-dom` is
 vendored beside `react-dom/client`). The component catalog is generated from
 `packages/ui` (`scripts/build-tool-catalog.ts` → `lib/tools/catalog.generated.ts`,
 checked current by `tests/tools-catalog.test.ts`) beside the kit's own entries,
-and reaches the MCP SDK, the builder, the Workbench and the `tool_design` guide.
+and reaches the MCP SDK, the starter's COMPONENTS.md, `visvine-tool dev` and the `tool_design` guide.
 
 ### Error card
 

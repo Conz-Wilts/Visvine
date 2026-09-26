@@ -1,7 +1,7 @@
 /**
  * The kit's components, drawn: a Tool whose one screen renders every
  * component entry of the catalog (apps/web lib/tools/catalog.ts) from its own
- * snippet — the list `get_tool_sdk`, the Workbench and COMPONENTS.md read —
+ * snippet — the list `get_tool_sdk` and COMPONENTS.md read —
  * so `visvine-tool dev` shows the app's look beside the Tool being built.
  */
 import { snippetImports, TOOL_CATALOG } from '@/lib/tools/catalog'

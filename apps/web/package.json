@@ -70,7 +70,6 @@
     "verify:tools:escape": "tsx scripts/verify-tools-escape.ts",
     "verify:tools:desktop": "tsx scripts/verify-tools-desktop.ts",
     "verify:tools:shell": "tsx scripts/verify-tools-shell.ts",
-    "verify:tools:builder": "tsx scripts/verify-tools-builder.ts",
     "verify:tools:bindings": "tsx scripts/verify-tools-bindings.ts",
     "verify:tools:global": "tsx scripts/verify-tools-global.ts",
     "verify:tools:monitoring": "tsx scripts/verify-tools-monitoring.ts",

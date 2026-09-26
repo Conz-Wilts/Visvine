@@ -1,7 +1,7 @@
 'use client';
 
-// A Tool's Workbench. Kept to the route plumbing — the deciding logic lives in
-// features/tools/components/workbench/Workbench.tsx, like every other surface.
+// A Tool's preview page. Kept to the route plumbing — the deciding logic lives in
+// features/tools/components/PreviewPage.tsx, like every other surface.
 //
 // This path is load-bearing beyond the URL bar: it is what
 // `visvine-desktop://open/tools/preview/<name>` resolves to, and what
@@ -10,14 +10,14 @@
 
 import { Suspense } from 'react';
 import { useParams } from 'next/navigation';
-import Workbench from '@/features/tools/components/workbench/Workbench';
+import PreviewPage from '@/features/tools/components/PreviewPage';
 
 export default function ToolPreviewRoute() {
   const params = useParams<{ name: string }>();
   const name = Array.isArray(params.name) ? params.name[0] : params.name;
   return (
     <Suspense>
-      <Workbench name={name ?? null} />
+      {name && <PreviewPage name={name} />}
     </Suspense>
   );
 }

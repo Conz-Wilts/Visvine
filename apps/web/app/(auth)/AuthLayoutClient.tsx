@@ -75,13 +75,12 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   // scroll internally, so the shell drops its gutters and scroll container.
   // An installed Tool's page (/t/<slug>) is the same shape: the frame IS the
   // pane, sized to it and scrolling inside itself, so the shell must not add a
-  // second scroll container around it. The Workbench (/tools/preview,
-  // /tools/build) is two panes that each scroll inside themselves.
+  // second scroll container around it. A Tool's preview page (/tools/preview)
+  // scrolls inside itself too.
   const fullBleed =
     pathname.startsWith("/channels") ||
     pathname.startsWith("/t/") ||
-    pathname.startsWith("/tools/preview/") ||
-    pathname === "/tools/build";
+    pathname.startsWith("/tools/preview/");
 
   // Every page scrolls inside <main> — not on the document — so <main> owns its
   // own scroll padding and gutter. (/context is immersive: it pins body overflow
