@@ -16,8 +16,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ reso
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
   const { resourceId } = await params;
-  const denied = await assertMember(resourceId, session.userId, session.email);
-  if (denied) return denied;
+  const check = await assertMember(resourceId, session.userId, session.email);
+  if (check.error) return check.error;
 
   const status = req.nextUrl.searchParams.get('status') ?? undefined;
   const where: Record<string, string> = { resourceId };
@@ -30,8 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ res
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
   const { resourceId } = await params;
-  const denied = await assertMember(resourceId, session.userId, session.email);
-  if (denied) return denied;
+  const check = await assertMember(resourceId, session.userId, session.email);
+  if (check.error) return check.error;
 
   const body = await req.json();
   const change = await prisma.resourceChange.create({

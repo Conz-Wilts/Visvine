@@ -1,0 +1,8 @@
+{
+  // What `next build` type-checks: the app, without tests/. The tests reach
+  // the Tool packages' own sources (packages/tool-kit, packages/tool-cli),
+  // whose dependencies the production image does not install; CI's
+  // `pnpm typecheck` checks them with tsconfig.json.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "scripts/fixtures/**", "tests/**"]
+}

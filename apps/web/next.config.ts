@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // The build checks the app, not tests/ (tsconfig.build.json says why).
+  typescript: { tsconfigPath: "tsconfig.build.json" },
   // Workspace packages shipped as TypeScript source, so one implementation can
   // be compiled by both bundlers that need it. @visvine/vm-policy is compiled
   // here and again by wrangler for the edge — the egress decision has to be the
