@@ -31,6 +31,8 @@ export type { SegmentedOption, SegmentedProps } from './Segmented';
 export { Select } from './Select';
 export type { SelectOption, SelectProps } from './Select';
 export { Spinner } from './Spinner';
+export { Swatch } from './Swatch';
+export type { SwatchProps } from './Swatch';
 export type { SpinnerProps } from './Spinner';
 export { Stack } from './Stack';
 export type { StackProps } from './Stack';

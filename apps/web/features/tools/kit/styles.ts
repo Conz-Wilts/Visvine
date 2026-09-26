@@ -93,9 +93,9 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The frame is sized by the host from a ResizeObserver, so the document must
-   never scroll on its own — it grows and the iframe follows. */
-body { overflow-x: hidden; overflow-y: hidden; }
+/* The host grows the frame to the Tool's height, up to the pane; past that the
+   document scrolls inside the frame, as any page taller than its window does. */
+body { overflow-x: hidden; overflow-y: auto; }
 
 #root { padding: 20px; }
 

@@ -170,7 +170,7 @@ export function buildPlanBrief(facts: PlanFacts): PlanBrief {
       'Fill in plan_template and show it to the person in ONE message; build on their yes, or on "you decide".',
       'Model the data first: add_type (with fields) for a note type; the collection schema goes in configure_tool.',
       'create_tool with `plan` set to the filled-in template, then configure_tool (surfaces, collections, bindings, permissions), set_tool_icon, and write_tool.',
-      'End with the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action.',
+      'End with the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action, then try_tool through the main act.',
     ],
   }
 }

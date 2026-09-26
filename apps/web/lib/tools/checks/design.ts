@@ -23,6 +23,10 @@ export interface DesignInput {
 
 const VIEWPORT = /100d?vh|\bh-screen\b|\bmin-h-screen\b|position:\s*['"]fixed['"]/
 /** `fixed` as a class token inside a className string. */
+/** A raw select opens the browser's own popup, not the app's menu. */
+const NATIVE_SELECT = /<select\b/
+/** A root squeezed to one screen: the frame scrolls, so content should take its height. */
+const SQUEEZED = /className="[^"]*\bh-full\b[^"]*\boverflow-hidden\b|className="[^"]*\boverflow-hidden\b[^"]*\bh-full\b/
 const FIXED_CLASS = /className=[^\n]*?(?<![\w-])fixed(?![\w-])/
 const HEX = /['"`][^'"`\n]*#[0-9a-fA-F]{3,8}\b/
 const PALETTE =
@@ -72,6 +76,8 @@ export function designFindings(input: DesignInput): CheckFinding[] {
   const boxed = once('design.boxed', 'A centred max-width column — a Tool is full bleed; drop the container and keep the page gutter')
   const tabs = once('design.tab-strip', 'A tab strip in the frame — declare the views as surfaces.nav sections and read useSection')
   const enumInput = once('design.enum-input', 'A text box for a field with a fixed set of values — draw it with Select or Segmented')
+  const nativeSelect = once('design.native-select', 'A raw <select> opens the browser’s own menu — use the kit’s Select, which opens the app’s')
+  const squeezed = once('design.squeezed', 'A screen-height or clipped root — the frame scrolls, so let content take its natural height')
   const unsized = once('design.chart-unsized', 'A chart with no height — give it one, and a parent with a width, or it draws nothing (the tool_charts guide)')
 
   const nav = input.config?.surfaces.nav?.sections ?? []
@@ -83,6 +89,10 @@ export function designFindings(input: DesignInput): CheckFinding[] {
     if (v) viewport(file, v)
     const c = firstMatch(code, HEX) ?? firstMatch(code, PALETTE)
     if (c) colour(file, c)
+    const n = firstMatch(code, NATIVE_SELECT)
+    if (n) nativeSelect(file, n)
+    const q = firstMatch(code, SQUEEZED)
+    if (q) squeezed(file, q)
     const b = firstMatch(code, BOXED)
     if (b) boxed(file, b)
     if (nav.length < 2) {

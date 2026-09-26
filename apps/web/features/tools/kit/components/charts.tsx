@@ -119,7 +119,7 @@ function CommonParts({
       />
       <Recharts.YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} width={40} tickFormatter={formatValue} />
       {tooltip !== false && <Recharts.Tooltip contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter(formatValue)} />}
-      {legend && <Recharts.Legend wrapperStyle={{ fontSize: 12 }} />}
+      {legend && <Recharts.Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />}
     </>
   );
 }
@@ -259,7 +259,7 @@ export function PieChart({
           ))}
         </Recharts.Pie>
         {tooltip && <Recharts.Tooltip contentStyle={TOOLTIP_STYLE} formatter={tooltipFormatter(formatValue)} />}
-        {legend && <Recharts.Legend wrapperStyle={{ fontSize: 12 }} />}
+        {legend && <Recharts.Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />}
         {children}
       </Recharts.PieChart>
     </Frame>

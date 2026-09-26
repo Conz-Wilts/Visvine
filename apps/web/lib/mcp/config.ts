@@ -89,7 +89,7 @@ export function mcpInstructions(): string {
     "reads the space's types, records, folders and files and says where each thing should live; agree its " +
     'plan with the person in one message; then create_tool { plan } → configure_tool → set_tool_icon → ' +
     'write_tool, and never hand over a preview you have not looked at: check_tool { render: true }, then ' +
-    'preview_tool { screenshot: true } per section and per band action.'
+    'preview_tool { screenshot: true } per section and per band action, then try_tool through the main act.'
   )
 }
 

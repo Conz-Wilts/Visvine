@@ -21,6 +21,9 @@ person it is for asks for one; these are the default, not a wall.
 - Views are sections. Two or more screens (a board and a detail, companies and predictions) are `surfaces.nav` sections read with `useSection` — the app draws them as tabs on its band. Never draw your own tab strip or view switcher at the top of the frame.
 - The main act is always one press away. A Tool that adds things declares that act in `surfaces.actions` and handles it with `useBandAction`, so it works on the first item and the fiftieth — an empty state may offer it too, never only there.
 - Pick the control for the data. A known set of values is a Select (or Segmented for two to five shown at once), a date a DatePicker, a yes/no a Toggle, a share of a whole a PieChart, a tally a BarChart — free text only for what is truly free.
+- The page scrolls. The frame grows to the Tool's height up to the pane and then scrolls, so let content take its natural height: never squeeze a screen to fit (`h-full`, `h-screen`, `overflow-hidden` on the root, flex children forced to share one viewport). A long list is just long.
+- One size, one shape. Sizes come from the kit and Tailwind's scale (text-sm body, text-xs muted meta, controls at their own height), and a thing drawn in two places is drawn by one component: a piece used twice — a legend row, a vote bar, a company header — is a component in `src/<module>.tsx` imported by both, never copied.
+- Lay out by importance: the main act and the numbers that matter at the top, supporting detail below; a large chart beside its legend on wide screens (`lg:grid-cols-2`), stacked on narrow ones — never a chart alone in a wide empty band.
 - No 100vh and no position: fixed — they measure the frame, not the window. A dialog is the kit's Modal, which the app extends over the whole page.
 - A Tool may choose its own look when a person asks for one. These rules are the default, not a wall.
 
@@ -155,12 +158,22 @@ Props: any textarea attribute
 
 ### Select
 
-A native select. Any field whose values are a known set — a stage, a round, a status. Never an Input for these: declare the set as the field's `enum` and draw it here.
+The app's dropdown: a field that opens the app's own menu, not the browser's. Any field whose values are a known set — a stage, a round, a status. Never an Input for these: declare the set as the field's `enum` and draw it here. Never a raw `<select>`: it opens the system menu, not the app's.
 
-Props: options?: { value, label }[] · any select attribute
+Props: options?: { value, label }[] · value · onValueChange(value) · onChange(e) (e.target.value, as a native select) · placeholder? · disabled? · id? · name?
 
 ```tsx
-<Select options={[{ value: 'lead', label: 'Lead' }, { value: 'won', label: 'Won' }]} onChange={() => {}} />
+<Select options={[{ value: 'lead', label: 'Lead' }, { value: 'won', label: 'Won' }]} onValueChange={() => {}} />
+```
+
+### Swatch
+
+A round colour dot — the one mark for "this colour means this thing". A legend row, a series key, a status beside its label. The chart legends draw the same dot, so never draw your own circle or square for a colour.
+
+Props: color: string · size?: 'sm' | 'md'
+
+```tsx
+<span className="flex items-center gap-2"><Swatch color="var(--vv-accent)" /> Yes</span>
 ```
 
 ### Segmented

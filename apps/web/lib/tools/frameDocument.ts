@@ -48,7 +48,8 @@ const IMPORT_MAP_ENTRIES: ReadonlyArray<readonly [string, VendorFileName]> = [
  * Minimal, on purpose. `color-scheme` is what makes form controls and the
  * default canvas follow the host's theme — the frame is a separate document,
  * so it inherits nothing — and the host sizes the iframe from the Tool's own
- * height (runtime.ts observes it), so the body must not stretch or scroll.
+ * height (runtime.ts observes it) up to the pane, so the body must not stretch;
+ * content taller than the pane scrolls inside the frame.
  */
 const BASE_STYLE = `
 *,*::before,*::after{box-sizing:border-box}

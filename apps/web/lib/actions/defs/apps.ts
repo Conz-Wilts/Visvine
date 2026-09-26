@@ -61,9 +61,11 @@ import { bindableSpace as bindableSpaceService } from '@/lib/tools/bindable'
 import { bindingChoices, type BindableSpace, type BindingValues } from '@visvine/tool-protocol/bindings'
 import {
   captureToolPreview,
+  MAX_TOOL_STEPS,
   SCREENSHOT_BUDGET_MS,
   type ScreenshotRequest,
   type ScreenshotResult,
+  type ToolStep,
 } from '@/lib/tools/screenshot'
 import {
   configureTool as configureToolService,
@@ -415,6 +417,15 @@ interface PreviewToolArgs {
   screenshot?: boolean
   section?: string
   action?: string
+  full_page?: boolean
+  outline?: boolean
+}
+interface TryToolArgs {
+  space_id: string
+  name: string
+  steps: ToolStep[]
+  section?: string
+  full_page?: boolean
 }
 interface PublishToolArgs {
   space_id: string
@@ -461,7 +472,7 @@ async function createTool(ctx: ActionCaller, args: CreateToolArgs, deps: AppTool
       'configure_tool: surfaces (nav sections, band actions), collections, bindings and permissions — everything the plan decided. The bridge refuses anything undeclared.',
       'set_tool_icon: a built-in name or your own 24×24 stroke SVG.',
       `write_tool { name: "${result.name}", file: "ui.tsx", content } and read the build it hands back — kit components and Tailwind layout classes, never a painted page background.`,
-      'Then the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action.',
+      'Then the review loop: check_tool { render: true }, preview_tool { screenshot: true } per section and per band action, then try_tool through the main act.',
     ],
   }
 }
@@ -696,6 +707,8 @@ async function previewTool(ctx: ActionCaller, args: PreviewToolArgs, deps: AppTo
           ...previewRequest(ctx, target, detail.name, deps, { image: true }),
           ...(args.section ? { section: args.section } : {}),
           ...(args.action ? { action: args.action } : {}),
+          ...(args.full_page ? { fullPage: true } : {}),
+          ...(args.outline ? { outline: true } : {}),
         }),
       )
     : undefined
@@ -711,6 +724,52 @@ async function previewTool(ctx: ActionCaller, args: PreviewToolArgs, deps: AppTo
       : 'This tool does not compile, so the preview will show an error card. Fix the build first — check_tool lists the errors.',
     ...(screenshot ? { screenshot } : {}),
   }
+}
+
+/** The wire shape of a step, checked into the one the browser runs. */
+function toStep(raw: {
+  do: ToolStep['do']
+  target?: { role?: string; name?: string; label?: string; text?: string; placeholder?: string }
+  value?: string
+  key?: string
+  pixels?: number
+  ms?: number
+}): ToolStep {
+  const need = (field: string) => {
+    throw new ActionError(400, `A \`${raw.do}\` step needs \`${field}\`.`)
+  }
+  switch (raw.do) {
+    case 'click':
+    case 'hover':
+      return { do: raw.do, target: raw.target ?? need('target') }
+    case 'fill':
+    case 'choose':
+      return { do: raw.do, target: raw.target ?? need('target'), value: raw.value ?? need('value') }
+    case 'press':
+      return { do: 'press', key: raw.key ?? need('key'), ...(raw.target ? { target: raw.target } : {}) }
+    case 'scroll':
+      return { do: 'scroll', ...(raw.pixels !== undefined ? { pixels: raw.pixels } : {}), ...(raw.target ? { target: raw.target } : {}) }
+    case 'wait':
+      return { do: 'wait', ms: raw.ms ?? need('ms') }
+  }
+}
+
+/** A try runs steps and waits on each, so it gets more wall clock than a still. */
+const TRY_BUDGET_MS = 30_000
+
+async function tryTool(ctx: ActionCaller, args: TryToolArgs, deps: AppToolDeps = liveDeps) {
+  const { target, detail } = await requireTool(ctx, args.space_id, args.name, deps)
+  if (ctx.client === 'mobile') throw new ActionError(403, TOOL_PHONE_REFUSAL)
+  if (args.steps.length > MAX_TOOL_STEPS) throw new ActionError(400, `At most ${MAX_TOOL_STEPS} steps per try.`)
+  const result = await deps.capturePreview({
+    ...previewRequest(ctx, target, detail.name, deps, { image: true }),
+    budgetMs: TRY_BUDGET_MS,
+    steps: args.steps,
+    outline: true,
+    ...(args.section ? { section: args.section } : {}),
+    ...(args.full_page ? { fullPage: true } : {}),
+  })
+  return { name: detail.name, ...screenshotReport(result) }
 }
 
 /** What both render-capable tools hand `capturePreview`: the caller, as themselves. */
@@ -782,6 +841,9 @@ function screenshotReport(result: ScreenshotResult) {
     horizontal_overflow: result.horizontal_overflow
       ? 'The content is wider than the frame — something is cut off or scrolls sideways.'
       : undefined,
+    scroll_height: result.scroll_height,
+    steps: result.steps,
+    outline: result.outline,
     review: REVIEW_CHECKLIST,
   }
 }
@@ -1076,13 +1138,17 @@ const REVIEW_CHECKLIST =
   '4) the main act is a band button and works again after the first time; ' +
   '5) every known set of values is a Select or Segmented, never a text box; ' +
   '6) each view is a section on the band, not a tab strip inside the frame; ' +
-  '7) no sentence explains the screen.'
+  '7) no sentence explains the screen; ' +
+  '8) a Tool taller than its frame scrolls (`scroll_height`) — pass `full_page: true` to see all of it; nothing is squeezed to fit; ' +
+  '9) one size and one shape for one thing — a colour is a Swatch everywhere, a repeated piece is one component.'
 
 /** The loop every build ends with — said in create_tool, write_tool and preview_tool. */
 const REVIEW_LOOP =
   'BEFORE YOU HAND OVER THE LINK: run check_tool with `render: true`, then preview_tool with `screenshot: true` ' +
   'once per section (`section`) and once with each band button pressed (`action`) so the dialog it opens is shot. ' +
-  'Read every image against the review list in the answer and fix what fails. A Tool nobody looked at is not done.'
+  'Read every image against the review list in the answer and fix what fails. Then USE it: try_tool with the ' +
+  'steps a person would take for the main act (fill the form, choose from each Select, press save) and read ' +
+  'the outline and image after — a Tool nobody looked at, or nobody used, is not done.'
 
 const TOOL_SHAPE =
   'A Tool is three notes in the space: `tools/<name>/index.md` (frontmatter is the config — title, ' +
@@ -1305,9 +1371,58 @@ export const APP_ACTIONS = [
         .describe('Render the preview headlessly and return the image plus console errors (slower — a browser launches)'),
       section: z.string().max(64).optional().describe('With screenshot: the surfaces.nav section id to open before capturing'),
       action: z.string().max(64).optional().describe('With screenshot: the surfaces.actions id to press before capturing'),
+      full_page: z.boolean().optional().describe('With screenshot: capture the Tool\'s whole scrolled height, not only the first screen'),
+      outline: z.boolean().optional().describe('With screenshot: also return the page\'s accessibility outline as text — every heading, button, field and value'),
     },
     annotations: { readOnlyHint: true },
     run: (ctx, args) => previewTool(ctx, args),
+  }),
+
+  defineAction({
+    name: 'try_tool',
+    scope: 'tools:author',
+    summary: 'Use a Tool\'s working copy as a person would — click, fill, choose, scroll — then see the result.',
+    description:
+      'Drive the preview headlessly AS YOU, the way a person would, and read back what happened: after the ' +
+      'steps run, the answer carries the image, the page\'s accessibility `outline` (every heading, button, ' +
+      'field and its value, as text), each step\'s outcome, and every console error. Steps run in order and stop ' +
+      'at the first that fails, saying why. Targets are named as a person sees them, never by selector: ' +
+      '`{ role: "button", name: "Submit vote" }`, `{ label: "Company" }`, `{ text: "Azonic" }`, ' +
+      '`{ placeholder: "Search companies" }`. Steps: `click`, `hover`, `fill` (value), `choose` (a Select by its ' +
+      'label, then the option named `value`), `press` (key, optional target), `scroll` (pixels, or a target to ' +
+      'bring into view), `wait` (ms). The Tool runs against the space\'s REAL data under your own access: a ' +
+      'step that saves, saves — try on something you can put back, and say what you changed. Where headless ' +
+      'rendering is unavailable `available` is false with a reason.',
+    input: {
+      space_id: spaceArg,
+      name: nameArg,
+      steps: z
+        .array(
+          z.object({
+            do: z.enum(['click', 'hover', 'fill', 'choose', 'press', 'scroll', 'wait']),
+            target: z
+              .object({
+                role: z.string().max(40).optional().describe('ARIA role: button, link, combobox, textbox, checkbox, tab, option, radio…'),
+                name: z.string().max(200).optional().describe('The accessible name with `role` — the button\'s text, the field\'s label'),
+                label: z.string().max(200).optional().describe('A field by its label'),
+                text: z.string().max(200).optional().describe('Any visible text'),
+                placeholder: z.string().max(200).optional().describe('An input by its placeholder'),
+              })
+              .optional(),
+            value: z.string().max(2000).optional().describe('fill: the text to type · choose: the option to pick'),
+            key: z.string().max(40).optional().describe('press: a key, e.g. Enter, Escape, ArrowDown'),
+            pixels: z.number().int().min(-20000).max(20000).optional().describe('scroll: how far, down when positive'),
+            ms: z.number().int().min(0).max(3000).optional().describe('wait: how long'),
+          }),
+        )
+        .min(1)
+        .max(MAX_TOOL_STEPS)
+        .describe('What to do, in order'),
+      section: z.string().max(64).optional().describe('The surfaces.nav section to open first'),
+      full_page: z.boolean().optional().describe('Capture the whole scrolled height after the steps'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    run: (ctx, args) => tryTool(ctx, { ...args, steps: args.steps.map(toStep) }),
   }),
 
   defineAction({

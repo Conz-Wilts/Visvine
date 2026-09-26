@@ -84,7 +84,54 @@ export interface ScreenshotRequest {
   /** Press this band button (`surfaces.actions` id) before capturing — the dialog it opens is what is shot. */
   action?: string
   budgetMs?: number
+  /** Act on the Tool as a person would, in order, before the capture (`try_tool`). */
+  steps?: ToolStep[]
+  /** Return the frame's accessibility outline — what is on the page, as text. */
+  outline?: boolean
+  /** Capture the Tool's whole scrolled height, not only the first screen. */
+  fullPage?: boolean
 }
+
+/**
+ * Where a step lands, as a person names it — never a selector. `role` + `name`
+ * is a button, a link, a combobox; `label` a field by its label; `text` any
+ * visible text; `placeholder` an empty input. The first match is used.
+ */
+interface StepTarget {
+  role?: string
+  name?: string
+  label?: string
+  text?: string
+  placeholder?: string
+}
+
+export type ToolStep =
+  | { do: 'click'; target: StepTarget }
+  | { do: 'hover'; target: StepTarget }
+  | { do: 'fill'; target: StepTarget; value: string }
+  /** Open a Select by its label (or target) and press the option named `value`. */
+  | { do: 'choose'; target: StepTarget; value: string }
+  | { do: 'press'; key: string; target?: StepTarget }
+  /** Scroll the Tool's page by `pixels` (down when positive), or bring `target` into view. */
+  | { do: 'scroll'; pixels?: number; target?: StepTarget }
+  | { do: 'wait'; ms: number }
+
+interface StepOutcome {
+  step: number
+  do: ToolStep['do']
+  ok: boolean
+  /** Why it failed — the target was not found, not visible, disabled. */
+  error?: string
+}
+
+/** A step may wait this long for its target to be there and actionable. */
+const STEP_TIMEOUT_MS = 2500
+/** After an act, a beat for the Tool's state and reads to settle and paint. */
+const STEP_SETTLE_MS = 400
+export const MAX_TOOL_STEPS = 20
+const MAX_OUTLINE_CHARS = 12_000
+/** A full-page capture stops at this height. */
+const MAX_FULL_PAGE_HEIGHT = 4000
 
 export type ScreenshotResult =
   | { available: false; reason: string }
@@ -106,6 +153,12 @@ export type ScreenshotResult =
       action_missing?: boolean
       /** The Tool's content is wider than its frame: something is cut off or scrolls sideways. */
       horizontal_overflow?: boolean
+      /** The Tool is taller than its frame and scrolls — `height` of `scroll_height`. */
+      scroll_height?: number
+      /** One per step asked for, in order; steps after a failure are not run. */
+      steps?: StepOutcome[]
+      /** The frame's accessibility outline (YAML, Playwright's aria snapshot). */
+      outline?: string
     }
 
 /**
@@ -175,10 +228,24 @@ interface ContextLike {
   addInitScript(script: string): Promise<void>
   newPage(): Promise<PageLike>
 }
+interface LocatorLike {
+  first(): LocatorLike
+  click(opts: { timeout: number }): Promise<void>
+  hover(opts: { timeout: number }): Promise<void>
+  fill(value: string, opts: { timeout: number }): Promise<void>
+  press(key: string, opts: { timeout: number }): Promise<void>
+  scrollIntoViewIfNeeded(opts: { timeout: number }): Promise<void>
+  ariaSnapshot(opts: { timeout: number }): Promise<string>
+}
 interface FrameLike {
   url(): string
   waitForFunction(fn: string, arg?: unknown, opts?: { timeout?: number }): Promise<unknown>
-  evaluate(fn: string): Promise<unknown>
+  evaluate(fn: string, arg?: unknown): Promise<unknown>
+  getByRole(role: string, opts?: { name?: string; exact?: boolean }): LocatorLike
+  getByLabel(text: string, opts?: { exact?: boolean }): LocatorLike
+  getByText(text: string, opts?: { exact?: boolean }): LocatorLike
+  getByPlaceholder(text: string, opts?: { exact?: boolean }): LocatorLike
+  locator(selector: string): LocatorLike
 }
 interface RouteLike {
   request(): { url(): string; isNavigationRequest(): boolean; frame(): FrameLike }
@@ -196,7 +263,9 @@ interface PageLike {
   waitForSelector(selector: string, opts: { timeout: number; state?: 'attached' }): Promise<unknown>
   waitForTimeout(ms: number): Promise<void>
   click(selector: string, opts: { timeout: number }): Promise<void>
-  screenshot(opts: { type: 'png' } | { type: 'jpeg'; quality: number }): Promise<Buffer>
+  screenshot(opts: ({ type: 'png' } | { type: 'jpeg'; quality: number }) & { fullPage?: boolean }): Promise<Buffer>
+  setViewportSize(size: { width: number; height: number }): Promise<void>
+  keyboard: { press(key: string): Promise<void> }
 }
 
 async function loadPlaywright(): Promise<PlaywrightLike | null> {
@@ -212,6 +281,59 @@ async function loadPlaywright(): Promise<PlaywrightLike | null> {
 
 function clip(text: string): string {
   return text.length > MAX_CONSOLE_LINE ? `${text.slice(0, MAX_CONSOLE_LINE)}…` : text
+}
+
+/** The locator a step names, inside the Tool's frame. Null when it names nothing. */
+function locate(frame: FrameLike, t: StepTarget): LocatorLike | null {
+  if (t.role) return frame.getByRole(t.role, t.name ? { name: t.name } : undefined).first()
+  if (t.label) return frame.getByLabel(t.label).first()
+  if (t.placeholder) return frame.getByPlaceholder(t.placeholder).first()
+  if (t.text) return frame.getByText(t.text).first()
+  if (t.name) return frame.getByRole('button', { name: t.name }).first()
+  return null
+}
+
+function describe(t: StepTarget | undefined): string {
+  if (!t) return 'the page'
+  return t.role ? `${t.role} "${t.name ?? ''}"` : t.label ? `field "${t.label}"` : t.placeholder ? `input "${t.placeholder}"` : `"${t.text ?? t.name ?? ''}"`
+}
+
+/** Run one step in the Tool's frame. Returns the reason on failure, null on success. */
+async function runStep(page: PageLike, frame: FrameLike, step: ToolStep, timeout: number): Promise<string | null> {
+  const need = (t: StepTarget | undefined) => {
+    const l = t ? locate(frame, t) : null
+    if (!l) throw new Error('the step names no target — give role+name, label, text or placeholder')
+    return l
+  }
+  try {
+    switch (step.do) {
+      case 'click': await need(step.target).click({ timeout }); break
+      case 'hover': await need(step.target).hover({ timeout }); break
+      case 'fill': await need(step.target).fill(step.value, { timeout }); break
+      case 'choose': {
+        // The kit's Select is a combobox that opens the app's menu: press it,
+        // then the option by its name. A label names the combobox.
+        const t = step.target
+        const box = t.label ? frame.getByRole('combobox', { name: t.label }).first() : need(t)
+        await box.click({ timeout })
+        await frame.getByRole('option', { name: step.value, exact: true }).first().click({ timeout })
+        break
+      }
+      case 'press':
+        if (step.target) await need(step.target).press(step.key, { timeout })
+        else await page.keyboard.press(step.key)
+        break
+      case 'scroll':
+        if (step.target) await need(step.target).scrollIntoViewIfNeeded({ timeout })
+        else await frame.evaluate('(dy) => { (document.scrollingElement || document.body).scrollBy(0, dy); document.body.scrollBy(0, dy) }', step.pixels ?? 600)
+        break
+      case 'wait': await page.waitForTimeout(Math.min(step.ms, 3000)); break
+    }
+    return null
+  } catch (err) {
+    const message = err instanceof Error ? err.message.split('\n')[0] : String(err)
+    return /timeout/i.test(message) ? `${describe('target' in step ? step.target : undefined)} was not found or not actionable in time` : clip(message)
+  }
 }
 
 /**
@@ -338,6 +460,44 @@ export async function captureToolPreview(req: ScreenshotRequest): Promise<Screen
       }
     }
 
+    let stepOutcomes: StepOutcome[] | undefined
+    if (req.steps?.length) {
+      stepOutcomes = []
+      if (!rendered || !toolFrame) {
+        stepOutcomes.push({ step: 0, do: req.steps[0].do, ok: false, error: 'The Tool did not mount, so nothing could be pressed.' })
+      } else {
+        for (const [i, step] of req.steps.slice(0, MAX_TOOL_STEPS).entries()) {
+          const error = await runStep(page, toolFrame, step, Math.min(remaining(), STEP_TIMEOUT_MS))
+          stepOutcomes.push({ step: i, do: step.do, ok: error === null, ...(error ? { error } : {}) })
+          if (error) break
+          await page.waitForTimeout(Math.min(remaining(), STEP_SETTLE_MS))
+          if (navigatedAway !== null) break
+        }
+      }
+    }
+
+    let outline: string | undefined
+    if (req.outline && rendered && toolFrame) {
+      try {
+        const text = await toolFrame.locator('body').ariaSnapshot({ timeout: Math.min(remaining(), 2000) })
+        outline = text.length > MAX_OUTLINE_CHARS ? `${text.slice(0, MAX_OUTLINE_CHARS)}\n… (cut)` : text
+      } catch {
+        outline = undefined
+      }
+    }
+
+    // A Tool taller than its frame scrolls inside it — say so, so an author
+    // knows the first screen is not all there is.
+    let scrollHeight: number | undefined
+    if (rendered && toolFrame) {
+      try {
+        const h = (await toolFrame.evaluate('() => [document.documentElement.scrollHeight, window.innerHeight]')) as [number, number]
+        if (h[0] > h[1] + 1) scrollHeight = h[0]
+      } catch {
+        scrollHeight = undefined
+      }
+    }
+
     // Content wider than the frame is cut off or scrolls sideways — a layout
     // fault the author may not spot in a small capture.
     let horizontalOverflow = false
@@ -357,6 +517,14 @@ export async function captureToolPreview(req: ScreenshotRequest): Promise<Screen
 
     let image: Buffer | null = null
     let mime: 'image/png' | 'image/jpeg' | null = null
+    let capturedHeight = SCREENSHOT_HEIGHT
+    if (wantImage && req.fullPage && scrollHeight) {
+      // The host grows the frame to the pane, so a taller window is a taller
+      // frame: the whole Tool, laid out as a person scrolling would meet it.
+      capturedHeight = Math.min(MAX_FULL_PAGE_HEIGHT, SCREENSHOT_HEIGHT + scrollHeight)
+      await page.setViewportSize({ width: SCREENSHOT_WIDTH, height: capturedHeight })
+      await page.waitForTimeout(Math.min(remaining(), 500))
+    }
     if (wantImage) {
       image = await page.screenshot({ type: 'png' })
       mime = 'image/png'
@@ -371,9 +539,12 @@ export async function captureToolPreview(req: ScreenshotRequest): Promise<Screen
       image_base64: image ? image.toString('base64') : null,
       mime,
       width: SCREENSHOT_WIDTH,
-      height: SCREENSHOT_HEIGHT,
+      height: capturedHeight,
       rendered,
       console_errors: consoleErrors,
+      ...(scrollHeight ? { scroll_height: scrollHeight } : {}),
+      ...(stepOutcomes ? { steps: stepOutcomes } : {}),
+      ...(outline !== undefined ? { outline } : {}),
       ...(actionMissing ? { action_missing: true } : {}),
       ...(horizontalOverflow ? { horizontal_overflow: true } : {}),
     }
